@@ -476,7 +476,17 @@ const createCoreBeancountModule = (): DirectiveModule => ({
 					parser: (cursor) => parseString(cursor, 'open')
 				},
 				{ name: 'account', type: 'account', required: true },
-				{ name: 'currencies', type: 'array', required: false }
+				{
+					name: 'currencies',
+					type: 'array',
+					required: false,
+					parser: (cursor) => {
+						const result = parseRegex(cursor, REGEX_PATTERNS.CURRENCIES);
+						if (!result) return null;
+						const currencies = result.value[1].split(',');
+						return { value: currencies, cursor: result.cursor };
+					}
+				}
 			]
 		},
 		{

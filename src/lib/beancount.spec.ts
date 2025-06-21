@@ -110,7 +110,7 @@ describe('Core Parser Functions', () => {
 		});
 
 		test('parseQuotedString handles escape sequences', () => {
-			const config = createParserConfig([createTransactionModule()]);
+			const config = createParserConfig([createCoreBeancountModule(), createTransactionModule()]);
 			const parser = createParser(config);
 
 			const transaction = '2024-01-01 * "Store" "Description with \\"quotes\\" and \\n newline"';
@@ -489,7 +489,7 @@ describe('Error Handling', () => {
 	});
 
 	test('throws error for unterminated string', () => {
-		const config = createParserConfig([createTransactionModule()]);
+		const config = createParserConfig([createCoreBeancountModule(), createTransactionModule()]);
 		const parser = createParser(config);
 
 		expect(() => {
