@@ -9,7 +9,7 @@ const REGEX_PATTERNS = {
 	NUMBER: /^(-?\d+(?:\.\d+)?)/,
 	BOOLEAN: /^(true|false|yes|no|1|0)/i,
 	STRING_UNQUOTED: /^(\S+)/,
-	YAML_KEY: /^([a-zA-Z_][a-zA-Z0-9_-]*)\s*:\s*/,
+	YAML_KEY: /^([a-zA-Z_][a-zA-Z0-9_-]*)\s*:\s+/,
 	YAML_VALUE: /^([^\n]*)/,
 	INTEGER: /^\d+$/,
 	FLOAT: /^\d*\.\d+$/,
@@ -560,54 +560,81 @@ const createTransactionModule = (): DirectiveModule => ({
 					current = newlineResult.cursor;
 				}
 
-				// Parse postings first
+				// Parse transaction content (metadata and postings)
+				let meta: any = {};
 				const postings: any[] = [];
+
 				while (!isAtEnd(current)) {
 					const indentResult = parseRegex(current, REGEX_PATTERNS.INDENT_TWO);
 					if (!indentResult) break;
 					current = indentResult.cursor;
 
-					const accountResult = parseAccount(current);
-					if (!accountResult) break;
-					current = parseWhitespace(accountResult.cursor);
+					// Check if this line is metadata (YAML key-value)
+					const yamlKeyCheck = parseRegex(current, REGEX_PATTERNS.YAML_KEY);
+					if (yamlKeyCheck) {
+						// Parse as metadata
+						const key = yamlKeyCheck.value[1];
+						current = yamlKeyCheck.cursor;
 
-					let amount: AmountValue | undefined;
-					const amountResult = parseAmount(current);
-					if (amountResult) {
-						amount = amountResult.value;
-						current = amountResult.cursor;
+						let value: any;
+						const quotedStr = parseQuotedString(current);
+						if (quotedStr) {
+							value = quotedStr.value;
+							current = quotedStr.cursor;
+						} else {
+							const valueMatch = parseRegex(current, REGEX_PATTERNS.YAML_VALUE);
+							if (valueMatch) {
+								const rawValue = valueMatch.value[1].trim();
+								if (REGEX_PATTERNS.INTEGER.test(rawValue)) value = parseInt(rawValue);
+								else if (REGEX_PATTERNS.FLOAT.test(rawValue)) value = parseFloat(rawValue);
+								else if (rawValue === 'true' || rawValue === 'false') value = rawValue === 'true';
+								else value = rawValue || null;
+								current = valueMatch.cursor;
+							}
+						}
+
+						meta[key] = value;
+
+						const metaNewline = parseNewline(current);
+						if (metaNewline) {
+							current = metaNewline.cursor;
+						}
+					} else {
+						// Parse as posting
+						const accountResult = parseAccount(current);
+						if (!accountResult) break;
+						current = parseWhitespace(accountResult.cursor);
+
+						let amount: AmountValue | undefined;
+						const amountResult = parseAmount(current);
+						if (amountResult) {
+							amount = amountResult.value;
+							current = amountResult.cursor;
+						}
+
+						const restOfLine = parseRegex(current, REGEX_PATTERNS.REST_OF_LINE);
+						if (restOfLine) {
+							current = restOfLine.cursor;
+						}
+
+						const postingNewline = parseNewline(current);
+						if (postingNewline) {
+							current = postingNewline.cursor;
+						}
+
+						let postingMeta: any;
+						const postingMetaResult = parseYAML(current, 4);
+						if (postingMetaResult) {
+							postingMeta = postingMetaResult.value;
+							current = postingMetaResult.cursor;
+						}
+
+						postings.push({
+							account: accountResult.value,
+							amount,
+							meta: postingMeta
+						});
 					}
-
-					const restOfLine = parseRegex(current, REGEX_PATTERNS.REST_OF_LINE);
-					if (restOfLine) {
-						current = restOfLine.cursor;
-					}
-
-					const postingNewline = parseNewline(current);
-					if (postingNewline) {
-						current = postingNewline.cursor;
-					}
-
-					let postingMeta: any;
-					const postingMetaResult = parseYAML(current, 4);
-					if (postingMetaResult) {
-						postingMeta = postingMetaResult.value;
-						current = postingMetaResult.cursor;
-					}
-
-					postings.push({
-						account: accountResult.value,
-						amount,
-						meta: postingMeta
-					});
-				}
-
-				// Parse transaction-level metadata after postings
-				let meta: any;
-				const metaResult = parseYAML(current, 2);
-				if (metaResult) {
-					meta = metaResult.value;
-					current = metaResult.cursor;
 				}
 
 				return {
@@ -618,7 +645,7 @@ const createTransactionModule = (): DirectiveModule => ({
 						payee,
 						narration,
 						postings,
-						meta
+						meta: Object.keys(meta).length > 0 ? meta : undefined
 					},
 					cursor: current
 				};
