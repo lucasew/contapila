@@ -14,8 +14,8 @@ const REGEX_PATTERNS = {
 	INTEGER: /^\d+$/,
 	FLOAT: /^\d*\.\d+$/,
 	COMMENT: /^;/,
-	INDENT_TWO: /^  /,
-	INDENT_FOUR: /^    /,
+	INDENT_TWO: /^ {2}/,
+	INDENT_FOUR: /^ {4}/,
 	CURRENCIES: /^([A-Z]{3}(?:,[A-Z]{3})*)/,
 	REST_OF_LINE: /^[^\n]*/,
 	EMAIL: /^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
@@ -93,7 +93,7 @@ const createCursor = (text: string): ParseCursor => ({
 });
 
 const advanceCursor = (cursor: ParseCursor, chars: number): ParseCursor => {
-	let newPosition = cursor.position + chars;
+	const newPosition = cursor.position + chars;
 	let newLine = cursor.line;
 	let newColumn = cursor.column;
 
