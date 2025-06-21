@@ -620,6 +620,14 @@ const createTransactionModule = (): DirectiveModule => ({
 					narration = firstQuotedResult.value;
 				}
 
+				// Parse tags at the end of the line
+				let tags: string[] | undefined;
+				const tagsResult = parseTags(current);
+				if (tagsResult) {
+					tags = tagsResult.value;
+					current = tagsResult.cursor;
+				}
+
 				const newlineResult = parseNewline(current);
 				if (newlineResult) {
 					current = newlineResult.cursor;
@@ -710,7 +718,8 @@ const createTransactionModule = (): DirectiveModule => ({
 						payee,
 						narration,
 						postings,
-						meta: Object.keys(meta).length > 0 ? meta : undefined
+						meta: Object.keys(meta).length > 0 ? meta : undefined,
+						tags
 					},
 					cursor: current
 				};
@@ -832,19 +841,19 @@ const exampleUsage = () => {
 	const parser = createParser(config);
 
 	const testText = `
-2024-01-01 open Assets:Cash USD,BRL #primary #checking
+2024-01-01 open Assets:Cash USD,BRL #primary #checking #main
  description: "Conta principal"
 
-2024-01-15 * "Mercado" "Compras do mês" #food #monthly
+2024-01-15 * "Mercado" "Compras do mês" #food #monthly #groceries
  category: "groceries"
  Assets:Cash      -200.00 BRL
  Expenses:Food     200.00 BRL
 
-2024-02-01 budget Expenses:Food 500.00 BRL monthly #budget #food
+2024-02-01 budget Expenses:Food 500.00 BRL monthly #budget #food #monthly
  note: "Orçamento mensal para alimentação"
 
-2024-01-01 price USD 5.25 BRL #exchange-rate
-2024-01-15 price AAPL 150.00 USD #stocks #tech
+2024-01-01 price USD 5.25 BRL #exchange-rate #currency
+2024-01-15 price AAPL 150.00 USD #stocks #tech #apple
 `;
 
 	const entries = parser(testText);

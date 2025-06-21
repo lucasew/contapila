@@ -126,11 +126,11 @@ describe('Core Parser Functions', () => {
 			const config = createParserConfig([createCoreBeancountModule()]);
 			const parser = createParser(config);
 
-			const openEntry = '2024-01-01 open Assets:Cash USD #checking';
+			const openEntry = '2024-01-01 open Assets:Cash USD #checking #primary';
 			const entries = parser(openEntry);
 
 			expect(entries).toHaveLength(1);
-			expect(entries[0].tags).toEqual(['checking']);
+			expect(entries[0].tags).toEqual(['checking', 'primary']);
 		});
 
 		test('parseTag function works directly', () => {
@@ -350,7 +350,7 @@ describe('Core Beancount Directives', () => {
 	});
 
 	test('parses balance directive with tags', () => {
-		const text = '2024-01-01 balance Assets:Cash 1000.00 USD #monthly';
+		const text = '2024-01-01 balance Assets:Cash 1000.00 USD #monthly #checking';
 		const entries = parser(text);
 
 		expect(entries).toHaveLength(1);
@@ -363,7 +363,7 @@ describe('Core Beancount Directives', () => {
 				value: 1000.0,
 				currency: 'USD'
 			},
-			tags: ['monthly']
+			tags: ['monthly', 'checking']
 		});
 	});
 });
@@ -450,14 +450,14 @@ describe('Transaction Parser', () => {
 	});
 
 	test('parses transaction with tags', () => {
-		const text = `2024-01-01 * "Store" "Groceries" #food
+		const text = `2024-01-01 * "Store" "Groceries" #food #weekly
   Assets:Cash      -75.00 USD
   Expenses:Food     75.00 USD`;
 
 		const entries = parser(text);
 
 		expect(entries).toHaveLength(1);
-		expect(entries[0].tags).toEqual(['food']);
+		expect(entries[0].tags).toEqual(['food', 'weekly']);
 		expect(entries[0].payee).toBe('Store');
 		expect(entries[0].narration).toBe('Groceries');
 	});
@@ -609,7 +609,7 @@ describe('Integration Tests', () => {
 
 2024-01-01 open Expenses:Food USD #food
 
-2024-01-15 * "Grocery Store" "Weekly groceries" #food #weekly
+2024-01-15 * "Grocery Store" "Weekly groceries" #food #monthly
   category: "food"
   receipt: "12345"
   Assets:Cash      -150.75 USD
@@ -638,7 +638,7 @@ describe('Integration Tests', () => {
 
 		const transactionEntries = entries.filter((e) => e.kind === 'transaction');
 		expect(transactionEntries).toHaveLength(1);
-		expect(transactionEntries[0].tags).toEqual(['food', 'weekly']);
+		expect(transactionEntries[0].tags).toEqual(['food', 'monthly']);
 
 		const balanceEntries = entries.filter((e) => e.kind === 'balance');
 		expect(balanceEntries).toHaveLength(1);
