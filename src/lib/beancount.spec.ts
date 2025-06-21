@@ -217,7 +217,6 @@ describe('Module System', () => {
 		expect(types).toContain('balance');
 		expect(types).toContain('transaction');
 		expect(types).toContain('budget');
-		expect(types).toContain('goal');
 	});
 
 	test('getModuleByName finds correct module', () => {
@@ -400,32 +399,6 @@ describe('Custom Reporting Module', () => {
 		expect(entries).toHaveLength(1);
 		expect(entries[0].period).toBe('monthly'); // default value
 	});
-
-	test('parses goal directive', () => {
-		const text = '2024-01-01 goal "Emergency Fund" 10000.00 USD 2024-12-31';
-		const entries = parser(text);
-
-		expect(entries).toHaveLength(1);
-		expect(entries[0]).toMatchObject({
-			kind: 'goal',
-			date: '2024-01-01',
-			keyword: 'goal',
-			name: 'Emergency Fund',
-			target_amount: {
-				value: 10000.0,
-				currency: 'USD'
-			},
-			deadline: '2024-12-31'
-		});
-	});
-
-	test('parses goal directive without deadline', () => {
-		const text = '2024-01-01 goal "Vacation" 5000.00 USD';
-		const entries = parser(text);
-
-		expect(entries).toHaveLength(1);
-		expect(entries[0].deadline).toBeUndefined();
-	});
 });
 
 describe('Custom Field Parsers', () => {
@@ -551,15 +524,14 @@ describe('Integration Tests', () => {
 2024-02-01 budget Expenses:Food 600.00 USD monthly
   note: "Monthly food budget"
 
-2024-01-01 goal "Emergency Fund" 5000.00 USD 2024-12-31
-  priority: "high"
+
 
 2024-12-31 close Expenses:Food
 `;
 
 		const entries = parser(completeFile);
 
-		expect(entries).toHaveLength(7);
+		expect(entries).toHaveLength(6);
 
 		// Check each directive type is parsed correctly
 		const openEntries = entries.filter((e) => e.kind === 'open');
@@ -573,9 +545,6 @@ describe('Integration Tests', () => {
 
 		const budgetEntries = entries.filter((e) => e.kind === 'budget');
 		expect(budgetEntries).toHaveLength(1);
-
-		const goalEntries = entries.filter((e) => e.kind === 'goal');
-		expect(goalEntries).toHaveLength(1);
 
 		const closeEntries = entries.filter((e) => e.kind === 'close');
 		expect(closeEntries).toHaveLength(1);

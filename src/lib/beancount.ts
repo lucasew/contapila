@@ -673,21 +673,6 @@ const createCustomReportingModule = (): DirectiveModule => ({
 				{ name: 'amount', type: 'amount', required: true },
 				{ name: 'period', type: 'string', required: false, defaultValue: 'monthly' }
 			]
-		},
-		{
-			kind: 'goal',
-			fields: [
-				{ name: 'date', type: 'date', required: true },
-				{
-					name: 'keyword',
-					type: 'string',
-					required: true,
-					parser: (cursor) => parseString(cursor, 'goal')
-				},
-				{ name: 'name', type: 'string', required: true },
-				{ name: 'target_amount', type: 'amount', required: true },
-				{ name: 'deadline', type: 'date', required: false }
-			]
 		}
 	]
 });
@@ -792,9 +777,6 @@ const exampleUsage = () => {
 
 2024-02-01 budget Expenses:Food 500.00 BRL monthly
  note: "Orçamento mensal para alimentação"
-
-2024-12-31 goal "Casa Própria" 100000.00 BRL 2025-12-31
- priority: "high"
 `;
 
 	const entries = parser(testText);
