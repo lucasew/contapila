@@ -6,17 +6,10 @@
 		createTransactionModule
 	} from '$lib/beancount.js';
 
-	let files = $state();
-	let content = $state([]);
-	$effect(() => {
-		console.log(files);
-		if (!files) return;
-		if (files.length != 1) return;
-		files
-			.item('utf-8')
-			.text()
-			.then((text) => (content = parser(text)));
-	});
+	let files: FileList | undefined = $state();
+	let content: any[] = $state([]);
+	let erro: string | null = $state(null);
+
 	const parser = createParser({
 		modules: [
 			createCoreBeancountModule(),
@@ -26,10 +19,31 @@
 		fieldParsers: {},
 		customValidators: {}
 	});
+
+	$effect(() => {
+		console.log(files);
+		if (!files) return;
+		if (files.length != 1) return;
+		files
+			.item(0)
+			?.text()
+			.then((text: string) => {
+				try {
+					content = parser(text);
+					erro = null;
+				} catch (e: unknown) {
+					erro = e instanceof Error ? e.message : String(e);
+					content = [];
+				}
+			});
+	});
 </script>
 
 <h1>Beancount preview</h1>
 
 <input type="file" bind:files />
+{#if erro != null}
+	<p><b>Erro: </b>: {erro}</p>
+{/if}
 
-<pre>{content}</pre>
+<pre>{JSON.stringify(content, null, 2)}</pre>
