@@ -215,6 +215,7 @@ describe('Module System', () => {
 		expect(types).toContain('open');
 		expect(types).toContain('close');
 		expect(types).toContain('balance');
+		expect(types).toContain('price');
 		expect(types).toContain('transaction');
 		expect(types).toContain('budget');
 	});
@@ -278,6 +279,40 @@ describe('Core Beancount Directives', () => {
 			account: 'Assets:Cash',
 			amount: {
 				value: 1000.0,
+				currency: 'USD'
+			}
+		});
+	});
+
+	test('parses price directive', () => {
+		const text = '2024-01-01 price USD 5.25 BRL';
+		const entries = parser(text);
+
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'price',
+			date: '2024-01-01',
+			keyword: 'price',
+			commodity: 'USD',
+			amount: {
+				value: 5.25,
+				currency: 'BRL'
+			}
+		});
+	});
+
+	test('parses price directive with stock symbol', () => {
+		const text = '2024-01-01 price AAPL 150.00 USD';
+		const entries = parser(text);
+
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'price',
+			date: '2024-01-01',
+			keyword: 'price',
+			commodity: 'AAPL',
+			amount: {
+				value: 150.0,
 				currency: 'USD'
 			}
 		});
@@ -524,14 +559,14 @@ describe('Integration Tests', () => {
 2024-02-01 budget Expenses:Food 600.00 USD monthly
   note: "Monthly food budget"
 
-
+2024-01-01 price USD 5.25 BRL
 
 2024-12-31 close Expenses:Food
 `;
 
 		const entries = parser(completeFile);
 
-		expect(entries).toHaveLength(6);
+		expect(entries).toHaveLength(7);
 
 		// Check each directive type is parsed correctly
 		const openEntries = entries.filter((e) => e.kind === 'open');
@@ -545,6 +580,9 @@ describe('Integration Tests', () => {
 
 		const budgetEntries = entries.filter((e) => e.kind === 'budget');
 		expect(budgetEntries).toHaveLength(1);
+
+		const priceEntries = entries.filter((e) => e.kind === 'price');
+		expect(priceEntries).toHaveLength(1);
 
 		const closeEntries = entries.filter((e) => e.kind === 'close');
 		expect(closeEntries).toHaveLength(1);

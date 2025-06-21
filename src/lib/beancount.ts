@@ -515,6 +515,20 @@ const createCoreBeancountModule = (): DirectiveModule => ({
 				{ name: 'account', type: 'account', required: true },
 				{ name: 'amount', type: 'amount', required: true }
 			]
+		},
+		{
+			kind: 'price',
+			fields: [
+				{ name: 'date', type: 'date', required: true },
+				{
+					name: 'keyword',
+					type: 'string',
+					required: true,
+					parser: (cursor) => parseString(cursor, 'price')
+				},
+				{ name: 'commodity', type: 'string', required: true },
+				{ name: 'amount', type: 'amount', required: true }
+			]
 		}
 	]
 });
@@ -772,11 +786,14 @@ const exampleUsage = () => {
 
 2024-01-15 * "Mercado" "Compras do mês"
  category: "groceries"
- Assets:Cash      -200.00 BRL
+ Assets:Cash      -200.00BRL
  Expenses:Food     200.00 BRL
 
 2024-02-01 budget Expenses:Food 500.00 BRL monthly
  note: "Orçamento mensal para alimentação"
+
+2024-01-01 price USD 5.25 BRL
+2024-01-15 price AAPL 150.00USD
 `;
 
 	const entries = parser(testText);
