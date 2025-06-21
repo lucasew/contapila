@@ -538,28 +538,29 @@ const createTransactionModule = (): DirectiveModule => ({
 				current = parseWhitespace(flagResult.cursor);
 
 				let payee: string | undefined;
-				const payeeResult = parseQuotedString(current);
-				if (payeeResult) {
-					payee = payeeResult.value;
-					current = parseWhitespace(payeeResult.cursor);
-				}
+				let narration: string;
 
-				const narrationResult = parseQuotedString(current);
-				if (!narrationResult) return null;
-				current = parseWhitespace(narrationResult.cursor);
+				const firstQuotedResult = parseQuotedString(current);
+				if (!firstQuotedResult) return null;
+				current = parseWhitespace(firstQuotedResult.cursor);
+
+				const secondQuotedResult = parseQuotedString(current);
+				if (secondQuotedResult) {
+					// Two quoted strings: first is payee, second is narration
+					payee = firstQuotedResult.value;
+					narration = secondQuotedResult.value;
+					current = parseWhitespace(secondQuotedResult.cursor);
+				} else {
+					// One quoted string: it's the narration, no payee
+					narration = firstQuotedResult.value;
+				}
 
 				const newlineResult = parseNewline(current);
 				if (newlineResult) {
 					current = newlineResult.cursor;
 				}
 
-				let meta: any;
-				const metaResult = parseYAML(current, 2);
-				if (metaResult) {
-					meta = metaResult.value;
-					current = metaResult.cursor;
-				}
-
+				// Parse postings first
 				const postings: any[] = [];
 				while (!isAtEnd(current)) {
 					const indentResult = parseRegex(current, REGEX_PATTERNS.INDENT_TWO);
@@ -601,13 +602,21 @@ const createTransactionModule = (): DirectiveModule => ({
 					});
 				}
 
+				// Parse transaction-level metadata after postings
+				let meta: any;
+				const metaResult = parseYAML(current, 2);
+				if (metaResult) {
+					meta = metaResult.value;
+					current = metaResult.cursor;
+				}
+
 				return {
 					value: {
 						kind: 'transaction',
 						date: dateResult.value,
 						flag: flagResult.value[1],
 						payee,
-						narration: narrationResult.value,
+						narration,
 						postings,
 						meta
 					},
