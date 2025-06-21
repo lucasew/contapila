@@ -543,6 +543,19 @@ describe('Transaction Parser', () => {
 			}
 		});
 	});
+
+	test('parses note directive', () => {
+		const text = `2026-01-19 note Assets:Test:Account "This is a test note"`;
+		const entries = parser(text);
+
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'note',
+			date: '2026-01-19',
+			account: 'Assets:Test:Account',
+			comment: 'This is a test note'
+		});
+	});
 });
 
 describe('Custom Reporting Module', () => {

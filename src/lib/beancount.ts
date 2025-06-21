@@ -580,6 +580,20 @@ const createCoreBeancountModule = (): DirectiveModule => ({
 				{ name: 'commodity', type: 'string', required: true },
 				{ name: 'amount', type: 'amount', required: true }
 			]
+		},
+		{
+			kind: 'note',
+			fields: [
+				{ name: 'date', type: 'date', required: true },
+				{
+					name: 'keyword',
+					type: 'string',
+					required: true,
+					parser: (cursor) => parseString(cursor, 'note')
+				},
+				{ name: 'account', type: 'account', required: true },
+				{ name: 'comment', type: 'string', required: true, parser: parseQuotedString }
+			]
 		}
 	]
 });
