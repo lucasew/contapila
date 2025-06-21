@@ -18,7 +18,8 @@ const REGEX_PATTERNS = {
 	INDENT_FOUR: /^    /,
 	CURRENCIES: /^([A-Z]{3}(?:,[A-Z]{3})*)/,
 	REST_OF_LINE: /^[^\n]*/,
-	EMAIL: /^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/
+	EMAIL: /^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
+	TAG: /^#([a-zA-Z0-9_-]+)/
 } as const;
 
 // Tipos base
@@ -119,7 +120,8 @@ const peekChar = (cursor: ParseCursor, offset = 0): string =>
 const peekString = (cursor: ParseCursor, length: number): string =>
 	cursor.text.slice(cursor.position, cursor.position + length);
 
-const isAtEnd = (cursor: ParseCursor): boolean => cursor.position >= cursor.text.length;
+const isAtEnd = (cursor: ParseCursor): boolean =>
+	!cursor || !cursor.text || cursor.position >= cursor.text.length;
 
 // Parsers básicos funcionais
 const parseWhitespace = (cursor: ParseCursor): ParseCursor => {
@@ -255,6 +257,44 @@ const parseEmail = (cursor: ParseCursor): ParseResult<string> | null => {
 	return result ? { value: result.value[1], cursor: result.cursor } : null;
 };
 
+const parseTag = (cursor: ParseCursor): ParseResult<string> | null => {
+	if (!cursor || !cursor.text || isAtEnd(cursor)) {
+		return null;
+	}
+	const result = parseRegex(cursor, REGEX_PATTERNS.TAG);
+	return result ? { value: result.value[1], cursor: result.cursor } : null;
+};
+
+const parseTags = (cursor: ParseCursor): ParseResult<string[]> | null => {
+	if (!cursor || !cursor.text || isAtEnd(cursor)) {
+		return null;
+	}
+
+	const tags: string[] = [];
+	let currentCursor = cursor;
+
+	while (!isAtEnd(currentCursor)) {
+		// Skip whitespace
+		currentCursor = parseWhitespace(currentCursor);
+
+		// Check if we're at end after whitespace
+		if (isAtEnd(currentCursor)) {
+			break;
+		}
+
+		// Try to parse a tag
+		const tagResult = parseTag(currentCursor);
+		if (tagResult) {
+			tags.push(tagResult.value);
+			currentCursor = tagResult.cursor;
+		} else {
+			break;
+		}
+	}
+
+	return tags.length > 0 ? { value: tags, cursor: currentCursor } : null;
+};
+
 // Parser YAML funcional
 const parseYAML = (cursor: ParseCursor, indentLevel: number): ParseResult<any> | null => {
 	const baseIndent = ' '.repeat(indentLevel);
@@ -321,7 +361,9 @@ const createBuiltinFieldParsers = (): Record<string, FieldParser> => ({
 	account: parseAccount,
 	array: parseArray,
 	email: parseEmail,
-	object: (cursor) => parseYAML(cursor, 0)
+	object: (cursor) => parseYAML(cursor, 0),
+	tag: parseTag,
+	tags: parseTags
 });
 
 // Validação de módulos funcional
@@ -392,6 +434,15 @@ const parseDirective = (
 		} else if (field.defaultValue !== undefined) {
 			entry[field.name] = field.defaultValue;
 		}
+	}
+
+	current = parseWhitespace(current);
+
+	// Parse tags at the end of the line
+	const tagsResult = parseTags(current);
+	if (tagsResult) {
+		entry.tags = tagsResult.value;
+		current = tagsResult.cursor;
 	}
 
 	current = parseWhitespace(current);
@@ -781,19 +832,19 @@ const exampleUsage = () => {
 	const parser = createParser(config);
 
 	const testText = `
-2024-01-01 open Assets:Cash USD,BRL
+2024-01-01 open Assets:Cash USD,BRL #primary #checking
  description: "Conta principal"
 
-2024-01-15 * "Mercado" "Compras do mês"
+2024-01-15 * "Mercado" "Compras do mês" #food #monthly
  category: "groceries"
- Assets:Cash      -200.00BRL
+ Assets:Cash      -200.00 BRL
  Expenses:Food     200.00 BRL
 
-2024-02-01 budget Expenses:Food 500.00 BRL monthly
+2024-02-01 budget Expenses:Food 500.00 BRL monthly #budget #food
  note: "Orçamento mensal para alimentação"
 
-2024-01-01 price USD 5.25 BRL
-2024-01-15 price AAPL 150.00USD
+2024-01-01 price USD 5.25 BRL #exchange-rate
+2024-01-15 price AAPL 150.00 USD #stocks #tech
 `;
 
 	const entries = parser(testText);
@@ -813,6 +864,8 @@ export {
 	getModuleByName,
 	validateModuleDependencies,
 	exampleUsage,
+	parseTag,
+	parseTags,
 	type DirectiveModule,
 	type DirectiveDefinition,
 	type FieldDefinition,

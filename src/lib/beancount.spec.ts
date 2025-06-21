@@ -9,6 +9,8 @@ import {
 	getAllDirectiveTypes,
 	getModuleByName,
 	validateModuleDependencies,
+	parseTag,
+	parseTags,
 	type DirectiveModule,
 	type BaseEntry
 } from '$lib/beancount.js';
@@ -118,6 +120,35 @@ describe('Core Parser Functions', () => {
 
 			expect(entries).toHaveLength(1);
 			expect(entries[0].narration).toBe('Description with "quotes" and \n newline');
+		});
+
+		test('parseTag extracts hashtag tags', () => {
+			const config = createParserConfig([createCoreBeancountModule()]);
+			const parser = createParser(config);
+
+			const openEntry = '2024-01-01 open Assets:Cash USD #checking';
+			const entries = parser(openEntry);
+
+			expect(entries).toHaveLength(1);
+			expect(entries[0].tags).toEqual(['checking']);
+		});
+
+		test('parseTag function works directly', () => {
+			// Test the tag parsing function directly
+			const cursor = createTestCursor('#test');
+			const result = parseTag(cursor);
+
+			expect(result).not.toBeNull();
+			expect(result?.value).toBe('test');
+		});
+
+		test('parseTags function works directly', () => {
+			// Test the tags parsing function directly
+			const cursor = createTestCursor('#tag1 #tag2');
+			const result = parseTags(cursor);
+
+			expect(result).not.toBeNull();
+			expect(result?.value).toEqual(['tag1', 'tag2']);
 		});
 	});
 });
@@ -317,6 +348,24 @@ describe('Core Beancount Directives', () => {
 			}
 		});
 	});
+
+	test('parses balance directive with tags', () => {
+		const text = '2024-01-01 balance Assets:Cash 1000.00 USD #monthly';
+		const entries = parser(text);
+
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'balance',
+			date: '2024-01-01',
+			keyword: 'balance',
+			account: 'Assets:Cash',
+			amount: {
+				value: 1000.0,
+				currency: 'USD'
+			},
+			tags: ['monthly']
+		});
+	});
 });
 
 describe('Transaction Parser', () => {
@@ -398,6 +447,19 @@ describe('Transaction Parser', () => {
 		expect(entries).toHaveLength(1);
 		expect(entries[0].postings).toHaveLength(2);
 		expect(entries[0].postings[1].amount).toBeUndefined();
+	});
+
+	test('parses transaction with tags', () => {
+		const text = `2024-01-01 * "Store" "Groceries" #food
+  Assets:Cash      -75.00 USD
+  Expenses:Food     75.00 USD`;
+
+		const entries = parser(text);
+
+		expect(entries).toHaveLength(1);
+		expect(entries[0].tags).toEqual(['food']);
+		expect(entries[0].payee).toBe('Store');
+		expect(entries[0].narration).toBe('Groceries');
 	});
 });
 
@@ -542,26 +604,26 @@ describe('Integration Tests', () => {
 
 		const completeFile = `
 ; Comment line
-2024-01-01 open Assets:Cash USD,BRL
+2024-01-01 open Assets:Cash USD,BRL #primary #checking
   description: "Main cash account"
 
-2024-01-01 open Expenses:Food USD
+2024-01-01 open Expenses:Food USD #food
 
-2024-01-15 * "Grocery Store" "Weekly groceries"
+2024-01-15 * "Grocery Store" "Weekly groceries" #food #weekly
   category: "food"
   receipt: "12345"
   Assets:Cash      -150.75 USD
   Expenses:Food     150.75 USD
     tax_included: true
 
-2024-02-01 balance Assets:Cash 849.25 USD
+2024-02-01 balance Assets:Cash 849.25 USD #monthly
 
-2024-02-01 budget Expenses:Food 600.00 USD monthly
+2024-02-01 budget Expenses:Food 600.00 USD monthly #budget #food
   note: "Monthly food budget"
 
-2024-01-01 price USD 5.25 BRL
+2024-01-01 price USD 5.25 BRL #exchange-rate
 
-2024-12-31 close Expenses:Food
+2024-12-31 close Expenses:Food #cleanup
 `;
 
 		const entries = parser(completeFile);
@@ -571,21 +633,28 @@ describe('Integration Tests', () => {
 		// Check each directive type is parsed correctly
 		const openEntries = entries.filter((e) => e.kind === 'open');
 		expect(openEntries).toHaveLength(2);
+		expect(openEntries[0].tags).toEqual(['primary', 'checking']);
+		expect(openEntries[1].tags).toEqual(['food']);
 
 		const transactionEntries = entries.filter((e) => e.kind === 'transaction');
 		expect(transactionEntries).toHaveLength(1);
+		expect(transactionEntries[0].tags).toEqual(['food', 'weekly']);
 
 		const balanceEntries = entries.filter((e) => e.kind === 'balance');
 		expect(balanceEntries).toHaveLength(1);
+		expect(balanceEntries[0].tags).toEqual(['monthly']);
 
 		const budgetEntries = entries.filter((e) => e.kind === 'budget');
 		expect(budgetEntries).toHaveLength(1);
+		expect(budgetEntries[0].tags).toEqual(['budget', 'food']);
 
 		const priceEntries = entries.filter((e) => e.kind === 'price');
 		expect(priceEntries).toHaveLength(1);
+		expect(priceEntries[0].tags).toEqual(['exchange-rate']);
 
 		const closeEntries = entries.filter((e) => e.kind === 'close');
 		expect(closeEntries).toHaveLength(1);
+		expect(closeEntries[0].tags).toEqual(['cleanup']);
 	});
 
 	test('handles empty file', () => {
