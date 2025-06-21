@@ -461,6 +461,88 @@ describe('Transaction Parser', () => {
 		expect(entries[0].payee).toBe('Store');
 		expect(entries[0].narration).toBe('Groceries');
 	});
+
+	test('parses transaction with complex metadata and commodity units', () => {
+		const text = `2024-11-19 * "Investment Broker" "Sale of government bond" #todo
+  doc-nr: "20241119000001234"
+  details: ""
+  transaction-type: "Bond-Sale"
+  Assets:Investment:Bonds -0.07 GOVT_BOND_2029 {15000.00 USD}
+  Assets:Bank:Checking 1000.00 USD
+  Income:Investment:CapitalGains`;
+
+		const entries = parser(text);
+
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'transaction',
+			date: '2024-11-19',
+			flag: '*',
+			payee: 'Investment Broker',
+			narration: 'Sale of government bond',
+			tags: ['todo']
+		});
+
+		expect(entries[0].meta).toEqual({
+			'doc-nr': '20241119000001234',
+			details: '',
+			'transaction-type': 'Bond-Sale'
+		});
+
+		expect(entries[0].postings).toHaveLength(3);
+		expect(entries[0].postings[0]).toMatchObject({
+			account: 'Assets:Investment:Bonds',
+			amount: {
+				value: -0.07,
+				currency: 'GOVT_BOND_2029'
+			}
+		});
+		expect(entries[0].postings[1]).toMatchObject({
+			account: 'Assets:Bank:Checking',
+			amount: {
+				value: 1000.0,
+				currency: 'USD'
+			}
+		});
+		expect(entries[0].postings[2]).toMatchObject({
+			account: 'Income:Investment:CapitalGains'
+		});
+		expect(entries[0].postings[2].amount).toBeUndefined();
+	});
+
+	test('parses transaction with comment in the middle', () => {
+		const text = `2024-11-19 * "Store" "Purchase with comment"
+  Assets:Cash -100.00 USD
+  ; This is a comment in the middle
+  Expenses:Food 100.00 USD`;
+
+		const entries = parser(text);
+
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'transaction',
+			date: '2024-11-19',
+			flag: '*',
+			payee: 'Store',
+			narration: 'Purchase with comment'
+		});
+
+		expect(entries[0].postings).toHaveLength(2);
+		expect(entries[0].postings[0]).toMatchObject({
+			account: 'Assets:Cash',
+			amount: {
+				value: -100.0,
+				currency: 'USD'
+			}
+		});
+		expect(entries[0].postings[1]).toMatchObject({
+			account: 'Expenses:Food',
+			amount: {
+				value: 100.0,
+				currency: 'USD'
+			}
+		});
+	});
 });
 
 describe('Custom Reporting Module', () => {

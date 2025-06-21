@@ -3,7 +3,7 @@
 const REGEX_PATTERNS = {
 	WHITESPACE: /\s/,
 	DATE: /^\d{4}-\d{2}-\d{2}/,
-	AMOUNT: /^(-?\d+(?:\.\d+)?)\s+([A-Z]{3})/,
+	AMOUNT: /^(-?\d+(?:\.\d+)?)\s+([A-Z][A-Z0-9_]+)(?:\s+\{[^}]+\})?/,
 	ACCOUNT: /^([A-Z][A-Za-z0-9:_-]*)/,
 	FLAG: /^([*!])/,
 	NUMBER: /^(-?\d+(?:\.\d+)?)/,
@@ -641,6 +641,21 @@ const createTransactionModule = (): DirectiveModule => ({
 					const indentResult = parseRegex(current, REGEX_PATTERNS.INDENT_TWO);
 					if (!indentResult) break;
 					current = indentResult.cursor;
+
+					// Check if this line is a comment
+					const commentResult = parseRegex(current, REGEX_PATTERNS.COMMENT);
+					if (commentResult) {
+						// Skip comment line
+						const restOfLine = parseRegex(current, REGEX_PATTERNS.REST_OF_LINE);
+						if (restOfLine) {
+							current = restOfLine.cursor;
+						}
+						const commentNewline = parseNewline(current);
+						if (commentNewline) {
+							current = commentNewline.cursor;
+						}
+						continue;
+					}
 
 					// Check if this line is metadata (YAML key-value)
 					const yamlKeyCheck = parseRegex(current, REGEX_PATTERNS.YAML_KEY);
