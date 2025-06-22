@@ -15,7 +15,7 @@ export const REGEX_PATTERNS = {
 	COMMENT: /^;/,
 	INDENT_TWO: /^ {2}/,
 	INDENT_FOUR: /^ {4}/,
-	CURRENCY: /^([A-Z_]+)/,
+	CURRENCY: /^([A-Z0-9_]+)/,
 	REST_OF_LINE: /^[^\n]*/,
 	EMAIL: /^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
 	TAG: /^#([a-zA-Z0-9_-]+)/
@@ -563,8 +563,20 @@ const createCoreBeancountModule = (): DirectiveModule => ({
 					parser: (cursor) => {
 						const result = parseRegex(cursor, REGEX_PATTERNS.CURRENCY);
 						if (!result) return null;
-						const currencies = result.value[1].split(',');
-						return { value: currencies, cursor: result.cursor };
+						let current = result.cursor;
+						const currencies = [result.value[1]];
+
+						// Parse additional comma-separated currencies
+						while (peekChar(current) === ',') {
+							current = advanceCursor(current, 1); // Skip comma
+							current = skipWhitespace(current);
+							const nextResult = parseRegex(current, REGEX_PATTERNS.CURRENCY);
+							if (!nextResult) break;
+							currencies.push(nextResult.value[1]);
+							current = nextResult.cursor;
+						}
+
+						return { value: currencies, cursor: current };
 					}
 				}
 			]
