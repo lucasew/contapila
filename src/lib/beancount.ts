@@ -1,10 +1,9 @@
 // Reexport your entry components here
 // Constantes de regex no topo
-const REGEX_PATTERNS = {
+export const REGEX_PATTERNS = {
 	WHITESPACE: /\s/,
 	DATE: /^\d{4}-\d{2}-\d{2}/,
-	AMOUNT: /^(-?\d+(?:\.\d+)?)\s+([A-Z][A-Z0-9_]+)(?:\s+\{[^}]+\})?/,
-	ACCOUNT: /^([A-Z][A-Za-z0-9:_-]*)/,
+	ACCOUNT: /^([A-Z][A-Za-z0-9:_-]+)/,
 	FLAG: /^([*!])/,
 	NUMBER: /^(-?\d+(?:\.\d+)?)/,
 	BOOLEAN: /^(true|false|yes|no|1|0)/i,
@@ -16,7 +15,7 @@ const REGEX_PATTERNS = {
 	COMMENT: /^;/,
 	INDENT_TWO: /^ {2}/,
 	INDENT_FOUR: /^ {4}/,
-	CURRENCIES: /^([A-Z]{3}(?:,[A-Z]{3})*)/,
+	CURRENCY: /^([A-Z_]+)/,
 	REST_OF_LINE: /^[^\n]*/,
 	EMAIL: /^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
 	TAG: /^#([a-zA-Z0-9_-]+)/
@@ -83,6 +82,23 @@ type DirectiveParser = (
 	fields: FieldDefinition[]
 ) => ParseResult<BaseEntry> | null;
 type ModuleValidator = (modules: DirectiveModule[]) => string[];
+type CursorTransformer = (cursor: ParseCursor) => ParseCursor;
+
+// Utility cursor transformers
+const skipToEndOfLine: CursorTransformer = (cursor) => {
+	let current = cursor;
+	while (!isAtEnd(current) && peekChar(current) !== '\n') {
+		current = advanceCursor(current, 1);
+	}
+	return current;
+};
+
+const skipComments: CursorTransformer = (cursor) => {
+	if (REGEX_PATTERNS.COMMENT.test(peekChar(cursor))) {
+		return skipToEndOfLine(cursor);
+	}
+	return cursor;
+};
 
 // Utilitários do cursor (funcionais)
 const createCursor = (text: string): ParseCursor => ({
@@ -124,7 +140,7 @@ const isAtEnd = (cursor: ParseCursor): boolean =>
 	!cursor || !cursor.text || cursor.position >= cursor.text.length;
 
 // Parsers básicos funcionais
-const parseWhitespace = (cursor: ParseCursor): ParseCursor => {
+const parseWhitespace: CursorTransformer = (cursor) => {
 	let current = cursor;
 	while (
 		!isAtEnd(current) &&
@@ -135,6 +151,8 @@ const parseWhitespace = (cursor: ParseCursor): ParseCursor => {
 	}
 	return current;
 };
+
+const skipWhitespace: CursorTransformer = parseWhitespace;
 
 const parseNewline = (cursor: ParseCursor): ParseResult<string> | null =>
 	peekChar(cursor) === '\n' ? { value: '\n', cursor: advanceCursor(cursor, 1) } : null;
@@ -187,17 +205,30 @@ const parseDate = (cursor: ParseCursor): ParseResult<string> | null => {
 	return result ? { value: result.value[0], cursor: result.cursor } : null;
 };
 
-const parseAmount = (cursor: ParseCursor): ParseResult<AmountValue> | null => {
-	const result = parseRegex(cursor, REGEX_PATTERNS.AMOUNT);
-	return result
-		? {
-				value: {
-					value: parseFloat(result.value[1]),
-					currency: result.value[2]
-				},
-				cursor: result.cursor
-			}
-		: null;
+const parseCurrency = (cursor: ParseCursor): ParseResult<string> | null => {
+	const result = parseRegex(cursor, REGEX_PATTERNS.CURRENCY);
+	return result ? { value: result.value[1], cursor: result.cursor } : null;
+};
+
+export const parseAmount = (cursor: ParseCursor): ParseResult<AmountValue> | null => {
+	// Parse number first
+	const numberResult = parseNumber(cursor);
+	if (!numberResult) return null;
+
+	// Skip whitespace between number and currency
+	const current = skipWhitespace(numberResult.cursor);
+
+	// Parse currency
+	const currencyResult = parseCurrency(current);
+	if (!currencyResult) return null;
+
+	return {
+		value: {
+			value: numberResult.value,
+			currency: currencyResult.value
+		},
+		cursor: currencyResult.cursor
+	};
 };
 
 const parseAccount = (cursor: ParseCursor): ParseResult<string> | null => {
@@ -239,11 +270,11 @@ const parseArray = (cursor: ParseCursor): ParseResult<string[]> | null => {
 		if (!result) break;
 
 		values.push(result.value);
-		current = parseWhitespace(result.cursor);
+		current = skipWhitespace(result.cursor);
 
 		const comma = parseString(current, ',');
 		if (comma) {
-			current = parseWhitespace(comma.cursor);
+			current = skipWhitespace(comma.cursor);
 		} else {
 			break;
 		}
@@ -275,7 +306,7 @@ const parseTags = (cursor: ParseCursor): ParseResult<string[]> | null => {
 
 	while (!isAtEnd(currentCursor)) {
 		// Skip whitespace
-		currentCursor = parseWhitespace(currentCursor);
+		currentCursor = skipWhitespace(currentCursor);
 
 		// Check if we're at end after whitespace
 		if (isAtEnd(currentCursor)) {
@@ -422,7 +453,7 @@ const parseDirective = (
 	const entry: any = { kind: definition.kind };
 
 	for (const field of definition.fields) {
-		current = parseWhitespace(current);
+		current = skipWhitespace(current);
 
 		const result = parseField(current, field, fieldParsers);
 
@@ -436,7 +467,7 @@ const parseDirective = (
 		}
 	}
 
-	current = parseWhitespace(current);
+	current = skipWhitespace(current);
 
 	// Parse tags at the end of the line
 	const tagsResult = parseTags(current);
@@ -445,7 +476,7 @@ const parseDirective = (
 		current = tagsResult.cursor;
 	}
 
-	current = parseWhitespace(current);
+	current = skipWhitespace(current);
 	const newlineResult = parseNewline(current);
 	if (newlineResult) {
 		current = newlineResult.cursor;
@@ -474,7 +505,7 @@ const createParser = (config: ParserConfig) => {
 		let cursor = createCursor(text);
 
 		while (!isAtEnd(cursor)) {
-			cursor = parseWhitespace(cursor);
+			cursor = skipWhitespace(cursor);
 
 			if (peekChar(cursor) === '\n') {
 				cursor = advanceCursor(cursor, 1);
@@ -482,9 +513,7 @@ const createParser = (config: ParserConfig) => {
 			}
 
 			if (REGEX_PATTERNS.COMMENT.test(peekChar(cursor))) {
-				while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
-					cursor = advanceCursor(cursor, 1);
-				}
+				cursor = skipComments(cursor);
 				continue;
 			}
 
@@ -532,7 +561,7 @@ const createCoreBeancountModule = (): DirectiveModule => ({
 					type: 'array',
 					required: false,
 					parser: (cursor) => {
-						const result = parseRegex(cursor, REGEX_PATTERNS.CURRENCIES);
+						const result = parseRegex(cursor, REGEX_PATTERNS.CURRENCY);
 						if (!result) return null;
 						const currencies = result.value[1].split(',');
 						return { value: currencies, cursor: result.cursor };
@@ -610,25 +639,25 @@ const createTransactionModule = (): DirectiveModule => ({
 
 				const dateResult = parseDate(current);
 				if (!dateResult) return null;
-				current = parseWhitespace(dateResult.cursor);
+				current = skipWhitespace(dateResult.cursor);
 
 				const flagResult = parseRegex(current, REGEX_PATTERNS.FLAG);
 				if (!flagResult) return null;
-				current = parseWhitespace(flagResult.cursor);
+				current = skipWhitespace(flagResult.cursor);
 
 				let payee: string | undefined;
 				let narration: string;
 
 				const firstQuotedResult = parseQuotedString(current);
 				if (!firstQuotedResult) return null;
-				current = parseWhitespace(firstQuotedResult.cursor);
+				current = skipWhitespace(firstQuotedResult.cursor);
 
 				const secondQuotedResult = parseQuotedString(current);
 				if (secondQuotedResult) {
 					// Two quoted strings: first is payee, second is narration
 					payee = firstQuotedResult.value;
 					narration = secondQuotedResult.value;
-					current = parseWhitespace(secondQuotedResult.cursor);
+					current = skipWhitespace(secondQuotedResult.cursor);
 				} else {
 					// One quoted string: it's the narration, no payee
 					narration = firstQuotedResult.value;
@@ -705,7 +734,7 @@ const createTransactionModule = (): DirectiveModule => ({
 						// Parse as posting
 						const accountResult = parseAccount(current);
 						if (!accountResult) break;
-						current = parseWhitespace(accountResult.cursor);
+						current = skipWhitespace(accountResult.cursor);
 
 						let amount: AmountValue | undefined;
 						const amountResult = parseAmount(current);

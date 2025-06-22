@@ -12,7 +12,9 @@ import {
 	parseTag,
 	parseTags,
 	type DirectiveModule,
-	type BaseEntry
+	type BaseEntry,
+	REGEX_PATTERNS,
+	parseAmount
 } from '$lib/beancount.js';
 
 // Test utilities
@@ -25,32 +27,13 @@ const createTestCursor = (text: string, position = 0) => ({
 
 describe('Regex Patterns', () => {
 	test('DATE pattern matches valid dates', () => {
-		const REGEX_PATTERNS = {
-			DATE: /^\d{4}-\d{2}-\d{2}/
-		};
-
 		expect('2024-01-01'.match(REGEX_PATTERNS.DATE)).toBeTruthy();
 		expect('2024-12-31'.match(REGEX_PATTERNS.DATE)).toBeTruthy();
 		expect('invalid-date'.match(REGEX_PATTERNS.DATE)).toBeFalsy();
 		expect('24-01-01'.match(REGEX_PATTERNS.DATE)).toBeFalsy();
 	});
 
-	test('AMOUNT pattern matches valid amounts', () => {
-		const REGEX_PATTERNS = {
-			AMOUNT: /^(-?\d+(?:\.\d+)?)\s+([A-Z]{3})/
-		};
-
-		expect('100.50 USD'.match(REGEX_PATTERNS.AMOUNT)).toBeTruthy();
-		expect('-200.75 BRL'.match(REGEX_PATTERNS.AMOUNT)).toBeTruthy();
-		expect('1000 EUR'.match(REGEX_PATTERNS.AMOUNT)).toBeTruthy();
-		expect('invalid amount'.match(REGEX_PATTERNS.AMOUNT)).toBeFalsy();
-	});
-
 	test('ACCOUNT pattern matches valid accounts', () => {
-		const REGEX_PATTERNS = {
-			ACCOUNT: /^([A-Z][A-Za-z0-9:_-]*)/
-		};
-
 		expect('Assets:Cash'.match(REGEX_PATTERNS.ACCOUNT)).toBeTruthy();
 		expect('Expenses:Food:Groceries'.match(REGEX_PATTERNS.ACCOUNT)).toBeTruthy();
 		expect('Income:Salary_2024'.match(REGEX_PATTERNS.ACCOUNT)).toBeTruthy();
@@ -98,6 +81,20 @@ describe('Core Parser Functions', () => {
 				value: 1000.5,
 				currency: 'USD'
 			});
+
+			expect(parseAmount(createTestCursor('100.50 USD'))?.value).toStrictEqual({
+				value: 100.5,
+				currency: 'USD'
+			});
+			expect(parseAmount(createTestCursor('-200.75 BRL'))?.value).toStrictEqual({
+				value: -200.75,
+				currency: 'BRL'
+			});
+			expect(parseAmount(createTestCursor('1000EUR'))?.value).toStrictEqual({
+				value: 1000,
+				currency: 'EUR'
+			});
+			expect(parseAmount(createTestCursor('invalid amount'))).toBeNull();
 		});
 
 		test('parseAccount extracts valid account names', () => {
