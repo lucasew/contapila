@@ -94,6 +94,10 @@ describe('Core Parser Functions', () => {
 				value: 1000,
 				currency: 'EUR'
 			});
+			expect(parseAmount(createTestCursor('1000A_B_C'))?.value).toStrictEqual({
+				value: 1000,
+				currency: 'A_B_C'
+			});
 			expect(parseAmount(createTestCursor('invalid amount'))).toBeNull();
 		});
 
