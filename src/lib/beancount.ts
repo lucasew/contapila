@@ -191,6 +191,23 @@ const createTransactionModule = (): DirectiveModule => ({
 
 				// Se encontrou ;;, finalize a transação aqui, sem postings nem metadados
 				if (foundComment) {
+					// Ignora linhas de postings órfãos imediatamente após a transação
+					while (!isAtEnd(current)) {
+						const firstChar = peekChar(current);
+						const secondChar = peekChar(current, 1);
+						const thirdChar = peekChar(current, 2);
+						const fourthChar = peekChar(current, 3);
+						if ((firstChar === ' ' && secondChar === ' ') ||
+							(firstChar === ' ' && secondChar === ' ' && thirdChar === ' ' && fourthChar === ' ')) {
+							// Avança até o fim da linha
+							while (!isAtEnd(current) && peekChar(current) !== '\n') {
+								current = advanceCursor(current, 1);
+							}
+							if (peekChar(current) === '\n') current = advanceCursor(current, 1);
+						} else {
+							break;
+						}
+					}
 					return {
 						value: {
 							kind: 'transaction',
