@@ -7,6 +7,7 @@
 	import { createParser } from '$lib/parser.js';
 	import { Table, Badge, Button, Collapse, ListGroup, ListGroupItem, Row, Col, Accordion, AccordionItem, Icon } from '@sveltestrap/sveltestrap';
 	import PostingItem from '$lib/PostingItem.svelte';
+	import TipoBadge from '$lib/TipoBadge.svelte';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
@@ -160,7 +161,9 @@
 			<AccordionItem>
 				<Row slot="header" class="align-items-center w-100">
 					<Col class="col-auto text-nowrap" >{linha.data}</Col>
-					<Col class="col-auto text-nowrap" >{linha.tipo}</Col>
+					<Col class="col-auto text-nowrap" >
+						<TipoBadge tipo={linha.tipo} />
+					</Col>
 					<Col>
 						{#if linha.titulo}
 							<strong>{linha.titulo}</strong>
