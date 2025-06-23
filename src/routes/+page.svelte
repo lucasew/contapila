@@ -6,8 +6,8 @@
 	} from '$lib/beancount.js';
 	import { createParser } from '$lib/parser.js';
 	import { Table, Badge, Button, Collapse, ListGroup, ListGroupItem, Row, Col, Accordion, AccordionItem, Icon } from '@sveltestrap/sveltestrap';
-	import PostingItem from '$lib/PostingItem.svelte';
-	import TipoBadge from '$lib/TipoBadge.svelte';
+	import PostingItem from '$lib/components/PostingItem.svelte';
+	import TipoBadge from '$lib/components/TipoBadge.svelte';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
