@@ -1,6 +1,6 @@
 <script lang="ts">
 import { createEventDispatcher } from 'svelte';
-import { Form, FormGroup, Label, Input, Button, Icon, ListGroup, ListGroupItem, Row, Col } from '@sveltestrap/sveltestrap';
+import { Form, FormGroup, Label, Input, Button, Icon, ListGroup, ListGroupItem, Row, Col, Badge } from '@sveltestrap/sveltestrap';
 
 let files: File[] = [];
 const dispatch = createEventDispatcher();
@@ -89,27 +89,28 @@ function toFileList(arr: File[]): FileList {
         {#if files.length === 0}
           <div class="text-muted mt-2">Nenhum arquivo selecionado ainda.</div>
         {/if}
+        {#if files.length > 0}
+          <div class="w-100 mt-3">
+            {#each files as file, idx}
+              <Row class="align-items-center mb-2 g-2">
+                <Col>
+                  <span style="cursor: pointer;" on:click|stopPropagation={() => removeFile(idx)}>
+                    <Badge color="primary" pill class="fs-6">
+                      {file.name} <span class="text-muted small ms-1">({Math.round(file.size/1024)} KB)</span>
+                    </Badge>
+                  </span>
+                </Col>
+              </Row>
+            {/each}
+          </div>
+          <div class="w-100 d-flex justify-content-center mt-2">
+            <Button outline color="danger" on:click={clearFiles}>
+              <Icon name="x" class="me-1" /> Limpar tudo
+            </Button>
+          </div>
+        {/if}
       </ListGroupItem>
-      {#each files as file, idx}
-        <ListGroupItem class="d-flex align-items-center justify-content-between px-2 py-1 mb-1">
-          <Row class="w-100 align-items-center">
-            <Col class="text-truncate" style="max-width: 80%;">
-              {file.name} <span class="text-muted small">({Math.round(file.size/1024)} KB)</span>
-            </Col>
-            <Col class="text-end" style="max-width: 20%;">
-              <Button color="link" class="p-0 text-danger" aria-label="Remover" on:click={() => removeFile(idx)}>
-                <Icon name="x" />
-              </Button>
-            </Col>
-          </Row>
-        </ListGroupItem>
-      {/each}
     </ListGroup>
-    {#if files.length > 0}
-      <Button outline color="danger" class="mt-2" on:click={clearFiles}>
-        <Icon name="x" class="me-1" /> Limpar tudo
-      </Button>
-    {/if}
   </FormGroup>
 </Form>
 
