@@ -121,38 +121,44 @@
 						<Button color="primary" size="sm" on:click={() => toggleCollapse(i)}>
 							{openCollapse[i] ? 'Ocultar' : 'Ver detalhes'}
 						</Button>
+					</td>
+				</tr>
+				<tr>
+					<td colspan="8" style="padding:0; border: none; background: transparent;">
 						<Collapse isOpen={!!openCollapse[i]}>
-							{#if entidade.kind === 'transaction' && entidade.postings}
-								<strong>Postings:</strong>
-								<ListGroup class="mb-2">
-									{#each entidade.postings as posting}
-										<ListGroupItem>
-											Conta: {posting.account} | Valor: {posting.amount?.value ?? ''} {posting.amount?.currency ?? ''}
-											{#if posting.meta}
-												<br /><em>Meta:</em>
-												<ListGroup class="mt-1">
-													{#each Object.entries(posting.meta) as [k, v]}
-														<ListGroupItem>{k}: {JSON.stringify(v)}</ListGroupItem>
-													{/each}
-												</ListGroup>
-											{/if}
-										</ListGroupItem>
-									{/each}
+							<div style="padding: 1rem; background: #f8f9fa; border-radius: 0 0 0.5rem 0.5rem; border: 1px solid #dee2e6; border-top: none;">
+								{#if entidade.kind === 'transaction' && entidade.postings}
+									<strong>Postings:</strong>
+									<ListGroup class="mb-2">
+										{#each entidade.postings as posting}
+											<ListGroupItem>
+												Conta: {posting.account} | Valor: {posting.amount?.value ?? ''} {posting.amount?.currency ?? ''}
+												{#if posting.meta}
+													<br /><em>Meta:</em>
+													<ListGroup class="mt-1">
+														{#each Object.entries(posting.meta) as [k, v]}
+															<ListGroupItem>{k}: {JSON.stringify(v)}</ListGroupItem>
+														{/each}
+													</ListGroup>
+												{/if}
+											</ListGroupItem>
+										{/each}
+									</ListGroup>
+								{/if}
+								{#if entidade.meta}
+									<strong>Meta:</strong>
+									<ListGroup class="mb-2">
+										{#each Object.entries(entidade.meta) as [k, v]}
+											<ListGroupItem>{k}: {JSON.stringify(v)}</ListGroupItem>
+										{/each}
+									</ListGroup>
+								{/if}
+								<ListGroup>
+									<ListGroupItem>
+										<pre>{JSON.stringify(entidade, null, 2)}</pre>
+									</ListGroupItem>
 								</ListGroup>
-							{/if}
-							{#if entidade.meta}
-								<strong>Meta:</strong>
-								<ListGroup class="mb-2">
-									{#each Object.entries(entidade.meta) as [k, v]}
-										<ListGroupItem>{k}: {JSON.stringify(v)}</ListGroupItem>
-									{/each}
-								</ListGroup>
-							{/if}
-							<ListGroup>
-								<ListGroupItem>
-									<pre>{JSON.stringify(entidade, null, 2)}</pre>
-								</ListGroupItem>
-							</ListGroup>
+							</div>
 						</Collapse>
 					</td>
 				</tr>
