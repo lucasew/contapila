@@ -529,6 +529,20 @@ export const createParser = (config: ParserConfig, filename: string = 'stdin') =
 			}
 
 			if (!parsed) {
+				// Se a linha começa com 2 ou 4 espaços, ignore (é um posting órfão)
+				const firstChar = peekChar(cursor);
+				const secondChar = peekChar(cursor, 1);
+				const thirdChar = peekChar(cursor, 2);
+				const fourthChar = peekChar(cursor, 3);
+				if ((firstChar === ' ' && secondChar === ' ') ||
+					(firstChar === ' ' && secondChar === ' ' && thirdChar === ' ' && fourthChar === ' ')) {
+					// Avança até o fim da linha
+					while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
+						cursor = advanceCursor(cursor, 1);
+					}
+					if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
+					continue;
+				}
 				const start = cursor.position;
 				let end = start;
 				while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
