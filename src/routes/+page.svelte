@@ -76,6 +76,9 @@
 	function entidadeParaLinhaTabela(entidade: any) {
 		let titulo = '';
 		let subtitulo = '';
+		let tags = [];
+		let postings = undefined;
+		let meta = entidade.meta;
 		if (entidade.kind === 'balance') {
 			titulo = entidade.account;
 			subtitulo = entidade.amount ? `${entidade.amount.value} ${entidade.amount.currency}` : '';
@@ -87,12 +90,18 @@
 			if (entidade.narration) subtitulo = entidade.narration;
 			else if (entidade.comment) subtitulo = entidade.comment;
 		}
+		if (entidade.tags) tags = entidade.tags;
+		if (entidade.postings) postings = entidade.postings;
 		return {
 			data: entidade.date,
 			tipo: entidade.kind,
 			titulo,
 			subtitulo,
-			detalhes: entidade
+			tags,
+			postings,
+			meta,
+			narration: entidade.narration,
+			comment: entidade.comment
 		};
 	}
 
@@ -138,34 +147,30 @@
 						{#if linha.subtitulo}
 							{#if linha.titulo} {linha.subtitulo}{:else}{linha.subtitulo}{/if}
 						{/if}
-						
-							{#each getTags(linha.detalhes) as tag}
-								<Badge color="secondary" class="me-1">{tag}</Badge>
-							{/each}
-						
+						{#each linha.tags as tag}
+							<Badge color="secondary" class="me-1">{tag}</Badge>
+						{/each}
 					</Col>
 				</Row>
-			
-					{#if linha.detalhes.kind === 'transaction' && linha.detalhes.postings}
-						{#each linha.detalhes.postings as posting, j}
-							<PostingItem posting={posting} />
-						{/each}
-					{/if}
-					{#if linha.detalhes.narration || linha.detalhes.comment || Object.keys(linha.detalhes).length > 0}
-						<details class="mt-2">
-							<summary><strong>Atributos</strong></summary>
-							{#if linha.detalhes.meta}
-								<ul class="ms-3 mb-2">
-									{#each Object.entries(linha.detalhes.meta) as [k, v]}
-										<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
-									{/each}
-								</ul>
-							{:else}
-								<span class="ms-3 text-muted">Sem atributos extras</span>
-							{/if}
-						</details>
-					{/if}
-
+				{#if linha.postings}
+					{#each linha.postings as posting}
+						<PostingItem posting={posting} />
+					{/each}
+				{/if}
+				{#if linha.narration || linha.comment || linha.meta}
+					<details class="mt-2">
+						<summary><strong>Atributos</strong></summary>
+						{#if linha.meta}
+							<ul class="ms-3 mb-2">
+								{#each Object.entries(linha.meta) as [k, v]}
+									<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
+								{/each}
+							</ul>
+						{:else}
+							<span class="ms-3 text-muted">Sem atributos extras</span>
+						{/if}
+					</details>
+				{/if}
 			</AccordionItem>
 		{/each}
 	</Accordion>
