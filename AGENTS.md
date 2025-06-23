@@ -34,4 +34,30 @@ This document defines standards and practices for automated agents and humans co
 
 ---
 
+## Diretrizes de Commits (Git Guidelines)
+
+Para manter o histórico do projeto organizado, utilize os tipos de commit convencionais:
+
+- **feat**: Adição de nova funcionalidade (ex: feat: adicionar upload de múltiplos arquivos)
+- **fix**: Correção de bug (ex: fix: corrigir erro de parsing de datas)
+- **chore**: Tarefas de manutenção, sem impacto direto no código de produção (ex: chore: atualizar dependências)
+- **docs**: Mudanças apenas em documentação (ex: docs: atualizar README)
+- **refactor**: Refatoração de código, sem alterar comportamento (ex: refactor: mover lógica para função utilitária)
+- **style**: Mudanças de formatação, sem alterar lógica (ex: style: padronizar indentação)
+- **test**: Adição ou ajuste de testes (ex: test: adicionar teste para parser de tags)
+- **perf**: Melhorias de performance (ex: perf: otimizar laço de parsing)
+- **build**: Mudanças que afetam o sistema de build (ex: build: ajustar configuração do Vite)
+- **ci**: Mudanças em arquivos/configuração de integração contínua (ex: ci: adicionar workflow do GitHub Actions)
+- **revert**: Reversão de commit anterior (ex: revert: feat: adicionar upload de múltiplos arquivos)
+
+**Exemplo de mensagem de commit:**
+
+```
+feat: permitir seleção de múltiplos arquivos no upload
+```
+
+> Sempre escreva mensagens de commit claras e objetivas, preferencialmente em português.
+
 > This document should be kept up to date as the project evolves. 
+
+**Observação:** Não utilizar CSS inline. Sempre prefira componentes Sveltestrap e classes utilitárias. 
