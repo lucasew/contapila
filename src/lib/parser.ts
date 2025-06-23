@@ -578,7 +578,9 @@ export const createParser = (config: ParserConfig, filename: string = 'stdin') =
 						break;
 					}
 				}
-				const body = text.slice(start, end);
+				const bodyRaw = text.slice(start, end);
+				// Remove indentação de cada linha agregada
+				const body = bodyRaw.replace(/\n +/g, '\n');
 				const type = body.trim().split(/\s+/)[0] || '';
 				entries.push({
 					kind: 'unknown_directive',
