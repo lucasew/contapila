@@ -408,7 +408,8 @@ export const parseField = (
 export const parseDirective = (
 	cursor: ParseCursor,
 	definition: DirectiveDefinition,
-	fieldParsers: Record<string, FieldParser>
+	fieldParsers: Record<string, FieldParser>,
+	filename: string = 'stdin'
 ): ParseResult<BaseEntry> | null => {
 	if (definition.customParser) {
 		return definition.customParser(cursor, definition.fields);
@@ -455,12 +456,12 @@ export const parseDirective = (
 
 	// Garante que meta sempre existe e inclui localização
 	if (!entry.meta) entry.meta = {};
-	entry.meta.location = `$file:${startLine}`;
+	entry.meta.location = `${filename}:${startLine}`;
 
 	return { value: entry as BaseEntry, cursor: current };
 };
 
-export const createParser = (config: ParserConfig) => {
+export const createParser = (config: ParserConfig, filename: string = 'stdin') => {
 	const validationErrors = validateModuleDependencies(config.modules);
 	if (validationErrors.length > 0) {
 		throw new Error(`Module validation failed: ${validationErrors.join(', ')}`);
@@ -491,7 +492,7 @@ export const createParser = (config: ParserConfig) => {
 			let parsed = false;
 
 			for (const definition of allDirectives) {
-				const result = parseDirective(cursor, definition, fieldParsers);
+				const result = parseDirective(cursor, definition, fieldParsers, filename);
 				if (result) {
 					entries.push(result.value);
 					cursor = result.cursor;

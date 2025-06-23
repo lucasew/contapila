@@ -103,7 +103,7 @@ describe('YAML Parser', () => {
 			balance: 1000.5
 		});
 		expect(typeof entries[0].meta.location).toBe('string');
-		expect(entries[0].meta.location).toMatch(/^\$file:\d+$/);
+		expect(entries[0].meta.location).toMatch(/^(\$file|stdin):\d+$/);
 	});
 
 	test('handles different data types in YAML', () => {
@@ -123,7 +123,7 @@ describe('YAML Parser', () => {
 			null_value: null
 		});
 		expect(typeof entries[0].meta.location).toBe('string');
-		expect(entries[0].meta.location).toMatch(/^\$file:\d+$/);
+		expect(entries[0].meta.location).toMatch(/^(\$file|stdin):\d+$/);
 	});
 });
 
