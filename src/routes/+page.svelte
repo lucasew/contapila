@@ -5,12 +5,14 @@
 		createTransactionModule
 	} from '$lib/beancount.js';
 	import { createParser } from '$lib/parser.js';
-	import { Table, Badge, Button, Collapse, ListGroup, ListGroupItem, Row, Col } from '@sveltestrap/sveltestrap';
+	import { Table, Badge, Button, Collapse, ListGroup, ListGroupItem, Row, Col, Accordion, AccordionItem, Icon } from '@sveltestrap/sveltestrap';
+	import PostingItem from '$lib/PostingItem.svelte';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
 	let erro: string | null = $state(null);
 	let openCollapse: Record<number, boolean> = $state({});
+	let openPostings: boolean[][] = [];
 
 	const parser = createParser({
 		modules: [
@@ -64,6 +66,13 @@
 		openCollapse = { ...openCollapse, [idx]: !openCollapse[idx] };
 	}
 
+	function togglePosting(i: number, j: number) {
+		// Garante nova referência para reatividade
+		openPostings = openPostings.slice();
+		openPostings[i] = (openPostings[i] || []).slice();
+		openPostings[i][j] = !openPostings[i]?.[j];
+	}
+
 	function entidadeParaLinhaTabela(entidade: any) {
 		let titulo = '';
 		let subtitulo = '';
@@ -103,16 +112,11 @@
 					content = [];
 				}
 			});
-		console.log(content);
+		console.log($inspect(content));
 	});
 </script>
 
-<style>
-.valor {
-	text-align: right;
-	font-variant-numeric: tabular-nums;
-}
-</style>
+
 
 
 <input type="file" bind:files />
@@ -159,28 +163,9 @@
 						<Collapse isOpen={!!openCollapse[i]}>
 							<div style="padding: 1rem; background: #f8f9fa; border-radius: 0 0 0.5rem 0.5rem; border: 1px solid #dee2e6; border-top: none;">
 								{#if linha.detalhes.kind === 'transaction' && linha.detalhes.postings}
-									<ListGroup class="mb-2">
-										{#each linha.detalhes.postings as posting}
-											<ListGroupItem>
-												<Row class="align-items-center">
-													<Col>{posting.account}</Col>
-													<Col class="text-end" style="font-variant-numeric: tabular-nums; min-width: 100px;">{posting.amount?.value ?? ''} {posting.amount?.currency ?? ''}</Col>
-												</Row>
-												<details class="mt-2">
-													<summary><strong>Atributos</strong></summary>
-													{#if posting.meta}
-														<ul class="ms-3 mb-2">
-															{#each Object.entries(posting.meta) as [k, v]}
-																<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
-															{/each}
-														</ul>
-													{:else}
-														<span class="ms-3 text-muted">Sem atributos extras</span>
-													{/if}
-												</details>
-											</ListGroupItem>
-										{/each}
-									</ListGroup>
+									{#each linha.detalhes.postings as posting, j}
+										<PostingItem posting={posting} />
+									{/each}
 								{/if}
 								{#if linha.detalhes.narration || linha.detalhes.comment || Object.keys(linha.detalhes).length > 0}
 									<details class="mt-2">
