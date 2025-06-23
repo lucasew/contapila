@@ -5,7 +5,7 @@
 		createTransactionModule
 	} from '$lib/beancount.js';
 	import { createParser } from '$lib/parser.js';
-	import { Table, Badge, Button, Collapse, ListGroup, ListGroupItem } from '@sveltestrap/sveltestrap';
+	import { Table, Badge, Button, Collapse, ListGroup, ListGroupItem, Row, Col } from '@sveltestrap/sveltestrap';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
@@ -89,7 +89,6 @@
 }
 </style>
 
-<h1>Beancount preview</h1>
 
 <input type="file" bind:files />
 {#if erro != null}
@@ -117,6 +116,8 @@
 							{#if entidade.amount}
 								&nbsp;{entidade.amount.value} {entidade.amount.currency}
 							{/if}
+						{:else if entidade.kind === 'open' || entidade.kind === 'close'}
+							<strong>{entidade.account}</strong>
 						{:else}
 							{#if entidade.payee}
 								<strong>{entidade.payee}</strong>
@@ -127,7 +128,7 @@
 								{entidade.comment}
 							{/if}
 						{/if}
-						<div style="margin-top: 0.25em;">
+						<div class="mt-1">
 							{#each getTags(entidade) as tag}
 								<Badge color="secondary" class="me-1">{tag}</Badge>
 							{/each}
@@ -147,10 +148,10 @@
 									<ListGroup class="mb-2">
 										{#each entidade.postings as posting}
 											<ListGroupItem>
-												<div style="display: flex; justify-content: space-between; align-items: center;">
-													<span style="font-weight: 500;">{posting.account}</span>
-													<span style="font-variant-numeric: tabular-nums; text-align: right; min-width: 100px;">{posting.amount?.value ?? ''} {posting.amount?.currency ?? ''}</span>
-												</div>
+												<Row class="align-items-center">
+													<Col>{posting.account}</Col>
+													<Col class="text-end" style="font-variant-numeric: tabular-nums; min-width: 100px;">{posting.amount?.value ?? ''} {posting.amount?.currency ?? ''}</Col>
+												</Row>
 												{#if posting.meta}
 													<br /><em>Meta:</em>
 													<ListGroup class="mt-1">
