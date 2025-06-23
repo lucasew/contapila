@@ -455,8 +455,7 @@ export const parseDirective = (
 
 	// Garante que meta sempre existe e inclui localização
 	if (!entry.meta) entry.meta = {};
-	entry.meta.line = startLine;
-	entry.meta.column = startColumn;
+	entry.meta.location = `$file:${startLine}`;
 
 	return { value: entry as BaseEntry, cursor: current };
 };

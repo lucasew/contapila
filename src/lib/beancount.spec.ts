@@ -160,8 +160,8 @@ describe('YAML Parser', () => {
 			active: true,
 			balance: 1000.5
 		});
-		expect(typeof entries[0].meta.line).toBe('number');
-		expect(typeof entries[0].meta.column).toBe('number');
+		expect(typeof entries[0].meta.location).toBe('string');
+		expect(entries[0].meta.location).toMatch(/^\$file:\d+$/);
 	});
 
 	test('handles different data types in YAML', () => {
@@ -186,8 +186,8 @@ describe('YAML Parser', () => {
 			boolean_false: false,
 			null_value: null
 		});
-		expect(typeof entries[0].meta.line).toBe('number');
-		expect(typeof entries[0].meta.column).toBe('number');
+		expect(typeof entries[0].meta.location).toBe('string');
+		expect(entries[0].meta.location).toMatch(/^\$file:\d+$/);
 	});
 });
 
