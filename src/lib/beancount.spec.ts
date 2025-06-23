@@ -1,21 +1,23 @@
-import { describe, expect, beforeEach, test } from 'vitest';
 import {
-	createParser,
-	createParserConfig,
 	createCoreBeancountModule,
-	createTransactionModule,
 	createCustomReportingModule,
-	convertBeancountToGeneralizedFormat,
+	createTransactionModule,
 	getAllDirectiveTypes,
 	getModuleByName,
-	validateModuleDependencies,
+	type BaseEntry,
+	type DirectiveModule
+} from '$lib/beancount.js';
+import { beforeEach, describe, expect, test } from 'vitest';
+import {
+	REGEX_PATTERNS,
+	createParserConfig,
+	createParser,
+	parseAmount,
 	parseTag,
 	parseTags,
-	type DirectiveModule,
-	type BaseEntry,
-	REGEX_PATTERNS,
-	parseAmount
-} from '$lib/beancount.js';
+	convertBeancountToGeneralizedFormat,
+	validateModuleDependencies
+} from './parser.js';
 
 // Test utilities
 const createTestCursor = (text: string, position = 0) => ({
@@ -683,7 +685,6 @@ describe('Error Handling', () => {
 		];
 
 		expect(() => {
-			createParserConfig(invalidModules);
 			createParser(createParserConfig(invalidModules));
 		}).toThrow('Module validation failed');
 	});
