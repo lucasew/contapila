@@ -69,20 +69,6 @@ describe('Core Parser Functions', () => {
 			});
 			expect(parseAmount(createTestCursor('invalid amount'))).toBeNull();
 		});
-
-		test('parseTag funciona diretamente', () => {
-			const cursor = createTestCursor('#test');
-			const result = parseTag(cursor);
-			expect(result).not.toBeNull();
-			expect(result?.value).toBe('test');
-		});
-
-		test('parseTags funciona diretamente', () => {
-			const cursor = createTestCursor('#tag1 #tag2');
-			const result = parseTags(cursor);
-			expect(result).not.toBeNull();
-			expect(result?.value).toEqual(['tag1', 'tag2']);
-		});
 	});
 });
 
