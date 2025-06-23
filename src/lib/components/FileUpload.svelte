@@ -94,7 +94,7 @@ function toFileList(arr: File[]): FileList {
             {#each files as file, idx}
               <Row class="align-items-center mb-2 g-2">
                 <Col>
-                  <span style="cursor: pointer;" on:click|stopPropagation={() => removeFile(idx)}>
+                  <span style="cursor: pointer;" on:click|stopPropagation={() => removeFile(idx)} role="button" tabindex="0">
                     <Badge color="primary" pill class="fs-6">
                       {file.name} <span class="text-muted small ms-1">({Math.round(file.size/1024)} KB)</span>
                     </Badge>
@@ -113,17 +113,3 @@ function toFileList(arr: File[]): FileList {
     </ListGroup>
   </FormGroup>
 </Form>
-
-<style>
-.border-dashed {
-  border-style: dashed !important;
-}
-.bg-light {
-  background-color: #f8f9fa !important;
-}
-.text-truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style> 
