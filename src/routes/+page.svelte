@@ -166,25 +166,35 @@
 													<Col>{posting.account}</Col>
 													<Col class="text-end" style="font-variant-numeric: tabular-nums; min-width: 100px;">{posting.amount?.value ?? ''} {posting.amount?.currency ?? ''}</Col>
 												</Row>
-												{#if posting.meta}
-													<br /><em>Meta:</em>
-													<ListGroup class="mt-1">
-														{#each Object.entries(posting.meta) as [k, v]}
-															<ListGroupItem>{k}: {JSON.stringify(v)}</ListGroupItem>
-														{/each}
-													</ListGroup>
-												{/if}
+												<details class="mt-2">
+													<summary><strong>Atributos</strong></summary>
+													{#if posting.meta}
+														<ul class="ms-3 mb-2">
+															{#each Object.entries(posting.meta) as [k, v]}
+																<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
+															{/each}
+														</ul>
+													{:else}
+														<span class="ms-3 text-muted">Sem atributos extras</span>
+													{/if}
+												</details>
 											</ListGroupItem>
 										{/each}
 									</ListGroup>
 								{/if}
-								{#if linha.detalhes.meta}
-									<strong>Meta:</strong>
-									<ListGroup class="mb-2">
-										{#each Object.entries(linha.detalhes.meta) as [k, v]}
-											<ListGroupItem>{k}: {JSON.stringify(v)}</ListGroupItem>
-										{/each}
-									</ListGroup>
+								{#if linha.detalhes.narration || linha.detalhes.comment || Object.keys(linha.detalhes).length > 0}
+									<details class="mt-2">
+										<summary><strong>Atributos</strong></summary>
+										{#if linha.detalhes.meta}
+											<ul class="ms-3 mb-2">
+												{#each Object.entries(linha.detalhes.meta) as [k, v]}
+													<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
+												{/each}
+											</ul>
+										{:else}
+											<span class="ms-3 text-muted">Sem atributos extras</span>
+										{/if}
+									</details>
 								{/if}
 							</div>
 						</Collapse>
