@@ -529,44 +529,40 @@ export const createParser = (config: ParserConfig, filename: string = 'stdin') =
 			}
 
 			if (!parsed) {
-				// Se a linha começa com 2 ou 4 espaços, ignore (é um posting órfão)
-				const firstChar = peekChar(cursor);
-				const secondChar = peekChar(cursor, 1);
-				const thirdChar = peekChar(cursor, 2);
-				const fourthChar = peekChar(cursor, 3);
-				if ((firstChar === ' ' && secondChar === ' ') ||
-					(firstChar === ' ' && secondChar === ' ' && thirdChar === ' ' && fourthChar === ' ')) {
-					// Avança até o fim da linha
-					while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
-						cursor = advanceCursor(cursor, 1);
-					}
-					if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
-					continue;
-				}
-				// Se a linha começa com uma data, ignore o bloco (linha + metadados indentados)
+				// Se a linha começa com uma data, verifique se há linhas indentadas após ela
 				const dateMatch = parseRegex(cursor, REGEX_PATTERNS.DATE);
 				if (dateMatch) {
 					// Avança até o fim da linha
-					while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
-						cursor = advanceCursor(cursor, 1);
+					let tempCursor = cursor;
+					while (!isAtEnd(tempCursor) && peekChar(tempCursor) !== '\n') {
+						tempCursor = advanceCursor(tempCursor, 1);
 					}
-					if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
-					// Ignora linhas indentadas seguintes
-					while (!isAtEnd(cursor)) {
-						const fc = peekChar(cursor);
-						const sc = peekChar(cursor, 1);
-						const tc = peekChar(cursor, 2);
-						const frc = peekChar(cursor, 3);
-						if ((fc === ' ' && sc === ' ') || (fc === ' ' && sc === ' ' && tc === ' ' && frc === ' ')) {
-							while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
-								cursor = advanceCursor(cursor, 1);
+					if (peekChar(tempCursor) === '\n') tempCursor = advanceCursor(tempCursor, 1);
+					// Checa se próxima linha é indentada
+					const fc = peekChar(tempCursor);
+					const sc = peekChar(tempCursor, 1);
+					const tc = peekChar(tempCursor, 2);
+					const frc = peekChar(tempCursor, 3);
+					if ((fc === ' ' && sc === ' ') || (fc === ' ' && sc === ' ' && tc === ' ' && frc === ' ')) {
+						// Ignora bloco (linha + metadados)
+						cursor = tempCursor;
+						while (!isAtEnd(cursor)) {
+							const fc2 = peekChar(cursor);
+							const sc2 = peekChar(cursor, 1);
+							const tc2 = peekChar(cursor, 2);
+							const frc2 = peekChar(cursor, 3);
+							if ((fc2 === ' ' && sc2 === ' ') || (fc2 === ' ' && sc2 === ' ' && tc2 === ' ' && frc2 === ' ')) {
+								while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
+									cursor = advanceCursor(cursor, 1);
+								}
+								if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
+							} else {
+								break;
 							}
-							if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
-						} else {
-							break;
 						}
+						continue;
 					}
-					continue;
+					// Se não há linhas indentadas, volta o cursor para a posição original para gerar unknown_directive normalmente
 				}
 				// Agrega linhas indentadas como parte do body da unknown_directive
 				const start = cursor.position;
