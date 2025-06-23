@@ -108,27 +108,48 @@
 	$effect(() => {
 		console.log(files);
 		if (!files) return;
-		if (files.length != 1) return;
-		files
-			.item(0)
-			?.text()
-			.then((text: string) => {
+		if (files.length < 1) return;
+		const allEntries: any[] = [];
+		let errorFound: string | null = null;
+		const promises = Array.from(files).map(file =>
+			file.text().then(text => {
 				try {
-					content = parser(text);
-					erro = null;
+					// Cria um parser com o nome do arquivo como filename
+					const parserWithFilename = createParser({
+						modules: [
+							createCoreBeancountModule(),
+							createTransactionModule(),
+							createCustomReportingModule()
+						],
+						fieldParsers: {},
+						customValidators: {}
+					}, file.name);
+					const entries = parserWithFilename(text);
+					allEntries.push(...entries);
 				} catch (e: unknown) {
-					erro = e instanceof Error ? e.message : String(e);
-					content = [];
+					errorFound = `Erro no arquivo ${file.name}: ` + (e instanceof Error ? e.message : String(e));
 				}
-			});
-		console.log($inspect(content));
+			})
+		);
+		Promise.all(promises).then(() => {
+			if (errorFound) {
+				erro = errorFound;
+				content = [];
+			} else {
+				erro = null;
+				// Ordena por data crescente
+				allEntries.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+				content = allEntries;
+			}
+			console.log($inspect(content));
+		});
 	});
 </script>
 
 
 
 
-<input type="file" bind:files />
+<input type="file" bind:files multiple />
 {#if erro != null}
 	<p><b>Erro: </b>: {erro}</p>
 {/if}
