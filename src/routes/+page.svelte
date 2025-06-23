@@ -179,6 +179,9 @@
 						{#each linha.tags as tag}
 							<Badge color="secondary" class="me-1">{tag}</Badge>
 						{/each}
+						{#each linha.links as link}
+							<Badge color="info" outline class="me-1">^{link}</Badge>
+						{/each}
 					</Col>
 				</Row>
 				{#if linha.postings}

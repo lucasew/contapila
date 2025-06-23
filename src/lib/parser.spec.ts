@@ -9,7 +9,7 @@ import {
   parseTagOrLink,
   parseTagsAndLinks
 } from './parser.js';
-import { createCoreBeancountModule } from './beancount.js';
+import { createCoreBeancountModule, createTransactionModule, createCustomReportingModule } from './beancount.js';
 
 // Utilitário de teste para criar um cursor
 const createTestCursor = (text: string, position = 0) => ({
@@ -68,6 +68,20 @@ describe('Core Parser Functions', () => {
 				currency: 'A_B_C'
 			});
 			expect(parseAmount(createTestCursor('invalid amount'))).toBeNull();
+		});
+
+		test('parseTag funciona diretamente', () => {
+			const cursor = createTestCursor('#test');
+			const result = parseTag(cursor);
+			expect(result).not.toBeNull();
+			expect(result?.value).toBe('test');
+		});
+
+		test('parseTags funciona diretamente', () => {
+			const cursor = createTestCursor('#tag1 #tag2');
+			const result = parseTags(cursor);
+			expect(result).not.toBeNull();
+			expect(result?.value).toEqual(['tag1', 'tag2']);
 		});
 	});
 });
@@ -370,5 +384,19 @@ describe('Parsing de tags (#) e links (^) nas diretivas', () => {
 		expect(entries).toHaveLength(1);
 		expect(entries[0].tags).toEqual(['tag1', 'tag2']);
 		expect(entries[0].links).toEqual(['link1']);
+	});
+});
+
+describe('INTEGRAÇÃO: exemplo completo do arquivo example.beancount', () => {
+	test('parseia todas as entidades do exemplo exatamente como esperado', () => {
+		const example = `; Arquivo de teste Beancount - edge cases\n\n2015-01-01 open Assets:Cash USD #start ^init\n  description: \"Conta principal\"\n  prioridade: alta\n\n2015-01-01 open Assets:Investments:Stocks ;; \"Abertura de ações\" #invest ^b3\n  corretora: \"XP\"\n  ativo: \"PETR4\"\n  valor_inicial: 10000\n\n2015-01-01 open Expenses:Food #grocery ^supermercado\n\n2015-01-01 close Expenses:Food #cleanup ^fim\n\n2015-01-15 balance Assets:Cash 1000.00 USD #monthly ^saldo\n  verificado: true\n\n2015-01-20 price USD 5.25 BRL #fx ^usdbrl\n\n2015-02-01 note Assets:Cash \"Primeira nota\" #info ^notinha\n\n2015-02-10 * \"Supermercado\" \"Compra semanal\" #food ^compra\n  categoria: \"alimentação\"\n  recibo: \"12345\"\n  Assets:Cash      -150.75 USD\n  Expenses:Food     150.75 USD\n    tax_included: true\n\n2015-02-15 * \"Restaurante\" \"Almoço\" #food ^restaurante\n  Assets:Cash      -50.00 USD\n  Expenses:Food     50.00 USD\n\n2015-03-01 * \"Salário\" \"Recebimento\" #income ^salario\n  Income:Salary   -3000.00 USD\n  Assets:Cash      3000.00 USD\n\n2015-03-05 * \"Investimento\" \"Compra de ação\" #invest ^b3\n  Assets:Cash      -500.00 USD\n  Assets:Investments:Stocks  500.00 USD\n    ativo: \"PETR4\"\n    quantidade: 10\n\n2015-03-10 * \"Transferência\" \"Entre contas\" #transfer ^move\n  Assets:Cash      -200.00 USD\n  Assets:Bank      200.00 USD\n\n2015-03-15 * \"Compra internacional\" \"Amazon\" #shopping ^amazon\n  Assets:Cash      -100.00 USD\n  Expenses:Shopping 100.00 USD\n    moeda: \"USD\"\n    pais: \"EUA\"\n\n2015-03-20 * \"Pagamento parcial\" \"Com valor zero\" #weird ^zero\n  Assets:Cash      0.00 USD\n  Expenses:Other   0.00 USD\n\n2015-03-25 * \"Comentário\" \"Linha com comentário\" #comment ^linha ;; Isso é um comentário\n  Assets:Cash      -10.00 USD\n  Expenses:Other   10.00 USD\n\n2015-04-01 unknown_directive Algo estranho aqui #unknown ^edge\n  campo: \"valor\"\n\n2015-04-10 open Assets:Crypto:BTC ;; \"Conta de Bitcoin\" #crypto ^btc\n  exchange: \"Binance\"\n  address: \"1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa\"\n\n2015-04-15 * \"Transação com ;;\" \"Teste de parser\" ;; \"ignorar isso\" #parser ^edge\n  Assets:Cash      -1.00 USD\n  Expenses:Other   1.00 USD\n\n2015-04-20 * \"Aspas e caracteres\" \"Descrição com \\\"aspas\\\" e \\n nova linha\" #escape ^test\n  Assets:Cash      -5.00 USD\n  Expenses:Other   5.00 USD\n\n; Fim do arquivo de teste `;
+		const config = createParserConfig([
+			createCoreBeancountModule(),
+			createTransactionModule(),
+			createCustomReportingModule()
+		]);
+		const parser = createParser(config, 'example.beancount');
+		const entries = parser(example);
+		expect(entries).toMatchSnapshot();
 	});
 }); 

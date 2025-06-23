@@ -1,0 +1,77 @@
+; Arquivo de teste Beancount - edge cases
+
+2015-01-01 open Assets:Cash USD #start ^init
+  description: "Conta principal"
+  prioridade: alta
+
+2015-01-01 open Assets:Investments:Stocks ;; "Abertura de ações" #invest ^b3
+  corretora: "XP"
+  ativo: "PETR4"
+  valor_inicial: 10000
+
+2015-01-01 open Expenses:Food #grocery ^supermercado
+
+2015-01-01 close Expenses:Food #cleanup ^fim
+
+2015-01-15 balance Assets:Cash 1000.00 USD #monthly ^saldo
+  verificado: true
+
+2015-01-20 price USD 5.25 BRL #fx ^usdbrl
+
+2015-02-01 note Assets:Cash "Primeira nota" #info ^notinha
+
+2015-02-10 * "Supermercado" "Compra semanal" #food ^compra
+  categoria: "alimentação"
+  recibo: "12345"
+  Assets:Cash      -150.75 USD
+  Expenses:Food     150.75 USD
+    tax_included: true
+
+2015-02-15 * "Restaurante" "Almoço" #food ^restaurante
+  Assets:Cash      -50.00 USD
+  Expenses:Food     50.00 USD
+
+2015-03-01 * "Salário" "Recebimento" #income ^salario
+  Income:Salary   -3000.00 USD
+  Assets:Cash      3000.00 USD
+
+2015-03-05 * "Investimento" "Compra de ação" #invest ^b3
+  Assets:Cash      -500.00 USD
+  Assets:Investments:Stocks  500.00 USD
+    ativo: "PETR4"
+    quantidade: 10
+
+2015-03-10 * "Transferência" "Entre contas" #transfer ^move
+  Assets:Cash      -200.00 USD
+  Assets:Bank      200.00 USD
+
+2015-03-15 * "Compra internacional" "Amazon" #shopping ^amazon
+  Assets:Cash      -100.00 USD
+  Expenses:Shopping 100.00 USD
+    moeda: "USD"
+    pais: "EUA"
+
+2015-03-20 * "Pagamento parcial" "Com valor zero" #weird ^zero
+  Assets:Cash      0.00 USD
+  Expenses:Other   0.00 USD
+
+2015-03-25 * "Comentário" "Linha com comentário" #comment ^linha ;; Isso é um comentário
+  Assets:Cash      -10.00 USD
+  Expenses:Other   10.00 USD
+
+2015-04-01 unknown_directive Algo estranho aqui #unknown ^edge
+  campo: "valor"
+
+2015-04-10 open Assets:Crypto:BTC ;; "Conta de Bitcoin" #crypto ^btc
+  exchange: "Binance"
+  address: "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+
+2015-04-15 * "Transação com ;;" "Teste de parser" ;; "ignorar isso" #parser ^edge
+  Assets:Cash      -1.00 USD
+  Expenses:Other   1.00 USD
+
+2015-04-20 * "Aspas e caracteres" "Descrição com \"aspas\" e \\n nova linha" #escape ^test
+  Assets:Cash      -5.00 USD
+  Expenses:Other   5.00 USD
+
+; Fim do arquivo de teste 

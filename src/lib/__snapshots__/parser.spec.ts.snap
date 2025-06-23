@@ -1,0 +1,494 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia todas as entidades do exemplo exatamente como esperado 1`] = `
+[
+  {
+    "account": "Assets:Cash",
+    "currencies": [
+      "USD",
+    ],
+    "date": "2015-01-01",
+    "keyword": "open",
+    "kind": "open",
+    "links": [
+      "init",
+    ],
+    "meta": {
+      "description": "Conta principal",
+      "location": "example.beancount:3",
+      "prioridade": "alta",
+    },
+    "tags": [
+      "start",
+    ],
+  },
+  {
+    "account": "Assets:Investments:Stocks",
+    "date": "2015-01-01",
+    "keyword": "open",
+    "kind": "open",
+    "meta": {
+      "ativo": "PETR4",
+      "corretora": "XP",
+      "location": "example.beancount:7",
+      "valor_inicial": 10000,
+    },
+  },
+  {
+    "account": "Expenses:Food",
+    "date": "2015-01-01",
+    "keyword": "open",
+    "kind": "open",
+    "links": [
+      "supermercado",
+    ],
+    "meta": {
+      "location": "example.beancount:12",
+    },
+    "tags": [
+      "grocery",
+    ],
+  },
+  {
+    "account": "Expenses:Food",
+    "date": "2015-01-01",
+    "keyword": "close",
+    "kind": "close",
+    "links": [
+      "fim",
+    ],
+    "meta": {
+      "location": "example.beancount:14",
+    },
+    "tags": [
+      "cleanup",
+    ],
+  },
+  {
+    "account": "Assets:Cash",
+    "amount": {
+      "currency": "USD",
+      "value": 1000,
+    },
+    "date": "2015-01-15",
+    "keyword": "balance",
+    "kind": "balance",
+    "links": [
+      "saldo",
+    ],
+    "meta": {
+      "location": "example.beancount:16",
+      "verificado": true,
+    },
+    "tags": [
+      "monthly",
+    ],
+  },
+  {
+    "amount": {
+      "currency": "BRL",
+      "value": 5.25,
+    },
+    "commodity": "USD",
+    "date": "2015-01-20",
+    "keyword": "price",
+    "kind": "price",
+    "links": [
+      "usdbrl",
+    ],
+    "meta": {
+      "location": "example.beancount:19",
+    },
+    "tags": [
+      "fx",
+    ],
+  },
+  {
+    "account": "Assets:Cash",
+    "comment": "Primeira nota",
+    "date": "2015-02-01",
+    "keyword": "note",
+    "kind": "note",
+    "links": [
+      "notinha",
+    ],
+    "meta": {
+      "location": "example.beancount:21",
+    },
+    "tags": [
+      "info",
+    ],
+  },
+  {
+    "date": "2015-02-10",
+    "flag": "*",
+    "kind": "transaction",
+    "links": [
+      "compra",
+    ],
+    "meta": {
+      "categoria": "alimentação",
+      "recibo": "12345",
+    },
+    "narration": "Compra semanal",
+    "payee": "Supermercado",
+    "postings": [
+      {
+        "account": "Assets:Cash",
+        "amount": {
+          "currency": "USD",
+          "value": -150.75,
+        },
+        "meta": undefined,
+      },
+      {
+        "account": "Expenses:Food",
+        "amount": {
+          "currency": "USD",
+          "value": 150.75,
+        },
+        "meta": {
+          "tax_included": true,
+        },
+      },
+    ],
+    "tags": [
+      "food",
+    ],
+  },
+  {
+    "date": "2015-02-15",
+    "flag": "*",
+    "kind": "transaction",
+    "links": [
+      "restaurante",
+    ],
+    "meta": undefined,
+    "narration": "Almoço",
+    "payee": "Restaurante",
+    "postings": [
+      {
+        "account": "Assets:Cash",
+        "amount": {
+          "currency": "USD",
+          "value": -50,
+        },
+        "meta": undefined,
+      },
+      {
+        "account": "Expenses:Food",
+        "amount": {
+          "currency": "USD",
+          "value": 50,
+        },
+        "meta": undefined,
+      },
+    ],
+    "tags": [
+      "food",
+    ],
+  },
+  {
+    "date": "2015-03-01",
+    "flag": "*",
+    "kind": "transaction",
+    "links": [
+      "salario",
+    ],
+    "meta": undefined,
+    "narration": "Recebimento",
+    "payee": "Salário",
+    "postings": [
+      {
+        "account": "Income:Salary",
+        "amount": {
+          "currency": "USD",
+          "value": -3000,
+        },
+        "meta": undefined,
+      },
+      {
+        "account": "Assets:Cash",
+        "amount": {
+          "currency": "USD",
+          "value": 3000,
+        },
+        "meta": undefined,
+      },
+    ],
+    "tags": [
+      "income",
+    ],
+  },
+  {
+    "date": "2015-03-05",
+    "flag": "*",
+    "kind": "transaction",
+    "links": [
+      "b3",
+    ],
+    "meta": undefined,
+    "narration": "Compra de ação",
+    "payee": "Investimento",
+    "postings": [
+      {
+        "account": "Assets:Cash",
+        "amount": {
+          "currency": "USD",
+          "value": -500,
+        },
+        "meta": undefined,
+      },
+      {
+        "account": "Assets:Investments:Stocks",
+        "amount": {
+          "currency": "USD",
+          "value": 500,
+        },
+        "meta": {
+          "ativo": "PETR4",
+          "quantidade": 10,
+        },
+      },
+    ],
+    "tags": [
+      "invest",
+    ],
+  },
+  {
+    "date": "2015-03-10",
+    "flag": "*",
+    "kind": "transaction",
+    "links": [
+      "move",
+    ],
+    "meta": undefined,
+    "narration": "Entre contas",
+    "payee": "Transferência",
+    "postings": [
+      {
+        "account": "Assets:Cash",
+        "amount": {
+          "currency": "USD",
+          "value": -200,
+        },
+        "meta": undefined,
+      },
+      {
+        "account": "Assets:Bank",
+        "amount": {
+          "currency": "USD",
+          "value": 200,
+        },
+        "meta": undefined,
+      },
+    ],
+    "tags": [
+      "transfer",
+    ],
+  },
+  {
+    "date": "2015-03-15",
+    "flag": "*",
+    "kind": "transaction",
+    "links": [
+      "amazon",
+    ],
+    "meta": undefined,
+    "narration": "Amazon",
+    "payee": "Compra internacional",
+    "postings": [
+      {
+        "account": "Assets:Cash",
+        "amount": {
+          "currency": "USD",
+          "value": -100,
+        },
+        "meta": undefined,
+      },
+      {
+        "account": "Expenses:Shopping",
+        "amount": {
+          "currency": "USD",
+          "value": 100,
+        },
+        "meta": {
+          "moeda": "USD",
+          "pais": "EUA",
+        },
+      },
+    ],
+    "tags": [
+      "shopping",
+    ],
+  },
+  {
+    "date": "2015-03-20",
+    "flag": "*",
+    "kind": "transaction",
+    "links": [
+      "zero",
+    ],
+    "meta": undefined,
+    "narration": "Com valor zero",
+    "payee": "Pagamento parcial",
+    "postings": [
+      {
+        "account": "Assets:Cash",
+        "amount": {
+          "currency": "USD",
+          "value": 0,
+        },
+        "meta": undefined,
+      },
+      {
+        "account": "Expenses:Other",
+        "amount": {
+          "currency": "USD",
+          "value": 0,
+        },
+        "meta": undefined,
+      },
+    ],
+    "tags": [
+      "weird",
+    ],
+  },
+  {
+    "date": "2015-03-25",
+    "flag": "*",
+    "kind": "transaction",
+    "links": [
+      "linha",
+    ],
+    "meta": undefined,
+    "narration": "Linha com comentário",
+    "payee": "Comentário",
+    "postings": [],
+    "tags": [
+      "comment",
+    ],
+  },
+  {
+    "body": "Assets:Cash      -10.00 USD",
+    "date": "",
+    "kind": "unknown_directive",
+    "meta": {
+      "body": "Assets:Cash      -10.00 USD",
+      "location": "example.beancount:59",
+      "type": "Assets:Cash",
+      "warning": "Unknown directive at line 59, column 30",
+    },
+  },
+  {
+    "body": "Expenses:Other   10.00 USD",
+    "date": "",
+    "kind": "unknown_directive",
+    "meta": {
+      "body": "Expenses:Other   10.00 USD",
+      "location": "example.beancount:60",
+      "type": "Expenses:Other",
+      "warning": "Unknown directive at line 60, column 29",
+    },
+  },
+  {
+    "body": "2015-04-01 unknown_directive Algo estranho aqui #unknown ^edge",
+    "date": "",
+    "kind": "unknown_directive",
+    "meta": {
+      "body": "2015-04-01 unknown_directive Algo estranho aqui #unknown ^edge",
+      "location": "example.beancount:62",
+      "type": "2015-04-01",
+      "warning": "Unknown directive at line 62, column 63",
+    },
+  },
+  {
+    "body": "campo: "valor"",
+    "date": "",
+    "kind": "unknown_directive",
+    "meta": {
+      "body": "campo: "valor"",
+      "location": "example.beancount:63",
+      "type": "campo:",
+      "warning": "Unknown directive at line 63, column 17",
+    },
+  },
+  {
+    "account": "Assets:Crypto:BTC",
+    "date": "2015-04-10",
+    "keyword": "open",
+    "kind": "open",
+    "meta": {
+      "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+      "exchange": "Binance",
+      "location": "example.beancount:65",
+    },
+  },
+  {
+    "date": "2015-04-15",
+    "flag": "*",
+    "kind": "transaction",
+    "links": undefined,
+    "meta": undefined,
+    "narration": "Teste de parser",
+    "payee": "Transação com ;;",
+    "postings": [],
+    "tags": undefined,
+  },
+  {
+    "body": "Assets:Cash      -1.00 USD",
+    "date": "",
+    "kind": "unknown_directive",
+    "meta": {
+      "body": "Assets:Cash      -1.00 USD",
+      "location": "example.beancount:70",
+      "type": "Assets:Cash",
+      "warning": "Unknown directive at line 70, column 29",
+    },
+  },
+  {
+    "body": "Expenses:Other   1.00 USD",
+    "date": "",
+    "kind": "unknown_directive",
+    "meta": {
+      "body": "Expenses:Other   1.00 USD",
+      "location": "example.beancount:71",
+      "type": "Expenses:Other",
+      "warning": "Unknown directive at line 71, column 28",
+    },
+  },
+  {
+    "date": "2015-04-20",
+    "flag": "*",
+    "kind": "transaction",
+    "links": [
+      "test",
+    ],
+    "meta": undefined,
+    "narration": "Descrição com "aspas" e 
+ nova linha",
+    "payee": "Aspas e caracteres",
+    "postings": [
+      {
+        "account": "Assets:Cash",
+        "amount": {
+          "currency": "USD",
+          "value": -5,
+        },
+        "meta": undefined,
+      },
+      {
+        "account": "Expenses:Other",
+        "amount": {
+          "currency": "USD",
+          "value": 5,
+        },
+        "meta": undefined,
+      },
+    ],
+    "tags": [
+      "escape",
+    ],
+  },
+]
+`;
