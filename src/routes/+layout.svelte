@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Navbar, NavbarBrand, Container, Styles } from '@sveltestrap/sveltestrap';
-import ThemeToggle from '$lib/ThemeToggle.svelte';
+import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 
 </script>
 <Styles/>

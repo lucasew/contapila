@@ -8,6 +8,7 @@
 	import { Table, Badge, Button, Collapse, ListGroup, ListGroupItem, Row, Col, Accordion, AccordionItem, Icon } from '@sveltestrap/sveltestrap';
 	import PostingItem from '$lib/components/PostingItem.svelte';
 	import TipoBadge from '$lib/components/TipoBadge.svelte';
+	import FileUpload from '$lib/components/FileUpload.svelte';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
@@ -107,8 +108,13 @@
 	}
 
 	$effect(() => {
+		// Garante que a reatividade funcione ao remover arquivos
+		if (!files || files.length === 0) {
+			content = [];
+			erro = null;
+			return;
+		}
 		console.log(files);
-		if (!files) return;
 		if (files.length < 1) return;
 		const allEntries: any[] = [];
 		let errorFound: string | null = null;
@@ -147,10 +153,7 @@
 	});
 </script>
 
-
-
-
-<input type="file" bind:files multiple />
+<FileUpload on:change={e => files = e.detail.files} />
 {#if erro != null}
 	<p><b>Erro: </b>: {erro}</p>
 {/if}
@@ -181,20 +184,18 @@
 						<PostingItem posting={posting} />
 					{/each}
 				{/if}
-				{#if linha.narration || linha.comment || linha.meta}
-					<details class="mt-2">
-						<summary><strong>Atributos</strong></summary>
-						{#if linha.meta}
-							<ul class="ms-3 mb-2">
-								{#each Object.entries(linha.meta) as [k, v]}
-									<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
-								{/each}
-							</ul>
-						{:else}
-							<span class="ms-3 text-muted">Sem atributos extras</span>
-						{/if}
-					</details>
+				<details class="mt-2">
+					<summary><strong>Atributos</strong></summary>
+				{#if linha.meta}
+					
+						<ul class="ms-3 mb-2">
+							{#each Object.entries(linha.meta) as [k, v]}
+								<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
+							{/each}
+						</ul>
+					
 				{/if}
+			</details>
 			</AccordionItem>
 		{/each}
 	</Accordion>
