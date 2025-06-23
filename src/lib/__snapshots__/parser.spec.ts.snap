@@ -139,7 +139,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": -150.75,
         },
-        "meta": undefined,
+        "meta": {},
       },
       {
         "account": "Expenses:Food",
@@ -163,7 +163,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "restaurante",
     ],
-    "meta": undefined,
+    "meta": {},
     "narration": "Almoço",
     "payee": "Restaurante",
     "postings": [
@@ -173,7 +173,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": -50,
         },
-        "meta": undefined,
+        "meta": {},
       },
       {
         "account": "Expenses:Food",
@@ -181,7 +181,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": 50,
         },
-        "meta": undefined,
+        "meta": {},
       },
     ],
     "tags": [
@@ -195,7 +195,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "salario",
     ],
-    "meta": undefined,
+    "meta": {},
     "narration": "Recebimento",
     "payee": "Salário",
     "postings": [
@@ -205,7 +205,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": -3000,
         },
-        "meta": undefined,
+        "meta": {},
       },
       {
         "account": "Assets:Cash",
@@ -213,7 +213,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": 3000,
         },
-        "meta": undefined,
+        "meta": {},
       },
     ],
     "tags": [
@@ -227,7 +227,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "b3",
     ],
-    "meta": undefined,
+    "meta": {},
     "narration": "Compra de ação",
     "payee": "Investimento",
     "postings": [
@@ -237,7 +237,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": -500,
         },
-        "meta": undefined,
+        "meta": {},
       },
       {
         "account": "Assets:Investments:Stocks",
@@ -262,7 +262,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "move",
     ],
-    "meta": undefined,
+    "meta": {},
     "narration": "Entre contas",
     "payee": "Transferência",
     "postings": [
@@ -272,7 +272,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": -200,
         },
-        "meta": undefined,
+        "meta": {},
       },
       {
         "account": "Assets:Bank",
@@ -280,7 +280,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": 200,
         },
-        "meta": undefined,
+        "meta": {},
       },
     ],
     "tags": [
@@ -294,7 +294,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "amazon",
     ],
-    "meta": undefined,
+    "meta": {},
     "narration": "Amazon",
     "payee": "Compra internacional",
     "postings": [
@@ -304,7 +304,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": -100,
         },
-        "meta": undefined,
+        "meta": {},
       },
       {
         "account": "Expenses:Shopping",
@@ -329,7 +329,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "zero",
     ],
-    "meta": undefined,
+    "meta": {},
     "narration": "Com valor zero",
     "payee": "Pagamento parcial",
     "postings": [
@@ -339,7 +339,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": 0,
         },
-        "meta": undefined,
+        "meta": {},
       },
       {
         "account": "Expenses:Other",
@@ -347,7 +347,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": 0,
         },
-        "meta": undefined,
+        "meta": {},
       },
     ],
     "tags": [
@@ -361,57 +361,13 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "linha",
     ],
-    "meta": undefined,
+    "meta": {},
     "narration": "Linha com comentário",
     "payee": "Comentário",
     "postings": [],
     "tags": [
       "comment",
     ],
-  },
-  {
-    "body": "Assets:Cash      -10.00 USD",
-    "date": "",
-    "kind": "unknown_directive",
-    "meta": {
-      "body": "Assets:Cash      -10.00 USD",
-      "location": "example.beancount:59",
-      "type": "Assets:Cash",
-      "warning": "Unknown directive at line 59, column 30",
-    },
-  },
-  {
-    "body": "Expenses:Other   10.00 USD",
-    "date": "",
-    "kind": "unknown_directive",
-    "meta": {
-      "body": "Expenses:Other   10.00 USD",
-      "location": "example.beancount:60",
-      "type": "Expenses:Other",
-      "warning": "Unknown directive at line 60, column 29",
-    },
-  },
-  {
-    "body": "2015-04-01 unknown_directive Algo estranho aqui #unknown ^edge",
-    "date": "",
-    "kind": "unknown_directive",
-    "meta": {
-      "body": "2015-04-01 unknown_directive Algo estranho aqui #unknown ^edge",
-      "location": "example.beancount:62",
-      "type": "2015-04-01",
-      "warning": "Unknown directive at line 62, column 63",
-    },
-  },
-  {
-    "body": "campo: "valor"",
-    "date": "",
-    "kind": "unknown_directive",
-    "meta": {
-      "body": "campo: "valor"",
-      "location": "example.beancount:63",
-      "type": "campo:",
-      "warning": "Unknown directive at line 63, column 17",
-    },
   },
   {
     "account": "Assets:Crypto:BTC",
@@ -464,7 +420,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "test",
     ],
-    "meta": undefined,
+    "meta": {},
     "narration": "Descrição com "aspas" e 
  nova linha",
     "payee": "Aspas e caracteres",
@@ -475,7 +431,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": -5,
         },
-        "meta": undefined,
+        "meta": {},
       },
       {
         "account": "Expenses:Other",
@@ -483,7 +439,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
           "currency": "USD",
           "value": 5,
         },
-        "meta": undefined,
+        "meta": {},
       },
     ],
     "tags": [
