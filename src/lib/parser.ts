@@ -579,8 +579,8 @@ export const createParser = (config: ParserConfig, filename: string = 'stdin') =
 					}
 				}
 				const bodyRaw = text.slice(start, end);
-				// Remove indentação de cada linha agregada
-				const body = bodyRaw.replace(/\n +/g, '\n');
+				// Remove indentação de cada linha agregada (inclusive a primeira)
+				const body = bodyRaw.replace(/^ +/gm, '');
 				const type = body.trim().split(/\s+/)[0] || '';
 				entries.push({
 					kind: 'unknown_directive',
