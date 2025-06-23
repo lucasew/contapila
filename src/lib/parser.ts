@@ -416,6 +416,8 @@ export const parseDirective = (
 
 	let current = cursor;
 	const entry: any = { kind: definition.kind };
+	const startLine = current.line;
+	const startColumn = current.column;
 
 	for (const field of definition.fields) {
 		current = skipWhitespace(current);
@@ -450,6 +452,11 @@ export const parseDirective = (
 			current = metaResult.cursor;
 		}
 	}
+
+	// Garante que meta sempre existe e inclui localização
+	if (!entry.meta) entry.meta = {};
+	entry.meta.line = startLine;
+	entry.meta.column = startColumn;
 
 	return { value: entry as BaseEntry, cursor: current };
 };

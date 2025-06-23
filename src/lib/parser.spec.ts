@@ -96,12 +96,14 @@ describe('YAML Parser', () => {
 		const entries = parser(entryWithMeta);
 
 		expect(entries).toHaveLength(1);
-		expect(entries[0].meta).toEqual({
+		expect(entries[0].meta).toMatchObject({
 			description: 'Main account',
 			priority: 'high',
 			active: true,
 			balance: 1000.5
 		});
+		expect(typeof entries[0].meta.line).toBe('number');
+		expect(typeof entries[0].meta.column).toBe('number');
 	});
 
 	test('handles different data types in YAML', () => {
@@ -112,7 +114,7 @@ describe('YAML Parser', () => {
 
 		const entries = parser(entryWithMeta);
 
-		expect(entries[0].meta).toEqual({
+		expect(entries[0].meta).toMatchObject({
 			string_value: 'test',
 			integer_value: 42,
 			float_value: 3.14,
@@ -120,6 +122,8 @@ describe('YAML Parser', () => {
 			boolean_false: false,
 			null_value: null
 		});
+		expect(typeof entries[0].meta.line).toBe('number');
+		expect(typeof entries[0].meta.column).toBe('number');
 	});
 });
 

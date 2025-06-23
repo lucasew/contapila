@@ -312,6 +312,54 @@ const getAllDirectiveTypes = (modules: DirectiveModule[]): string[] =>
 
 const getModuleByName = (modules: DirectiveModule[], name: string): DirectiveModule | undefined =>
 	modules.find((module) => module.name === name);
+
+// Utility: sum amounts by currency
+function sumAmountsByCurrency(postings: { amount?: AmountValue }[]): Record<string, number> {
+	const balance: Record<string, number> = {};
+	for (const p of postings) {
+		if (p.amount) {
+			const { value, currency } = p.amount;
+			balance[currency] = (balance[currency] || 0) + Number(value);
+		}
+	}
+	return balance;
+}
+
+// Main validator/filler for transactions
+function validateAndFillTransactions(entries: BaseEntry[]): { entries: BaseEntry[]; errors: { source: any; message: string; entry: BaseEntry }[] } {
+	const errors: { source: any; message: string; entry: BaseEntry }[] = [];
+	const newEntries = entries.map(entry => {
+		if (entry.kind !== 'transaction') return entry;
+
+		const postings = (entry.postings || []) as { amount?: AmountValue }[];
+		const postingsWithoutAmount = postings.filter((p: { amount?: AmountValue }) => !p.amount);
+		if (postingsWithoutAmount.length === 0) return entry; // Nothing to do
+
+		if (postingsWithoutAmount.length === 1) {
+			const balance = sumAmountsByCurrency(postings);
+			const currencies = Object.keys(balance);
+			if (currencies.length === 1) {
+				const currency = currencies[0];
+				const missingAmount = -balance[currency];
+				const newPostings = postings.map((p: { amount?: AmountValue }) =>
+					p.amount
+						? p
+						: { ...p, amount: { value: missingAmount, currency } }
+				);
+				return { ...entry, postings: newPostings };
+			}
+			// More than one currency: cannot infer
+			errors.push({ source: entry.meta, message: 'Cannot infer missing amount: multiple currencies present.', entry });
+			return entry;
+		} else {
+			// More than one posting without amount: error
+			errors.push({ source: entry.meta, message: 'More than one posting without amount.', entry });
+			return entry;
+		}
+	});
+	return { entries: newEntries, errors };
+}
+
 // Exemplo de uso funcional
 const exampleUsage = () => {
 	const config = createParserConfig(
@@ -360,5 +408,6 @@ export {
 	type BaseEntry,
 	type DirectiveDefinition,
 	type DirectiveModule,
-	type FieldDefinition
+	type FieldDefinition,
+	validateAndFillTransactions
 };
