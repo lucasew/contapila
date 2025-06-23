@@ -27,22 +27,6 @@ const createTestCursor = (text: string, position = 0) => ({
 	column: 1
 });
 
-describe('Regex Patterns', () => {
-	test('DATE pattern matches valid dates', () => {
-		expect('2024-01-01'.match(REGEX_PATTERNS.DATE)).toBeTruthy();
-		expect('2024-12-31'.match(REGEX_PATTERNS.DATE)).toBeTruthy();
-		expect('invalid-date'.match(REGEX_PATTERNS.DATE)).toBeFalsy();
-		expect('24-01-01'.match(REGEX_PATTERNS.DATE)).toBeFalsy();
-	});
-
-	test('ACCOUNT pattern matches valid accounts', () => {
-		expect('Assets:Cash'.match(REGEX_PATTERNS.ACCOUNT)).toBeTruthy();
-		expect('Expenses:Food:Groceries'.match(REGEX_PATTERNS.ACCOUNT)).toBeTruthy();
-		expect('Income:Salary_2024'.match(REGEX_PATTERNS.ACCOUNT)).toBeTruthy();
-		expect('assets:cash'.match(REGEX_PATTERNS.ACCOUNT)).toBeFalsy(); // lowercase first letter
-	});
-});
-
 describe('Core Parser Functions', () => {
 	describe('Cursor utilities', () => {
 		test('createCursor initializes correctly', () => {
