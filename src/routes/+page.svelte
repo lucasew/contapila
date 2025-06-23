@@ -125,69 +125,50 @@
 {/if}
 
 {#if linhasTabela.length > 0}
-	<Table striped hover responsive>
-		<thead>
-			<tr>
-				<th>Data</th>
-				<th>Tipo</th>
-				<th>Descrição</th>
-				<th>Detalhes</th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each linhasTabela as linha, i}
-				<tr>
-					<td>{linha.data}</td>
-					<td>{linha.tipo}</td>
-					<td>
+	<Accordion>
+		{#each linhasTabela as linha, i}
+			<AccordionItem>
+				<Row slot="header" class="align-items-center w-100">
+					<Col class="col-auto text-nowrap" >{linha.data}</Col>
+					<Col class="col-auto text-nowrap" >{linha.tipo}</Col>
+					<Col>
 						{#if linha.titulo}
 							<strong>{linha.titulo}</strong>
 						{/if}
 						{#if linha.subtitulo}
 							{#if linha.titulo} {linha.subtitulo}{:else}{linha.subtitulo}{/if}
 						{/if}
-						<div class="mt-1">
+						
 							{#each getTags(linha.detalhes) as tag}
 								<Badge color="secondary" class="me-1">{tag}</Badge>
 							{/each}
-						</div>
-					</td>
-					<td>
-						<Button color="primary" size="sm" on:click={() => toggleCollapse(i)}>
-							{openCollapse[i] ? 'Ocultar' : 'Ver detalhes'}
-						</Button>
-					</td>
-				</tr>
-				<tr>
-					<td colspan="4" style="padding:0; border: none; background: transparent;">
-						<Collapse isOpen={!!openCollapse[i]}>
-							<div style="padding: 1rem; background: #f8f9fa; border-radius: 0 0 0.5rem 0.5rem; border: 1px solid #dee2e6; border-top: none;">
-								{#if linha.detalhes.kind === 'transaction' && linha.detalhes.postings}
-									{#each linha.detalhes.postings as posting, j}
-										<PostingItem posting={posting} />
+						
+					</Col>
+				</Row>
+			
+					{#if linha.detalhes.kind === 'transaction' && linha.detalhes.postings}
+						{#each linha.detalhes.postings as posting, j}
+							<PostingItem posting={posting} />
+						{/each}
+					{/if}
+					{#if linha.detalhes.narration || linha.detalhes.comment || Object.keys(linha.detalhes).length > 0}
+						<details class="mt-2">
+							<summary><strong>Atributos</strong></summary>
+							{#if linha.detalhes.meta}
+								<ul class="ms-3 mb-2">
+									{#each Object.entries(linha.detalhes.meta) as [k, v]}
+										<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
 									{/each}
-								{/if}
-								{#if linha.detalhes.narration || linha.detalhes.comment || Object.keys(linha.detalhes).length > 0}
-									<details class="mt-2">
-										<summary><strong>Atributos</strong></summary>
-										{#if linha.detalhes.meta}
-											<ul class="ms-3 mb-2">
-												{#each Object.entries(linha.detalhes.meta) as [k, v]}
-													<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
-												{/each}
-											</ul>
-										{:else}
-											<span class="ms-3 text-muted">Sem atributos extras</span>
-										{/if}
-									</details>
-								{/if}
-							</div>
-						</Collapse>
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</Table>
+								</ul>
+							{:else}
+								<span class="ms-3 text-muted">Sem atributos extras</span>
+							{/if}
+						</details>
+					{/if}
+
+			</AccordionItem>
+		{/each}
+	</Accordion>
 {:else}
 	<p>Nenhuma entidade encontrada.</p>
 {/if}
