@@ -5,6 +5,7 @@
 		createTransactionModule
 	} from '$lib/beancount.js';
 	import { createParser } from '$lib/parser.js';
+	import { Table} from '@sveltestrap/sveltestrap';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
@@ -36,6 +37,7 @@
 					content = [];
 				}
 			});
+		console.log(content);
 	});
 </script>
 
@@ -46,4 +48,30 @@
 	<p><b>Erro: </b>: {erro}</p>
 {/if}
 
-<pre>{JSON.stringify(content, null, 2)}</pre>
+{#if content.length > 0}
+	<Table striped bordered hover responsive>
+		<thead>
+			<tr>
+				<th>Tipo</th>
+				<th>Data</th>
+				<th>Detalhes</th>
+			</tr>
+		</thead>
+		<tbody>
+			{#each content as entidade, i}
+				<tr>
+					<td>{entidade.kind}</td>
+					<td>{entidade.date}</td>
+					<td>
+						<details>
+							<summary>Ver detalhes</summary>
+							<pre>{JSON.stringify(entidade, null, 2)}</pre>
+						</details>
+					</td>
+				</tr>
+			{/each}
+		</tbody>
+	</Table>
+{:else}
+	<p>Nenhuma entidade encontrada.</p>
+{/if}
