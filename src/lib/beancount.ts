@@ -192,6 +192,7 @@ const createTransactionModule = (): DirectiveModule => ({
 				// Se encontrou ;;, finalize a transação aqui, sem postings nem metadados
 				if (foundComment) {
 					// Ignora linhas de postings órfãos imediatamente após a transação
+					let hasPostings = false;
 					while (!isAtEnd(current)) {
 						const firstChar = peekChar(current);
 						const secondChar = peekChar(current, 1);
@@ -199,6 +200,7 @@ const createTransactionModule = (): DirectiveModule => ({
 						const fourthChar = peekChar(current, 3);
 						if ((firstChar === ' ' && secondChar === ' ') ||
 							(firstChar === ' ' && secondChar === ' ' && thirdChar === ' ' && fourthChar === ' ')) {
+							hasPostings = true;
 							// Avança até o fim da linha
 							while (!isAtEnd(current) && peekChar(current) !== '\n') {
 								current = advanceCursor(current, 1);
@@ -216,9 +218,9 @@ const createTransactionModule = (): DirectiveModule => ({
 							payee,
 							narration,
 							postings: [],
-							meta: undefined,
-							tags,
-							links
+							meta: hasPostings ? {} : undefined,
+							tags: tags || [],
+							links: links || []
 						},
 						cursor: current
 					};
