@@ -16,7 +16,8 @@ export const REGEX_PATTERNS = {
 	CURRENCY: /^([A-Z0-9_]+)/,
 	REST_OF_LINE: /^[^\n]*/,
 	EMAIL: /^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/,
-	TAG: /^#([a-zA-Z0-9_-]+)/
+	TAG: /^#([a-zA-Z0-9_-]+)/,
+	LINK: /^\^([a-zA-Z0-9_-]+)/
 } as const;
 
 export interface ParseCursor {
@@ -279,20 +280,27 @@ export const parseEmail = (cursor: ParseCursor): ParseResult<string> | null => {
 	return result ? { value: result.value[1], cursor: result.cursor } : null;
 };
 
-export const parseTag = (cursor: ParseCursor): ParseResult<string> | null => {
+export const parseTagOrLink = (cursor: ParseCursor): ParseResult<{type: 'tag'|'link', value: string}> | null => {
 	if (!cursor || !cursor.text || isAtEnd(cursor)) {
 		return null;
 	}
-	const result = parseRegex(cursor, REGEX_PATTERNS.TAG);
-	return result ? { value: result.value[1], cursor: result.cursor } : null;
+	const tagResult = parseRegex(cursor, REGEX_PATTERNS.TAG);
+	if (tagResult) {
+		return { value: { type: 'tag', value: tagResult.value[1] }, cursor: tagResult.cursor };
+	}
+	const linkResult = parseRegex(cursor, REGEX_PATTERNS.LINK);
+	if (linkResult) {
+		return { value: { type: 'link', value: linkResult.value[1] }, cursor: linkResult.cursor };
+	}
+	return null;
 };
 
-export const parseTags = (cursor: ParseCursor): ParseResult<string[]> | null => {
+export const parseTagsAndLinks = (cursor: ParseCursor): ParseResult<{type: 'tag'|'link', value: string}[]> | null => {
 	if (!cursor || !cursor.text || isAtEnd(cursor)) {
 		return null;
 	}
 
-	const tags: string[] = [];
+	const items: {type: 'tag'|'link', value: string}[] = [];
 	let currentCursor = cursor;
 
 	while (!isAtEnd(currentCursor)) {
@@ -301,16 +309,16 @@ export const parseTags = (cursor: ParseCursor): ParseResult<string[]> | null => 
 			break;
 		}
 
-		const tagResult = parseTag(currentCursor);
-		if (tagResult) {
-			tags.push(tagResult.value);
-			currentCursor = tagResult.cursor;
+		const itemResult = parseTagOrLink(currentCursor);
+		if (itemResult) {
+			items.push(itemResult.value);
+			currentCursor = itemResult.cursor;
 		} else {
 			break;
 		}
 	}
 
-	return tags.length > 0 ? { value: tags, cursor: currentCursor } : null;
+	return items.length > 0 ? { value: items, cursor: currentCursor } : null;
 };
 
 export const parseYAML = (cursor: ParseCursor, indentLevel: number): ParseResult<any> | null => {
@@ -378,8 +386,9 @@ export const createBuiltinFieldParsers = (): Record<string, FieldParser> => ({
 	array: parseArray,
 	email: parseEmail,
 	object: (cursor) => parseYAML(cursor, 0),
-	tag: parseTag,
-	tags: parseTags
+	tag: parseTagOrLink,
+	tags: parseTagsAndLinks,
+	tagsAndLinks: parseTagsAndLinks
 });
 
 export const parseField = (
@@ -446,10 +455,11 @@ export const parseDirective = (
 
 	current = skipWhitespace(current);
 
-	const tagsResult = parseTags(current);
-	if (tagsResult) {
-		entry.tags = tagsResult.value;
-		current = tagsResult.cursor;
+	const tagsLinksResult = parseTagsAndLinks(current);
+	if (tagsLinksResult) {
+		entry.tags = tagsLinksResult.value.filter(i => i.type === 'tag').map(i => i.value);
+		entry.links = tagsLinksResult.value.filter(i => i.type === 'link').map(i => i.value);
+		current = tagsLinksResult.cursor;
 	}
 
 	current = skipWhitespace(current);

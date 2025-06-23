@@ -14,7 +14,8 @@ import {
 	parseQuotedString,
 	parseRegex,
 	parseString,
-	parseTags,
+	parseTagOrLink,
+	parseTagsAndLinks,
 	parseYAML,
 	peekChar,
 	skipWhitespace,
@@ -162,10 +163,12 @@ const createTransactionModule = (): DirectiveModule => ({
 
 				// Parse tags at the end of the line
 				let tags: string[] | undefined;
-				const tagsResult = parseTags(current);
-				if (tagsResult) {
-					tags = tagsResult.value;
-					current = tagsResult.cursor;
+				let links: string[] | undefined;
+				const tagsLinksResult = parseTagsAndLinks(current);
+				if (tagsLinksResult) {
+					tags = tagsLinksResult.value.filter(i => i.type === 'tag').map(i => i.value);
+					links = tagsLinksResult.value.filter(i => i.type === 'link').map(i => i.value);
+					current = tagsLinksResult.cursor;
 				}
 
 				const newlineResult = parseNewline(current);
@@ -274,7 +277,8 @@ const createTransactionModule = (): DirectiveModule => ({
 						narration,
 						postings,
 						meta: Object.keys(meta).length > 0 ? meta : undefined,
-						tags
+						tags,
+						links
 					},
 					cursor: current
 				};

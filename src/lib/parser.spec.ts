@@ -4,10 +4,10 @@ import {
   createParserConfig,
   createParser,
   parseAmount,
-  parseTag,
-  parseTags,
   convertBeancountToGeneralizedFormat,
-  validateModuleDependencies
+  validateModuleDependencies,
+  parseTagOrLink,
+  parseTagsAndLinks
 } from './parser.js';
 import { createCoreBeancountModule } from './beancount.js';
 
@@ -68,20 +68,6 @@ describe('Core Parser Functions', () => {
 				currency: 'A_B_C'
 			});
 			expect(parseAmount(createTestCursor('invalid amount'))).toBeNull();
-		});
-
-		test('parseTag funciona diretamente', () => {
-			const cursor = createTestCursor('#test');
-			const result = parseTag(cursor);
-			expect(result).not.toBeNull();
-			expect(result?.value).toBe('test');
-		});
-
-		test('parseTags funciona diretamente', () => {
-			const cursor = createTestCursor('#tag1 #tag2');
-			const result = parseTags(cursor);
-			expect(result).not.toBeNull();
-			expect(result?.value).toEqual(['tag1', 'tag2']);
 		});
 	});
 });
@@ -236,5 +222,153 @@ describe('Linha com ;; e string', () => {
 			date: '2015-03-01',
 			account: 'Assets:XXX:YYY',
 		});
+	});
+});
+
+describe('Diretivas open com ;;, string e metadados', () => {
+	test('parses open with ;; and string', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = '2015-03-01 open Assets:XXX:YYY ;; "SOME_STRING"';
+		const entries = parser(text);
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'open',
+			date: '2015-03-01',
+			account: 'Assets:XXX:YYY',
+		});
+	});
+
+	test('parses open with ;;, string and meta', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = `2015-03-01 open Assets:XXX:YYY:AAA ;; "SOME_STRING"\n  meta1: "TRUE"\n  meta2: "SOMETHING"\n  logic: "custom_logic"`;
+		const entries = parser(text);
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'open',
+			date: '2015-03-01',
+			account: 'Assets:XXX:YYY:AAA',
+		});
+		expect(entries[0].meta).toMatchObject({
+			meta1: 'TRUE',
+			meta2: 'SOMETHING',
+			logic: 'custom_logic'
+		});
+	});
+
+	test('parses multiple open with ;;, string and meta', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = `2015-03-01 open Assets:XXX:YYY:AAA ;; "SOME_STRING"\n  meta1: "TRUE"\n  meta2: "SOMETHING"\n  logic: "custom_logic"\n\n2015-03-01 open Assets:XXX:YYY:BBB ;; "SOME_STRING"\n  meta1: "TRUE"\n  meta2: "SOMETHING"\n  logic: "custom_logic2"`;
+		const entries = parser(text);
+		expect(entries).toHaveLength(2);
+		expect(entries[0]).toMatchObject({
+			kind: 'open',
+			date: '2015-03-01',
+			account: 'Assets:XXX:YYY:AAA',
+		});
+		expect(entries[0].meta).toMatchObject({
+			meta1: 'TRUE',
+			meta2: 'SOMETHING',
+			logic: 'custom_logic'
+		});
+		expect(entries[1]).toMatchObject({
+			kind: 'open',
+			date: '2015-03-01',
+			account: 'Assets:XXX:YYY:BBB',
+		});
+		expect(entries[1].meta).toMatchObject({
+			meta1: 'TRUE',
+			meta2: 'SOMETHING',
+			logic: 'custom_logic2'
+		});
+	});
+});
+
+describe('Teste anonimizado de open com ;;, string e metadados', () => {
+	test('parses múltiplas diretivas open com ;;, string e metadados anonimizados', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = `2015-03-01 open Assets:AAA:BBB ;; "STRING1"
+\n2015-03-01 open Assets:AAA:BBB:CCC ;; "STRING2"
+  meta_a: "TRUE"
+  meta_b: "VALOR1"
+  logic: "logica1"
+\n2015-03-01 open Assets:AAA:BBB:DDD ;; "STRING3"
+  meta_a: "TRUE"
+  meta_b: "VALOR2"
+  logic: "logica2"`;
+		const entries = parser(text);
+		expect(entries).toHaveLength(3);
+		expect(entries[0]).toMatchObject({
+			kind: 'open',
+			date: '2015-03-01',
+			account: 'Assets:AAA:BBB',
+		});
+		expect(entries[1]).toMatchObject({
+			kind: 'open',
+			date: '2015-03-01',
+			account: 'Assets:AAA:BBB:CCC',
+		});
+		expect(entries[1].meta).toMatchObject({
+			meta_a: 'TRUE',
+			meta_b: 'VALOR1',
+			logic: 'logica1'
+		});
+		expect(entries[2]).toMatchObject({
+			kind: 'open',
+			date: '2015-03-01',
+			account: 'Assets:AAA:BBB:DDD',
+		});
+		expect(entries[2].meta).toMatchObject({
+			meta_a: 'TRUE',
+			meta_b: 'VALOR2',
+			logic: 'logica2'
+		});
+	});
+});
+
+describe('Parsing de tags (#) e links (^) nas diretivas', () => {
+	test('parseTagOrLink reconhece tag', () => {
+		const cursor = createTestCursor('#tag1');
+		const result = parseTagOrLink(cursor);
+		expect(result).not.toBeNull();
+		if (result) expect(result.value).toEqual({ type: 'tag', value: 'tag1' });
+	});
+	test('parseTagOrLink reconhece link', () => {
+		const cursor = createTestCursor('^link1');
+		const result = parseTagOrLink(cursor);
+		expect(result).not.toBeNull();
+		if (result) expect(result.value).toEqual({ type: 'link', value: 'link1' });
+	});
+	test('parseTagsAndLinks reconhece tags e links misturados', () => {
+		const cursor = createTestCursor('#tag1 ^link1 #tag2 ^link2');
+		const result = parseTagsAndLinks(cursor);
+		expect(result).not.toBeNull();
+		if (result) expect(result.value).toEqual([
+			{ type: 'tag', value: 'tag1' },
+			{ type: 'link', value: 'link1' },
+			{ type: 'tag', value: 'tag2' },
+			{ type: 'link', value: 'link2' }
+		]);
+	});
+	test('parseTagsAndLinks só links', () => {
+		const cursor = createTestCursor('^linkA ^linkB');
+		const result = parseTagsAndLinks(cursor);
+		expect(result).not.toBeNull();
+		if (result) expect(result.value).toEqual([
+			{ type: 'link', value: 'linkA' },
+			{ type: 'link', value: 'linkB' }
+		]);
+	});
+	test('parseDirective popula tags e links separadamente', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = '2024-01-01 open Assets:Cash USD #tag1 ^link1 #tag2';
+		const entries = parser(text);
+		expect(entries).toHaveLength(1);
+		expect(entries[0].tags).toEqual(['tag1', 'tag2']);
+		expect(entries[0].links).toEqual(['link1']);
 	});
 }); 

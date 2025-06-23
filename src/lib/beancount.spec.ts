@@ -13,8 +13,8 @@ import {
 	createParserConfig,
 	createParser,
 	parseAmount,
-	parseTag,
-	parseTags,
+	parseTagOrLink,
+	parseTagsAndLinks,
 	convertBeancountToGeneralizedFormat,
 	validateModuleDependencies
 } from './parser.js';
@@ -109,7 +109,7 @@ describe('Core Parser Functions', () => {
 			expect(entries[0].narration).toBe('Description with "quotes" and \n newline');
 		});
 
-		test('parseTag extracts hashtag tags', () => {
+		test('parseTagOrLink extracts hashtag tags', () => {
 			const config = createParserConfig([createCoreBeancountModule()]);
 			const parser = createParser(config);
 
@@ -120,22 +120,27 @@ describe('Core Parser Functions', () => {
 			expect(entries[0].tags).toEqual(['checking', 'primary']);
 		});
 
-		test('parseTag function works directly', () => {
+		test('parseTagOrLink function works directly', () => {
 			// Test the tag parsing function directly
 			const cursor = createTestCursor('#test');
-			const result = parseTag(cursor);
+			const result = parseTagOrLink(cursor);
 
 			expect(result).not.toBeNull();
-			expect(result?.value).toBe('test');
+			expect(result?.value.type).toBe('tag');
+			expect(result?.value.value).toBe('test');
 		});
 
-		test('parseTags function works directly', () => {
+		test('parseTagsAndLinks function works directly', () => {
 			// Test the tags parsing function directly
 			const cursor = createTestCursor('#tag1 #tag2');
-			const result = parseTags(cursor);
+			const result = parseTagsAndLinks(cursor);
 
 			expect(result).not.toBeNull();
-			expect(result?.value).toEqual(['tag1', 'tag2']);
+			expect(result?.value.length).toBe(2);
+			expect(result?.value[0].type).toBe('tag');
+			expect(result?.value[0].value).toBe('tag1');
+			expect(result?.value[1].type).toBe('tag');
+			expect(result?.value[1].value).toBe('tag2');
 		});
 	});
 });
@@ -355,6 +360,20 @@ describe('Core Beancount Directives', () => {
 				currency: 'USD'
 			},
 			tags: ['monthly', 'checking']
+		});
+	});
+
+	test('parses open directive with double semicolon and quoted string', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = '2015-03-01 open Assets:XXX:YYY ;; "SOME_STRING"';
+		const entries = parser(text);
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'open',
+			date: '2015-03-01',
+			account: 'Assets:XXX:YYY',
+			// O campo meta pode ou não conter o valor dependendo do parser, mas não deve lançar erro
 		});
 	});
 });
@@ -635,31 +654,28 @@ describe('Custom Field Parsers', () => {
 });
 
 describe('Error Handling', () => {
-	test('throws error for unknown directive', () => {
+	test('returns unknown_directive entry for unknown directive', () => {
 		const config = createParserConfig([createCoreBeancountModule()]);
 		const parser = createParser(config);
-
-		expect(() => {
-			parser('2024-01-01 unknown_directive');
-		}).toThrow('Unknown directive');
+		const entries = parser('2024-01-01 unknown_directive');
+		expect(entries[0].kind).toBe('unknown_directive');
+		expect(entries[0].meta.warning).toContain('Unknown directive');
 	});
 
 	test('throws error for unterminated string', () => {
 		const config = createParserConfig([createCoreBeancountModule(), createTransactionModule()]);
 		const parser = createParser(config);
-
 		expect(() => {
 			parser('2024-01-01 * "Unterminated string');
 		}).toThrow('Unterminated string');
 	});
 
-	test('throws error for missing required field', () => {
+	test('returns unknown_directive entry for missing required field', () => {
 		const config = createParserConfig([createCoreBeancountModule()]);
 		const parser = createParser(config);
-
-		expect(() => {
-			parser('2024-01-01 open'); // missing required account
-		}).toThrow();
+		const entries = parser('2024-01-01 open'); // missing required account
+		expect(entries[0].kind).toBe('unknown_directive');
+		expect(entries[0].meta.warning).toContain('Unknown directive');
 	});
 
 	test('throws error for invalid module dependencies', () => {
@@ -675,6 +691,31 @@ describe('Error Handling', () => {
 		expect(() => {
 			createParser(createParserConfig(invalidModules));
 		}).toThrow('Module validation failed');
+	});
+});
+
+describe('Unknown Directives', () => {
+	test('parses unknown directive as unknown_directive entry', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = '2024-01-01 unknown_directive algo aqui';
+		const entries = parser(text);
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'unknown_directive',
+			body: '2024-01-01 unknown_directive algo aqui',
+		});
+		expect(entries[0].meta.warning).toContain('Unknown directive');
+	});
+
+	test('parses multiple unknown directives', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = 'foo bar\n2024-01-01 open Assets:Cash USD\nbar baz';
+		const entries = parser(text);
+		expect(entries[0].kind).toBe('unknown_directive');
+		expect(entries[1].kind).toBe('open');
+		expect(entries[2].kind).toBe('unknown_directive');
 	});
 });
 

@@ -104,9 +104,11 @@ function toFileList(arr: File[]): FileList {
             {/each}
           </div>
           <div class="w-100 d-flex justify-content-center mt-2">
-            <Button outline color="danger" on:click={clearFiles}>
-              <Icon name="x" class="me-1" /> Limpar tudo
-            </Button>
+            <span on:click|stopPropagation role="button" tabindex="0">
+              <Button outline color="danger" on:click={clearFiles}>
+                <Icon name="x" class="me-1" /> Limpar tudo
+              </Button>
+            </span>
           </div>
         {/if}
       </ListGroupItem>

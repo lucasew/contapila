@@ -168,7 +168,9 @@
 						<TipoBadge tipo={linha.tipo} />
 					</Col>
 					<Col>
-						{#if linha.titulo}
+						{#if linha.tipo === 'unknown_directive'}
+							<strong>{linha.meta?.type}</strong>
+						{:else if linha.titulo}
 							<strong>{linha.titulo}</strong>
 						{/if}
 						{#if linha.subtitulo}
@@ -186,16 +188,16 @@
 				{/if}
 				<details class="mt-2">
 					<summary><strong>Atributos</strong></summary>
-				{#if linha.meta}
-					
+					{#if linha.meta && Object.keys(linha.meta).length > 0}
 						<ul class="ms-3 mb-2">
 							{#each Object.entries(linha.meta) as [k, v]}
 								<li><strong>{k}:</strong> <span class="ms-3">{JSON.stringify(v)}</span></li>
 							{/each}
 						</ul>
-					
-				{/if}
-			</details>
+					{:else}
+						<span class="ms-3 text-muted">Sem atributos extras</span>
+					{/if}
+				</details>
 			</AccordionItem>
 		{/each}
 	</Accordion>
