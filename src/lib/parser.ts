@@ -602,10 +602,28 @@ export const createParser = (config: ParserConfig, filename: string = 'stdin') =
 				const bodyRaw = text.slice(start, end);
 				// Remove indentação de cada linha agregada (inclusive a primeira)
 				const body = bodyRaw.replace(/^ +/gm, '').trim();
-				const type = body.split(/\s+/)[0] || '';
+				const bodyWords = body.split(/\s+/);
+				let type = '';
+				let date = '';
+				if (bodyWords.length > 0) {
+					if (REGEX_PATTERNS.DATE.test(bodyWords[0])) {
+						date = bodyWords[0];
+						type = bodyWords[1] || '';
+					} else {
+						type = bodyWords[0];
+					}
+				}
+				let value = undefined;
+				// Se houver pelo menos três "palavras" (data, tipo, value entre aspas), extrai o value
+				const quotedMatches = body.match(/"([^"]*)"/g);
+				if (quotedMatches && quotedMatches.length >= 2) {
+					value = quotedMatches[1].replace(/\"/g, '').replace(/"/g, '');
+				}
 				entries.push({
 					kind: 'unknown_directive',
-					date: '',
+					date,
+					type,
+					value,
 					body,
 					meta: {
 						warning: `Unknown directive at line ${cursor.line}, column ${cursor.column}`,

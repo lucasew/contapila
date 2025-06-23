@@ -61,3 +61,7 @@ feat: permitir seleção de múltiplos arquivos no upload
 > This document should be kept up to date as the project evolves. 
 
 **Observação:** Não utilizar CSS inline. Sempre prefira componentes Sveltestrap e classes utilitárias. 
+
+## Notas de automação
+
+- O agente (assistente) sempre pode rodar os testes automatizados para validar alterações no código. 
