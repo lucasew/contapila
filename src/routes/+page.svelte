@@ -5,11 +5,12 @@
 		createTransactionModule
 	} from '$lib/beancount.js';
 	import { createParser } from '$lib/parser.js';
-	import { Table} from '@sveltestrap/sveltestrap';
+	import { Table, Badge, Button, Collapse, ListGroup, ListGroupItem } from '@sveltestrap/sveltestrap';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
 	let erro: string | null = $state(null);
+	let openCollapse: Record<number, boolean> = $state({});
 
 	const parser = createParser({
 		modules: [
@@ -20,6 +21,39 @@
 		fieldParsers: {},
 		customValidators: {}
 	});
+
+	function getMainAccount(entidade: any) {
+		if (entidade.kind === 'transaction' && entidade.postings && entidade.postings.length > 0) {
+			return entidade.postings[0].account;
+		}
+		return entidade.account || '';
+	}
+
+	function getMainValue(entidade: any) {
+		if (entidade.kind === 'transaction' && entidade.postings && entidade.postings.length > 0) {
+			return entidade.postings[0].amount?.value;
+		}
+		return entidade.amount?.value;
+	}
+
+	function getMainCurrency(entidade: any) {
+		if (entidade.kind === 'transaction' && entidade.postings && entidade.postings.length > 0) {
+			return entidade.postings[0].amount?.currency;
+		}
+		return entidade.amount?.currency;
+	}
+
+	function getNarration(entidade: any) {
+		return entidade.narration || entidade.comment || '';
+	}
+
+	function getTags(entidade: any) {
+		return entidade.tags || [];
+	}
+
+	function toggleCollapse(idx: number) {
+		openCollapse = { ...openCollapse, [idx]: !openCollapse[idx] };
+	}
 
 	$effect(() => {
 		console.log(files);
@@ -41,6 +75,13 @@
 	});
 </script>
 
+<style>
+.valor {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+</style>
+
 <h1>Beancount preview</h1>
 
 <input type="file" bind:files />
@@ -49,24 +90,70 @@
 {/if}
 
 {#if content.length > 0}
-	<Table striped bordered hover responsive>
+	<Table striped hover responsive>
 		<thead>
 			<tr>
-				<th>Tipo</th>
 				<th>Data</th>
+				<th>Tipo</th>
+				<th>Conta</th>
+				<th class="valor">Valor</th>
+				<th>Moeda</th>
+				<th>Descrição</th>
+				<th>Tags</th>
 				<th>Detalhes</th>
 			</tr>
 		</thead>
 		<tbody>
 			{#each content as entidade, i}
 				<tr>
-					<td>{entidade.kind}</td>
 					<td>{entidade.date}</td>
+					<td>{entidade.kind}</td>
+					<td>{getMainAccount(entidade)}</td>
+					<td class="valor">{getMainValue(entidade) ?? ''}</td>
+					<td>{getMainCurrency(entidade) ?? ''}</td>
+					<td>{getNarration(entidade)}</td>
 					<td>
-						<details>
-							<summary>Ver detalhes</summary>
-							<pre>{JSON.stringify(entidade, null, 2)}</pre>
-						</details>
+						{#each getTags(entidade) as tag}
+							<Badge color="secondary" class="me-1">{tag}</Badge>
+						{/each}
+					</td>
+					<td>
+						<Button color="primary" size="sm" on:click={() => toggleCollapse(i)}>
+							{openCollapse[i] ? 'Ocultar' : 'Ver detalhes'}
+						</Button>
+						<Collapse isOpen={!!openCollapse[i]}>
+							{#if entidade.kind === 'transaction' && entidade.postings}
+								<strong>Postings:</strong>
+								<ListGroup class="mb-2">
+									{#each entidade.postings as posting}
+										<ListGroupItem>
+											Conta: {posting.account} | Valor: {posting.amount?.value ?? ''} {posting.amount?.currency ?? ''}
+											{#if posting.meta}
+												<br /><em>Meta:</em>
+												<ListGroup class="mt-1">
+													{#each Object.entries(posting.meta) as [k, v]}
+														<ListGroupItem>{k}: {JSON.stringify(v)}</ListGroupItem>
+													{/each}
+												</ListGroup>
+											{/if}
+										</ListGroupItem>
+									{/each}
+								</ListGroup>
+							{/if}
+							{#if entidade.meta}
+								<strong>Meta:</strong>
+								<ListGroup class="mb-2">
+									{#each Object.entries(entidade.meta) as [k, v]}
+										<ListGroupItem>{k}: {JSON.stringify(v)}</ListGroupItem>
+									{/each}
+								</ListGroup>
+							{/if}
+							<ListGroup>
+								<ListGroupItem>
+									<pre>{JSON.stringify(entidade, null, 2)}</pre>
+								</ListGroupItem>
+							</ListGroup>
+						</Collapse>
 					</td>
 				</tr>
 			{/each}
