@@ -451,6 +451,15 @@ export const parseDirective = (
 		if (metaResult) {
 			entry.meta = metaResult.value;
 			current = metaResult.cursor;
+			while (!isAtEnd(current)) {
+				let posBefore = current.position;
+				current = skipWhitespace(current);
+				if (peekChar(current) === '\n') {
+					current = advanceCursor(current, 1);
+				} else if (current.position === posBefore) {
+					break;
+				}
+			}
 		}
 	}
 
