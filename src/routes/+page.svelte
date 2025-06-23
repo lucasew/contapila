@@ -2,9 +2,9 @@
 	import {
 		createCoreBeancountModule,
 		createCustomReportingModule,
-		createParser,
 		createTransactionModule
 	} from '$lib/beancount.js';
+	import { createParser } from '$lib/parser.js';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
