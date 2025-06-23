@@ -84,6 +84,9 @@
 		if (entidade.kind === 'balance') {
 			titulo = entidade.account;
 			subtitulo = entidade.amount ? `${entidade.amount.value} ${entidade.amount.currency}` : '';
+		} else if (entidade.kind === 'price') {
+			titulo = entidade.commodity;
+			subtitulo = entidade.amount ? `${entidade.amount.value} ${entidade.amount.currency}` : '';
 		} else if (entidade.kind === 'open' || entidade.kind === 'close') {
 			titulo = entidade.account;
 			subtitulo = '';

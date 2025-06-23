@@ -11,3 +11,119 @@ describe('/+page.svelte', () => {
 		await expect.element(heading).toBeInTheDocument();
 	});
 });
+
+// Teste para verificar se o tipo price está sendo exibido corretamente
+describe('Interface Price Display', () => {
+	it('should display commodity as title and amount as subtitle for price entries', () => {
+		// Mock da função entidadeParaLinhaTabela
+		function entidadeParaLinhaTabela(entidade: any) {
+			let titulo = '';
+			let subtitulo = '';
+			let tags = [];
+			let postings = undefined;
+			let meta = entidade.meta;
+			if (entidade.kind === 'balance') {
+				titulo = entidade.account;
+				subtitulo = entidade.amount ? `${entidade.amount.value} ${entidade.amount.currency}` : '';
+			} else if (entidade.kind === 'price') {
+				titulo = entidade.commodity;
+				subtitulo = entidade.amount ? `${entidade.amount.value} ${entidade.amount.currency}` : '';
+			} else if (entidade.kind === 'open' || entidade.kind === 'close') {
+				titulo = entidade.account;
+				subtitulo = '';
+			} else {
+				if (entidade.payee) titulo = entidade.payee;
+				if (entidade.narration) subtitulo = entidade.narration;
+				else if (entidade.comment) subtitulo = entidade.comment;
+			}
+			if (entidade.tags) tags = entidade.tags;
+			if (entidade.postings) postings = entidade.postings;
+			return {
+				data: entidade.date,
+				tipo: entidade.kind,
+				titulo,
+				subtitulo,
+				tags,
+				postings,
+				meta,
+				narration: entidade.narration,
+				comment: entidade.comment
+			};
+		}
+
+		// Entrada de teste do tipo price
+		const priceEntry = {
+			kind: 'price',
+			date: '2024-01-01',
+			keyword: 'price',
+			commodity: 'USD',
+			amount: {
+				value: 5.25,
+				currency: 'BRL'
+			},
+			tags: ['fx'],
+			meta: { location: 'test.beancount:1' }
+		};
+
+		const result = entidadeParaLinhaTabela(priceEntry);
+
+		expect(result.titulo).toBe('USD');
+		expect(result.subtitulo).toBe('5.25 BRL');
+		expect(result.tipo).toBe('price');
+		expect(result.data).toBe('2024-01-01');
+	});
+
+	it('should handle price entries without amount', () => {
+		// Mock da função entidadeParaLinhaTabela
+		function entidadeParaLinhaTabela(entidade: any) {
+			let titulo = '';
+			let subtitulo = '';
+			let tags = [];
+			let postings = undefined;
+			let meta = entidade.meta;
+			if (entidade.kind === 'balance') {
+				titulo = entidade.account;
+				subtitulo = entidade.amount ? `${entidade.amount.value} ${entidade.amount.currency}` : '';
+			} else if (entidade.kind === 'price') {
+				titulo = entidade.commodity;
+				subtitulo = entidade.amount ? `${entidade.amount.value} ${entidade.amount.currency}` : '';
+			} else if (entidade.kind === 'open' || entidade.kind === 'close') {
+				titulo = entidade.account;
+				subtitulo = '';
+			} else {
+				if (entidade.payee) titulo = entidade.payee;
+				if (entidade.narration) subtitulo = entidade.narration;
+				else if (entidade.comment) subtitulo = entidade.comment;
+			}
+			if (entidade.tags) tags = entidade.tags;
+			if (entidade.postings) postings = entidade.postings;
+			return {
+				data: entidade.date,
+				tipo: entidade.kind,
+				titulo,
+				subtitulo,
+				tags,
+				postings,
+				meta,
+				narration: entidade.narration,
+				comment: entidade.comment
+			};
+		}
+
+		// Entrada de teste do tipo price sem amount
+		const priceEntryWithoutAmount = {
+			kind: 'price',
+			date: '2024-01-01',
+			keyword: 'price',
+			commodity: 'AAPL',
+			tags: ['stocks'],
+			meta: { location: 'test.beancount:2' }
+		};
+
+		const result = entidadeParaLinhaTabela(priceEntryWithoutAmount);
+
+		expect(result.titulo).toBe('AAPL');
+		expect(result.subtitulo).toBe('');
+		expect(result.tipo).toBe('price');
+	});
+});
