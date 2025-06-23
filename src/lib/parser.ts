@@ -543,6 +543,31 @@ export const createParser = (config: ParserConfig, filename: string = 'stdin') =
 					if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
 					continue;
 				}
+				// Se a linha começa com uma data, ignore o bloco (linha + metadados indentados)
+				const dateMatch = parseRegex(cursor, REGEX_PATTERNS.DATE);
+				if (dateMatch) {
+					// Avança até o fim da linha
+					while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
+						cursor = advanceCursor(cursor, 1);
+					}
+					if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
+					// Ignora linhas indentadas seguintes
+					while (!isAtEnd(cursor)) {
+						const fc = peekChar(cursor);
+						const sc = peekChar(cursor, 1);
+						const tc = peekChar(cursor, 2);
+						const frc = peekChar(cursor, 3);
+						if ((fc === ' ' && sc === ' ') || (fc === ' ' && sc === ' ' && tc === ' ' && frc === ' ')) {
+							while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
+								cursor = advanceCursor(cursor, 1);
+							}
+							if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
+						} else {
+							break;
+						}
+					}
+					continue;
+				}
 				// Agrega linhas indentadas como parte do body da unknown_directive
 				const start = cursor.position;
 				let end = start;
