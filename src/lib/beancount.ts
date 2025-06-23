@@ -171,9 +171,40 @@ const createTransactionModule = (): DirectiveModule => ({
 					current = tagsLinksResult.cursor;
 				}
 
+				// Após parsear tags e links, se encontrar ';;', ignora o resto da linha E FINALIZA a transação
+				current = skipWhitespace(current);
+				const restOfLine = current.text.slice(current.position).split('\n')[0];
+				const semicolonIndex = restOfLine.indexOf(';;');
+				let foundComment = false;
+				if (semicolonIndex !== -1) {
+					current = advanceCursor(current, semicolonIndex);
+					while (!isAtEnd(current) && peekChar(current) !== '\n') {
+						current = advanceCursor(current, 1);
+					}
+					foundComment = true;
+				}
+
 				const newlineResult = parseNewline(current);
 				if (newlineResult) {
 					current = newlineResult.cursor;
+				}
+
+				// Se encontrou ;;, finalize a transação aqui, sem postings nem metadados
+				if (foundComment) {
+					return {
+						value: {
+							kind: 'transaction',
+							date: dateResult.value,
+							flag: flagResult.value[1],
+							payee,
+							narration,
+							postings: [],
+							meta: {},
+							tags,
+							links
+						},
+						cursor: current
+					};
 				}
 
 				// Parse transaction content (metadata and postings)
@@ -263,7 +294,7 @@ const createTransactionModule = (): DirectiveModule => ({
 						postings.push({
 							account: accountResult.value,
 							amount,
-							meta: postingMeta
+							meta: postingMeta || {}
 						});
 					}
 				}
@@ -276,7 +307,7 @@ const createTransactionModule = (): DirectiveModule => ({
 						payee,
 						narration,
 						postings,
-						meta: Object.keys(meta).length > 0 ? meta : undefined,
+						meta: Object.keys(meta).length > 0 ? meta : {},
 						tags,
 						links
 					},
