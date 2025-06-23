@@ -1,76 +1,37 @@
 # AGENTS.md
 
-## Padrões de Parsing, Validação e Relato de Erros
+## Guide for Agents and Contributors
 
-Este documento descreve os padrões adotados para parsing, validação e relato de erros no projeto, conforme discutido e implementado.
-
----
-
-## 1. Parsing de Entradas
-
-- O parser principal (`createParser`) recebe um `ParserConfig` e opcionalmente o nome do arquivo a ser processado.
-- Se o nome do arquivo não for informado, assume-se `stdin`.
-- Cada diretiva (entry) parseada recebe um campo `meta` que SEMPRE inclui a localização de origem no formato:
-  - `meta.location = "$file:linha"` (ex: `meuarquivo.beancount:12`)
-  - Se não houver arquivo, `meta.location = "stdin:linha"`
-- O campo `meta` também pode conter outros metadados extraídos do YAML ou do próprio arquivo.
-
-### Exemplo de uso do parser
-```ts
-const parser = createParser(config, "meuarquivo.beancount");
-const entries = parser(texto);
-// entries[0].meta.location === "meuarquivo.beancount:1"
-```
+This document defines standards and practices for automated agents and humans contributing to this project.
 
 ---
 
-## 2. Validação de Transações
+### 1. Commit Standards
+- Use descriptive commit messages in the format [type]: short description (e.g., `fix: fix transaction validation`).
+- Commits should be atomic: each commit addresses a single intent or issue.
 
-- A função de validação (`validateAndFillTransactions`) recebe uma lista de entries parseadas.
-- Ela retorna um objeto `{ entries, errors }`:
-  - `entries`: lista de entries ajustada (com postings preenchidos quando possível)
-  - `errors`: lista de erros encontrados, cada um com:
-    - `source`: o campo `meta` do entry (inclui localização)
-    - `message`: mensagem de erro
-    - `entry`: o próprio entry problemático
-- O validador preenche postings faltantes apenas se houver exatamente um sem valor e todas as moedas baterem. Caso contrário, gera erro.
-
-### Exemplo de uso da validação
-```ts
-const { entries: balancedEntries, errors } = validateAndFillTransactions(entries);
-errors.forEach(err => {
-  console.error(`Erro em ${err.source.location}: ${err.message}`);
-});
-```
-
----
-
-## 3. Padrão de Erros
-
-- Todos os erros de validação seguem a estrutura:
-  ```ts
-  {
-    source: entry.meta, // sempre inclui .location
-    message: string,
-    entry: BaseEntry
-  }
+### 2. Tests
+- Every relevant change must be covered by automated tests.
+- Always run the tests before committing or opening a PR.
+- The standard command to run the tests is:
+  ```sh
+  npm run test
   ```
-- Isso permite rastrear precisamente a origem do erro no arquivo de entrada.
+- If a test fails after a change, adjust the code or the test to ensure all tests pass.
+
+### 3. Traceability and Metadata
+- Whenever possible, include traceability information (e.g., error location, origin context) in processed data.
+- Use fields like `meta.location` to indicate the origin of data or errors.
+
+### 4. Interoperability
+- New agents, validators, or parsers must follow the data structure and metadata standards already established in the project.
+- Avoid reinventing existing conventions; consult this document and the codebase for standards.
+
+### 5. General Principles
+- Prefer clarity and traceability over "magic" or premature optimizations.
+- When in doubt, run the tests and follow the commit and metadata standards.
+- Document non-trivial decisions in this file.
 
 ---
 
-## 4. Testes
-
-- Os testes devem aceitar tanto o formato `$file:linha` quanto `stdin:linha` em `meta.location`.
-- Para validar metadados, use `toMatchObject` ao invés de `toEqual` para ignorar campos extras como `location`.
-
----
-
-## 5. Extensibilidade
-
-- O parser e o validador são agnósticos ao conteúdo do arquivo, desde que sigam o padrão de entries e meta descrito acima.
-- Para novos tipos de diretivas, basta garantir que o campo `meta.location` seja preenchido conforme o padrão.
-
----
-
-**Este documento deve ser atualizado sempre que houver mudanças nos padrões de parsing, validação ou relato de erros.** 
+> This document should be kept up to date as the project evolves. 
