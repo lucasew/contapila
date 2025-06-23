@@ -392,28 +392,6 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "tags": undefined,
   },
   {
-    "body": "Assets:Cash      -1.00 USD",
-    "date": "",
-    "kind": "unknown_directive",
-    "meta": {
-      "body": "Assets:Cash      -1.00 USD",
-      "location": "example.beancount:70",
-      "type": "Assets:Cash",
-      "warning": "Unknown directive at line 70, column 29",
-    },
-  },
-  {
-    "body": "Expenses:Other   1.00 USD",
-    "date": "",
-    "kind": "unknown_directive",
-    "meta": {
-      "body": "Expenses:Other   1.00 USD",
-      "location": "example.beancount:71",
-      "type": "Expenses:Other",
-      "warning": "Unknown directive at line 71, column 28",
-    },
-  },
-  {
     "date": "2015-04-20",
     "flag": "*",
     "kind": "transaction",
