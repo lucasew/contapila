@@ -423,6 +423,19 @@ export const parseDirective = (
 	for (const field of definition.fields) {
 		current = skipWhitespace(current);
 
+		// Se encontrar ';;', ignora o resto da linha
+		const restOfLine = current.text.slice(current.position).split('\n')[0];
+		const semicolonIndex = restOfLine.indexOf(';;');
+		if (semicolonIndex !== -1) {
+			// Avança o cursor até depois do ';;' e ignora o resto da linha
+			current = advanceCursor(current, semicolonIndex);
+			// Avança até o fim da linha
+			while (!isAtEnd(current) && peekChar(current) !== '\n') {
+				current = advanceCursor(current, 1);
+			}
+			break;
+		}
+
 		const result = parseField(current, field, fieldParsers);
 
 		if (result) {
