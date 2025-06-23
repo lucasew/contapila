@@ -51,6 +51,13 @@
 		return entidade.tags || [];
 	}
 
+	function getPostingType(posting: any, entidade: any) {
+		// Para transações, o tipo pode ser flag ou keyword
+		if (entidade.flag) return entidade.flag;
+		if (entidade.keyword) return entidade.keyword;
+		return '';
+	}
+
 	function toggleCollapse(idx: number) {
 		openCollapse = { ...openCollapse, [idx]: !openCollapse[idx] };
 	}
@@ -95,11 +102,7 @@
 			<tr>
 				<th>Data</th>
 				<th>Tipo</th>
-				<th>Conta</th>
-				<th class="valor">Valor</th>
-				<th>Moeda</th>
 				<th>Descrição</th>
-				<th>Tags</th>
 				<th>Detalhes</th>
 			</tr>
 		</thead>
@@ -108,14 +111,27 @@
 				<tr>
 					<td>{entidade.date}</td>
 					<td>{entidade.kind}</td>
-					<td>{getMainAccount(entidade)}</td>
-					<td class="valor">{getMainValue(entidade) ?? ''}</td>
-					<td>{getMainCurrency(entidade) ?? ''}</td>
-					<td>{getNarration(entidade)}</td>
 					<td>
-						{#each getTags(entidade) as tag}
-							<Badge color="secondary" class="me-1">{tag}</Badge>
-						{/each}
+						{#if entidade.kind === 'balance'}
+							<strong>{entidade.account}</strong>
+							{#if entidade.amount}
+								&nbsp;{entidade.amount.value} {entidade.amount.currency}
+							{/if}
+						{:else}
+							{#if entidade.payee}
+								<strong>{entidade.payee}</strong>
+							{/if}
+							{#if entidade.narration}
+								{#if entidade.payee} {entidade.narration}{:else}{entidade.narration}{/if}
+							{:else if entidade.comment}
+								{entidade.comment}
+							{/if}
+						{/if}
+						<div style="margin-top: 0.25em;">
+							{#each getTags(entidade) as tag}
+								<Badge color="secondary" class="me-1">{tag}</Badge>
+							{/each}
+						</div>
 					</td>
 					<td>
 						<Button color="primary" size="sm" on:click={() => toggleCollapse(i)}>
@@ -124,15 +140,17 @@
 					</td>
 				</tr>
 				<tr>
-					<td colspan="8" style="padding:0; border: none; background: transparent;">
+					<td colspan="4" style="padding:0; border: none; background: transparent;">
 						<Collapse isOpen={!!openCollapse[i]}>
 							<div style="padding: 1rem; background: #f8f9fa; border-radius: 0 0 0.5rem 0.5rem; border: 1px solid #dee2e6; border-top: none;">
 								{#if entidade.kind === 'transaction' && entidade.postings}
-									<strong>Postings:</strong>
 									<ListGroup class="mb-2">
 										{#each entidade.postings as posting}
 											<ListGroupItem>
-												Conta: {posting.account} | Valor: {posting.amount?.value ?? ''} {posting.amount?.currency ?? ''}
+												<div style="display: flex; justify-content: space-between; align-items: center;">
+													<span style="font-weight: 500;">{posting.account}</span>
+													<span style="font-variant-numeric: tabular-nums; text-align: right; min-width: 100px;">{posting.amount?.value ?? ''} {posting.amount?.currency ?? ''}</span>
+												</div>
 												{#if posting.meta}
 													<br /><em>Meta:</em>
 													<ListGroup class="mt-1">
@@ -153,11 +171,6 @@
 										{/each}
 									</ListGroup>
 								{/if}
-								<ListGroup>
-									<ListGroupItem>
-										<pre>{JSON.stringify(entidade, null, 2)}</pre>
-									</ListGroupItem>
-								</ListGroup>
 							</div>
 						</Collapse>
 					</td>
