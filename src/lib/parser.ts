@@ -447,14 +447,13 @@ export const parseDirective = (
 	const newlineResult = parseNewline(current);
 	if (newlineResult) {
 		current = newlineResult.cursor;
-		const metaResult = parseYAML(current, 2);
+		let metaResult = parseYAML(current, 2);
 		if (metaResult) {
 			entry.meta = metaResult.value;
 			current = metaResult.cursor;
 		}
 	}
 
-	// Garante que meta sempre existe e inclui localização
 	if (!entry.meta) entry.meta = {};
 	entry.meta.location = `${filename}:${startLine}`;
 
@@ -502,7 +501,26 @@ export const createParser = (config: ParserConfig, filename: string = 'stdin') =
 			}
 
 			if (!parsed) {
-				throw new Error(`Unknown directive at line ${cursor.line}, column ${cursor.column}`);
+				const start = cursor.position;
+				let end = start;
+				while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
+					cursor = advanceCursor(cursor, 1);
+					end = cursor.position;
+				}
+				const body = text.slice(start, end);
+				const type = body.trim().split(/\s+/)[0] || '';
+				entries.push({
+					kind: 'unknown_directive',
+					date: '',
+					body,
+					meta: {
+						warning: `Unknown directive at line ${cursor.line}, column ${cursor.column}`,
+						location: `${filename}:${cursor.line}`,
+						type,
+						body
+					}
+				});
+				if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
 			}
 		}
 
@@ -577,7 +595,6 @@ export const createParserConfig = (
 });
 
 export type ModuleValidator = (modules: DirectiveModule[]) => string[];
-// Validação de módulos funcional
 export const validateModuleDependencies: ModuleValidator = (modules) => {
 	const errors: string[] = [];
 	const moduleNames = new Set(modules.map((m) => m.name));
