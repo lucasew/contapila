@@ -22,6 +22,8 @@
 		customValidators: {}
 	});
 
+	let linhasTabela = $derived(content.map(entidadeParaLinhaTabela));
+
 	function getMainAccount(entidade: any) {
 		if (entidade.kind === 'transaction' && entidade.postings && entidade.postings.length > 0) {
 			return entidade.postings[0].account;
@@ -62,6 +64,29 @@
 		openCollapse = { ...openCollapse, [idx]: !openCollapse[idx] };
 	}
 
+	function entidadeParaLinhaTabela(entidade: any) {
+		let titulo = '';
+		let subtitulo = '';
+		if (entidade.kind === 'balance') {
+			titulo = entidade.account;
+			subtitulo = entidade.amount ? `${entidade.amount.value} ${entidade.amount.currency}` : '';
+		} else if (entidade.kind === 'open' || entidade.kind === 'close') {
+			titulo = entidade.account;
+			subtitulo = '';
+		} else {
+			if (entidade.payee) titulo = entidade.payee;
+			if (entidade.narration) subtitulo = entidade.narration;
+			else if (entidade.comment) subtitulo = entidade.comment;
+		}
+		return {
+			data: entidade.date,
+			tipo: entidade.kind,
+			titulo,
+			subtitulo,
+			detalhes: entidade
+		};
+	}
+
 	$effect(() => {
 		console.log(files);
 		if (!files) return;
@@ -95,7 +120,7 @@
 	<p><b>Erro: </b>: {erro}</p>
 {/if}
 
-{#if content.length > 0}
+{#if linhasTabela.length > 0}
 	<Table striped hover responsive>
 		<thead>
 			<tr>
@@ -106,30 +131,19 @@
 			</tr>
 		</thead>
 		<tbody>
-			{#each content as entidade, i}
+			{#each linhasTabela as linha, i}
 				<tr>
-					<td>{entidade.date}</td>
-					<td>{entidade.kind}</td>
+					<td>{linha.data}</td>
+					<td>{linha.tipo}</td>
 					<td>
-						{#if entidade.kind === 'balance'}
-							<strong>{entidade.account}</strong>
-							{#if entidade.amount}
-								&nbsp;{entidade.amount.value} {entidade.amount.currency}
-							{/if}
-						{:else if entidade.kind === 'open' || entidade.kind === 'close'}
-							<strong>{entidade.account}</strong>
-						{:else}
-							{#if entidade.payee}
-								<strong>{entidade.payee}</strong>
-							{/if}
-							{#if entidade.narration}
-								{#if entidade.payee} {entidade.narration}{:else}{entidade.narration}{/if}
-							{:else if entidade.comment}
-								{entidade.comment}
-							{/if}
+						{#if linha.titulo}
+							<strong>{linha.titulo}</strong>
+						{/if}
+						{#if linha.subtitulo}
+							{#if linha.titulo} {linha.subtitulo}{:else}{linha.subtitulo}{/if}
 						{/if}
 						<div class="mt-1">
-							{#each getTags(entidade) as tag}
+							{#each getTags(linha.detalhes) as tag}
 								<Badge color="secondary" class="me-1">{tag}</Badge>
 							{/each}
 						</div>
@@ -144,9 +158,9 @@
 					<td colspan="4" style="padding:0; border: none; background: transparent;">
 						<Collapse isOpen={!!openCollapse[i]}>
 							<div style="padding: 1rem; background: #f8f9fa; border-radius: 0 0 0.5rem 0.5rem; border: 1px solid #dee2e6; border-top: none;">
-								{#if entidade.kind === 'transaction' && entidade.postings}
+								{#if linha.detalhes.kind === 'transaction' && linha.detalhes.postings}
 									<ListGroup class="mb-2">
-										{#each entidade.postings as posting}
+										{#each linha.detalhes.postings as posting}
 											<ListGroupItem>
 												<Row class="align-items-center">
 													<Col>{posting.account}</Col>
@@ -164,10 +178,10 @@
 										{/each}
 									</ListGroup>
 								{/if}
-								{#if entidade.meta}
+								{#if linha.detalhes.meta}
 									<strong>Meta:</strong>
 									<ListGroup class="mb-2">
-										{#each Object.entries(entidade.meta) as [k, v]}
+										{#each Object.entries(linha.detalhes.meta) as [k, v]}
 											<ListGroupItem>{k}: {JSON.stringify(v)}</ListGroupItem>
 										{/each}
 									</ListGroup>
