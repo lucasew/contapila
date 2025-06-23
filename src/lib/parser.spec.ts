@@ -222,4 +222,19 @@ describe('Funções utilitárias do parser', () => {
 		const errors = validateModuleDependencies(modules);
 		expect(errors).toHaveLength(0);
 	});
+});
+
+describe('Linha com ;; e string', () => {
+	test('parses open directive with double semicolon and quoted string', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = '2015-03-01 open Assets:XXX:YYY ;; "SOME_STRING"';
+		const entries = parser(text);
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			kind: 'open',
+			date: '2015-03-01',
+			account: 'Assets:XXX:YYY',
+		});
+	});
 }); 
