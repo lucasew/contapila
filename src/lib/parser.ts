@@ -543,11 +543,40 @@ export const createParser = (config: ParserConfig, filename: string = 'stdin') =
 					if (peekChar(cursor) === '\n') cursor = advanceCursor(cursor, 1);
 					continue;
 				}
+				// Agrega linhas indentadas como parte do body da unknown_directive
 				const start = cursor.position;
 				let end = start;
 				while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
 					cursor = advanceCursor(cursor, 1);
 					end = cursor.position;
+				}
+				// Agregar linhas indentadas seguintes
+				let nextLineStart = cursor.position;
+				while (!isAtEnd(cursor)) {
+					// Checa se próxima linha é indentada
+					let isIndented = false;
+					if (peekChar(cursor) === '\n') {
+						let lookahead = cursor.position + 1;
+						let spaces = 0;
+						while (peekChar({ ...cursor, position: lookahead }) === ' ') {
+							spaces++;
+							lookahead++;
+						}
+						if (spaces >= 2) {
+							isIndented = true;
+						}
+					}
+					if (isIndented) {
+						// Pula o \n
+						cursor = advanceCursor(cursor, 1);
+						let lineStart = cursor.position;
+						while (!isAtEnd(cursor) && peekChar(cursor) !== '\n') {
+							cursor = advanceCursor(cursor, 1);
+						}
+						end = cursor.position;
+					} else {
+						break;
+					}
 				}
 				const body = text.slice(start, end);
 				const type = body.trim().split(/\s+/)[0] || '';
