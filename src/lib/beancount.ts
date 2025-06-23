@@ -216,7 +216,7 @@ const createTransactionModule = (): DirectiveModule => ({
 							payee,
 							narration,
 							postings: [],
-							meta: {},
+							meta: undefined,
 							tags,
 							links
 						},
