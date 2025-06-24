@@ -11,6 +11,8 @@
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import { getContext } from 'svelte';
 	import type { Writable } from 'svelte/store';
+	import { ParserWorker } from '$lib/worker-wrapper.js';
+	import { onDestroy } from 'svelte';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
@@ -21,14 +23,12 @@
 	// Obtém o store do layout
 	const processingStore = getContext<Writable<{ activeTasks: number }>>('processingStore');
 
-	const parser = createParser({
-		modules: [
-			createCoreBeancountModule(),
-			createTransactionModule(),
-			createCustomReportingModule()
-		],
-		fieldParsers: {},
-		customValidators: {}
+	// Cria o worker do parser
+	const parserWorker = new ParserWorker();
+
+	// Cleanup quando o componente for destruído
+	onDestroy(() => {
+		parserWorker.terminate();
 	});
 
 	let linhasTabela = $derived(content.map(entidadeParaLinhaTabela));
@@ -131,53 +131,53 @@
 		// Inicia o processamento
 		processingStore.update(state => ({ activeTasks: state.activeTasks + 1 }));
 
-		// Usa setTimeout para não bloquear a UI
-		setTimeout(async () => {
-			const allEntries: any[] = [];
-			let errorFound: string | null = null;
-			const fileArray = Array.from(files ?? []);
+		// Processa arquivos usando Web Worker
+		(async () => {
+			try {
+				const fileArray = Array.from(files ?? []);
+				const filesData = await Promise.all(
+					fileArray.map(async (file) => ({
+						text: await file.text(),
+						filename: file.name
+					}))
+				);
 
-			// Processa arquivos um por vez para não bloquear a UI
-			for (let i = 0; i < fileArray.length; i++) {
-				const file = fileArray[i];
+				const results = await parserWorker.parseMultipleFiles(filesData);
+				console.log('Resultados do worker:', results);
 				
-				try {
-					const text = await file.text();
-					const parserWithFilename = createParser({
-						modules: [
-							createCoreBeancountModule(),
-							createTransactionModule(),
-							createCustomReportingModule()
-						],
-						fieldParsers: {},
-						customValidators: {}
-					}, file.name);
-					const entries = parserWithFilename(text);
-					allEntries.push(...entries);
-				} catch (e: unknown) {
-					errorFound = `Erro no arquivo ${file.name}: ` + (e instanceof Error ? e.message : String(e));
-					break;
+				const allEntries: any[] = [];
+				let errorFound: string | null = null;
+
+				for (const result of results) {
+					if (result.success) {
+						allEntries.push(...result.entries);
+					} else {
+						errorFound = result.error;
+						break;
+					}
 				}
 
-				// Dá tempo para a UI ser atualizada entre arquivos
-				if (i < fileArray.length - 1) {
-					await new Promise(resolve => setTimeout(resolve, 0));
-				}
-			}
+				console.log('Total de entries coletadas:', allEntries.length);
 
-			if (errorFound) {
-				erro = errorFound;
+				if (errorFound) {
+					erro = errorFound;
+					content = [];
+				} else {
+					erro = null;
+					allEntries.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+					content = allEntries;
+					console.log('Content atualizado com', content.length, 'entries');
+				}
+				
+				console.log(content);
+			} catch (error) {
+				erro = `Erro no processamento: ${error instanceof Error ? error.message : String(error)}`;
 				content = [];
-			} else {
-				erro = null;
-				allEntries.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-				content = allEntries;
+			} finally {
+				// Finaliza o processamento
+				processingStore.update(state => ({ activeTasks: Math.max(0, state.activeTasks - 1) }));
 			}
-			
-			// Finaliza o processamento
-			processingStore.update(state => ({ activeTasks: Math.max(0, state.activeTasks - 1) }));
-			console.log(content);
-		}, 0);
+		})();
 	});
 </script>
 

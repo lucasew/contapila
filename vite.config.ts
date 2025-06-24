@@ -10,6 +10,9 @@ export default defineConfig({
 			outdir: './src/lib/paraglide'
 		})
 	],
+	worker: {
+		format: 'es'
+	},
 	test: {
 		projects: [
 			{
