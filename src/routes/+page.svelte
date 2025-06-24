@@ -9,6 +9,7 @@
 	import PostingItem from '$lib/components/PostingItem.svelte';
 	import TipoBadge from '$lib/components/TipoBadge.svelte';
 	import FileUpload from '$lib/components/FileUpload.svelte';
+	import { processingStore } from '$lib/stores';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
@@ -79,6 +80,7 @@
 		let titulo = '';
 		let subtitulo = '';
 		let tags = [];
+		let links = [];
 		let postings = undefined;
 		let meta = entidade.meta;
 		if (entidade.kind === 'balance') {
@@ -96,6 +98,7 @@
 			else if (entidade.comment) subtitulo = entidade.comment;
 		}
 		if (entidade.tags) tags = entidade.tags;
+		if (entidade.links) links = entidade.links;
 		if (entidade.postings) postings = entidade.postings;
 		return {
 			data: entidade.date,
@@ -103,6 +106,7 @@
 			titulo,
 			subtitulo,
 			tags,
+			links,
 			postings,
 			meta,
 			narration: entidade.narration,
@@ -111,7 +115,6 @@
 	}
 
 	$effect(() => {
-		// Garante que a reatividade funcione ao remover arquivos
 		if (!files || files.length === 0) {
 			content = [];
 			erro = null;
@@ -119,44 +122,48 @@
 		}
 		console.log(files);
 		if (files.length < 1) return;
-		const allEntries: any[] = [];
-		let errorFound: string | null = null;
-		const promises = Array.from(files).map(file =>
-			file.text().then(text => {
-				try {
-					// Cria um parser com o nome do arquivo como filename
-					const parserWithFilename = createParser({
-						modules: [
-							createCoreBeancountModule(),
-							createTransactionModule(),
-							createCustomReportingModule()
-						],
-						fieldParsers: {},
-						customValidators: {}
-					}, file.name);
-					const entries = parserWithFilename(text);
-					allEntries.push(...entries);
-				} catch (e: unknown) {
-					errorFound = `Erro no arquivo ${file.name}: ` + (e instanceof Error ? e.message : String(e));
-				}
-			})
-		);
-		Promise.all(promises).then(() => {
+
+		processingStore.runTask(async () => {
+			const allEntries: any[] = [];
+			let errorFound: string | null = null;
+			let processedFiles = 0;
+
+			const promises = Array.from(files ?? []).map((file, index) =>
+				file.text().then(text => {
+					try {
+						const parserWithFilename = createParser({
+							modules: [
+								createCoreBeancountModule(),
+								createTransactionModule(),
+								createCustomReportingModule()
+							],
+							fieldParsers: {},
+							customValidators: {}
+						}, file.name);
+						const entries = parserWithFilename(text);
+						allEntries.push(...entries);
+					} catch (e: unknown) {
+						errorFound = `Erro no arquivo ${file.name}: ` + (e instanceof Error ? e.message : String(e));
+					}
+					processedFiles++;
+				})
+			);
+			await Promise.all(promises);
 			if (errorFound) {
 				erro = errorFound;
 				content = [];
 			} else {
 				erro = null;
-				// Ordena por data crescente
 				allEntries.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 				content = allEntries;
 			}
-			console.log($inspect(content));
+			console.log(content);
 		});
 	});
 </script>
 
 <FileUpload on:change={e => files = e.detail.files} />
+
 {#if erro != null}
 	<p><b>Erro: </b>: {erro}</p>
 {/if}

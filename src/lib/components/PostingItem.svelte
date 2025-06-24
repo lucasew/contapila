@@ -2,10 +2,6 @@
 import { Row, Col, Collapse, Icon, Accordion, AccordionItem } from '@sveltestrap/sveltestrap';
 const { posting, open = false } = $props();
 let isOpen = $state(open);
-
-
-  console.log($inspect(isOpen));
-
 </script>
 <Accordion>
     <AccordionItem>
