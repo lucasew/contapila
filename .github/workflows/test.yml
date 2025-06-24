@@ -25,4 +25,4 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
 
       - name: Run tests
-        run: npm test -- --run --reporter=verbose
+        run: npm test -- --reporter=verbose
