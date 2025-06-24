@@ -11,6 +11,7 @@ export const REGEX_PATTERNS = {
 	INTEGER: /^\d+$/,
 	FLOAT: /^\d*\.\d+$/,
 	COMMENT: /^;/,
+	COMMENT_INLINE: /;;/,
 	INDENT_TWO: /^ {2}/,
 	INDENT_FOUR: /^ {4}/,
 	CURRENCY: /^([A-Z0-9_]+)/,
@@ -90,9 +91,54 @@ export const skipToEndOfLine: CursorTransformer = (cursor) => {
 };
 
 export const skipComments: CursorTransformer = (cursor) => {
+	// Comentário de linha inteira (começa com ;)
 	if (REGEX_PATTERNS.COMMENT.test(peekChar(cursor))) {
 		return skipToEndOfLine(cursor);
 	}
+	return cursor;
+};
+
+export const skipInlineComments: CursorTransformer = (cursor) => {
+	// Procura por comentários inline (;;) na linha atual
+	let current = cursor;
+	
+	// Encontra o fim da linha atual
+	while (!isAtEnd(current) && peekChar(current) !== '\n') {
+		current = advanceCursor(current, 1);
+	}
+	
+	const lineEnd = current.position;
+	current = cursor;
+	
+	// Procura por ;; na linha atual
+	while (current.position < lineEnd) {
+		const remaining = cursor.text.slice(current.position, lineEnd);
+		const match = remaining.match(REGEX_PATTERNS.COMMENT_INLINE);
+		
+		if (match && match.index === 0) {
+			// Encontrou ;; - retorna o cursor na posição do ;;
+			return current;
+		}
+		
+		current = advanceCursor(current, 1);
+	}
+	
+	return cursor;
+};
+
+export const skipAllComments: CursorTransformer = (cursor) => {
+	// Primeiro verifica se é um comentário de linha inteira
+	if (REGEX_PATTERNS.COMMENT.test(peekChar(cursor))) {
+		return skipToEndOfLine(cursor);
+	}
+	
+	// Depois verifica se há comentários inline na linha
+	const inlineCommentPos = skipInlineComments(cursor);
+	if (inlineCommentPos.position !== cursor.position) {
+		// Encontrou comentário inline - pula até o fim da linha
+		return skipToEndOfLine(inlineCommentPos);
+	}
+	
 	return cursor;
 };
 
@@ -414,6 +460,23 @@ export const parseField = (
 	return result;
 };
 
+// Função utilitária para cortar a linha no primeiro ; que não esteja dentro de aspas
+export function sliceLineAtSemicolonOutsideString(cursor: ParseCursor): ParseCursor {
+	const text = cursor.text.slice(cursor.position);
+	let inString = false;
+	for (let i = 0; i < text.length; i++) {
+		const char = text[i];
+		if (char === '"') {
+			inString = !inString;
+		} else if (char === ';' && !inString) {
+			return advanceCursor(cursor, i);
+		} else if (char === '\n') {
+			break;
+		}
+	}
+	return cursor;
+}
+
 export const parseDirective = (
 	cursor: ParseCursor,
 	definition: DirectiveDefinition,
@@ -442,43 +505,47 @@ export const parseDirective = (
 		}
 	}
 
-	// Após parsear os campos, se encontrar ';;', ignora o resto da linha
-	current = skipWhitespace(current);
-	const restOfLine = current.text.slice(current.position).split('\n')[0];
-	const semicolonIndex = restOfLine.indexOf(';;');
-	if (semicolonIndex !== -1) {
-		current = advanceCursor(current, semicolonIndex);
-		while (!isAtEnd(current) && peekChar(current) !== '\n') {
-			current = advanceCursor(current, 1);
-		}
-	}
+	// Corta a linha no ponto e vírgula (se houver)
+	const afterSemicolon = sliceLineAtSemicolonOutsideString(current);
+	current = afterSemicolon;
 
+	// Pule espaços e parseie tags/links
 	current = skipWhitespace(current);
-
 	const tagsLinksResult = parseTagsAndLinks(current);
 	if (tagsLinksResult) {
 		entry.tags = tagsLinksResult.value.filter(i => i.type === 'tag').map(i => i.value);
 		entry.links = tagsLinksResult.value.filter(i => i.type === 'link').map(i => i.value);
 		current = tagsLinksResult.cursor;
 	}
-
 	current = skipWhitespace(current);
-	const newlineResult = parseNewline(current);
-	if (newlineResult) {
-		current = newlineResult.cursor;
-		let metaResult = parseYAML(current, 2);
-		if (metaResult) {
-			entry.meta = metaResult.value;
-			current = metaResult.cursor;
-			while (!isAtEnd(current)) {
-				let posBefore = current.position;
-				current = skipWhitespace(current);
-				if (peekChar(current) === '\n') {
-					current = advanceCursor(current, 1);
-				} else if (current.position === posBefore) {
-					break;
-				}
+
+	// Agora avance até o final da linha e consuma o \n (se houver)
+	while (!isAtEnd(current) && peekChar(current) !== '\n') {
+		current = advanceCursor(current, 1);
+	}
+	if (!isAtEnd(current) && peekChar(current) === '\n') {
+		current = advanceCursor(current, 1);
+	}
+
+	// Agora chame parseYAML para consumir linhas indentadas como metadados
+	let metaResult = parseYAML(current, 2);
+	if (metaResult) {
+		entry.meta = metaResult.value;
+		current = metaResult.cursor;
+		while (!isAtEnd(current)) {
+			let posBefore = current.position;
+			current = skipWhitespace(current);
+			if (peekChar(current) === '\n') {
+				current = advanceCursor(current, 1);
+			} else if (current.position === posBefore) {
+				break;
 			}
+		}
+	} else {
+		// Caso não haja metadados, consuma um \n se houver
+		const newlineResult = parseNewline(current);
+		if (newlineResult) {
+			current = newlineResult.cursor;
 		}
 	}
 
@@ -509,8 +576,9 @@ export const createParser = (config: ParserConfig, filename: string = 'stdin') =
 				continue;
 			}
 
-			if (REGEX_PATTERNS.COMMENT.test(peekChar(cursor))) {
-				cursor = skipComments(cursor);
+			// Só pula linhas que começam com ; ou ****
+			if (peekChar(cursor) === ';' || (peekChar(cursor) === '*' && peekChar(cursor, 1) === '*' && peekChar(cursor, 2) === '*' && peekChar(cursor, 3) === '*')) {
+				cursor = skipToEndOfLine(cursor);
 				continue;
 			}
 

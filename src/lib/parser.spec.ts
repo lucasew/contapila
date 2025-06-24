@@ -385,4 +385,15 @@ describe('INTEGRAÇÃO: exemplo completo do arquivo example.beancount', () => {
 		const entries = parser(example);
 		expect(entries).toMatchSnapshot();
 	});
+});
+
+describe('DEBUG: Comentários inline', () => {
+	test('debug comentário inline com metadados', () => {
+		const config = createParserConfig([createCoreBeancountModule()]);
+		const parser = createParser(config);
+		const text = `2015-03-01 open Assets:XXX:YYY:AAA ;; "SOME_STRING"\n  meta1: "TRUE"`;
+		const entries = parser(text);
+		console.log('DEBUG - Entries:', JSON.stringify(entries, null, 2));
+		expect(entries).toHaveLength(1);
+	});
 }); 

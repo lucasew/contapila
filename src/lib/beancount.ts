@@ -23,7 +23,8 @@ import {
 	type BaseEntry,
 	type DirectiveDefinition,
 	type DirectiveModule,
-	type FieldDefinition
+	type FieldDefinition,
+	sliceLineAtSemicolonOutsideString
 } from './parser.js';
 
 // Módulos funcionais
@@ -161,7 +162,8 @@ const createTransactionModule = (): DirectiveModule => ({
 					narration = firstQuotedResult.value;
 				}
 
-				// Parse tags at the end of the line
+				// Pule espaços e parseie tags/links
+				current = skipWhitespace(current);
 				let tags: string[] | undefined;
 				let links: string[] | undefined;
 				const tagsLinksResult = parseTagsAndLinks(current);
@@ -170,93 +172,103 @@ const createTransactionModule = (): DirectiveModule => ({
 					links = tagsLinksResult.value.filter(i => i.type === 'link').map(i => i.value);
 					current = tagsLinksResult.cursor;
 				}
-
-				// Após parsear tags e links, se encontrar ';;', ignora o resto da linha E FINALIZA a transação
 				current = skipWhitespace(current);
+
+				// Agora corta o comentário inline (se houver) APENAS na linha principal
 				const restOfLine = current.text.slice(current.position).split('\n')[0];
-				const semicolonIndex = restOfLine.indexOf(';;');
-				let foundComment = false;
-				if (semicolonIndex !== -1) {
-					current = advanceCursor(current, semicolonIndex);
-					while (!isAtEnd(current) && peekChar(current) !== '\n') {
-						current = advanceCursor(current, 1);
+				let inString = false;
+				let semicolonPos = -1;
+				for (let i = 0; i < restOfLine.length; i++) {
+					const char = restOfLine[i];
+					if (char === '"') inString = !inString;
+					if (char === ';' && !inString) {
+						semicolonPos = i;
+						break;
 					}
-					foundComment = true;
+				}
+				// Verifica se há linhas indentadas após a linha principal
+				const afterLine = current.text.slice(current.position + restOfLine.length);
+				const hasIndented = /^\s+\S/m.test(afterLine);
+				if (semicolonPos !== -1 && !hasIndented) {
+					// Só finalize a transação se após o ; só houver comentário ou espaço até o fim da linha
+					const afterSemicolon = restOfLine.slice(semicolonPos + 1);
+					if (/^\s*;.*$/.test(afterSemicolon) || /^\s*$/.test(afterSemicolon)) {
+						current = advanceCursor(current, semicolonPos);
+						while (!isAtEnd(current) && peekChar(current) !== '\n') {
+							current = advanceCursor(current, 1);
+						}
+						if (!isAtEnd(current) && peekChar(current) === '\n') {
+							current = advanceCursor(current, 1);
+						}
+						return {
+							value: {
+								kind: 'transaction',
+								date: dateResult.value,
+								flag: flagResult.value[1],
+								payee,
+								narration,
+								postings: [],
+								meta: {},
+								tags: tags && tags.length ? tags : undefined,
+								links: links && links.length ? links : undefined
+							},
+							cursor: current
+						};
+					}
 				}
 
-				const newlineResult = parseNewline(current);
-				if (newlineResult) {
-					current = newlineResult.cursor;
-				}
-
-				// Se encontrou ;;, finalize a transação aqui, sem postings nem metadados
-				if (foundComment) {
-					// Ignora linhas de postings órfãos imediatamente após a transação
-					let hasPostings = false;
-					while (!isAtEnd(current)) {
-						const firstChar = peekChar(current);
-						const secondChar = peekChar(current, 1);
-						const thirdChar = peekChar(current, 2);
-						const fourthChar = peekChar(current, 3);
-						if ((firstChar === ' ' && secondChar === ' ') ||
-							(firstChar === ' ' && secondChar === ' ' && thirdChar === ' ' && fourthChar === ' ')) {
-							hasPostings = true;
-							// Avança até o fim da linha
-							while (!isAtEnd(current) && peekChar(current) !== '\n') {
-								current = advanceCursor(current, 1);
-							}
-							if (peekChar(current) === '\n') current = advanceCursor(current, 1);
+				// Pule linhas em branco após o header
+				while (!isAtEnd(current)) {
+					let c = peekChar(current);
+					if (c === '\n') {
+						current = advanceCursor(current, 1);
+					} else if (c === ' ') {
+						// só avança se for espaço no início da linha
+						let temp = current.position;
+						while (!isAtEnd(current) && peekChar({ ...current, position: temp }) === ' ') temp++;
+						if (peekChar({ ...current, position: temp }) === '\n') {
+							current = { ...current, position: temp + 1 };
 						} else {
 							break;
 						}
+					} else {
+						break;
 					}
-					return {
-						value: {
-							kind: 'transaction',
-							date: dateResult.value,
-							flag: flagResult.value[1],
-							payee,
-							narration,
-							postings: [],
-							meta: hasPostings ? {} : undefined,
-							tags: tags || [],
-							links: links || []
-						},
-						cursor: current
-					};
 				}
-
-				// Parse transaction content (metadata and postings)
+				// Agora processa todas as linhas indentadas
 				let meta: any = {};
 				const postings: any[] = [];
-
 				while (!isAtEnd(current)) {
-					const indentResult = parseRegex(current, REGEX_PATTERNS.INDENT_TWO);
-					if (!indentResult) break;
-					current = indentResult.cursor;
-
+					// Pule linhas em branco
+					let temp = current.position;
+					while (!isAtEnd(current) && peekChar({ ...current, position: temp }) === ' ') temp++;
+					if (peekChar({ ...current, position: temp }) === '\n') {
+						current = { ...current, position: temp + 1 };
+						continue;
+					}
+					// Verifica se a linha atual começa com pelo menos dois espaços
+					let lineStart = current.position;
+					let spaces = 0;
+					while (!isAtEnd(current) && peekChar({ ...current, position: lineStart }) === ' ') {
+						spaces++;
+						lineStart++;
+					}
+					if (spaces < 2) break;
+					current = { ...current, position: lineStart };
 					// Check if this line is a comment
 					const commentResult = parseRegex(current, REGEX_PATTERNS.COMMENT);
 					if (commentResult) {
-						// Skip comment line
 						const restOfLine = parseRegex(current, REGEX_PATTERNS.REST_OF_LINE);
-						if (restOfLine) {
-							current = restOfLine.cursor;
-						}
+						if (restOfLine) current = restOfLine.cursor;
 						const commentNewline = parseNewline(current);
-						if (commentNewline) {
-							current = commentNewline.cursor;
-						}
+						if (commentNewline) current = commentNewline.cursor;
 						continue;
 					}
-
 					// Check if this line is metadata (YAML key-value)
 					const yamlKeyCheck = parseRegex(current, REGEX_PATTERNS.YAML_KEY);
 					if (yamlKeyCheck) {
-						// Parse as metadata
 						const key = yamlKeyCheck.value[1];
 						current = yamlKeyCheck.cursor;
-
 						let value: any;
 						const quotedStr = parseQuotedString(current);
 						if (quotedStr) {
@@ -273,49 +285,58 @@ const createTransactionModule = (): DirectiveModule => ({
 								current = valueMatch.cursor;
 							}
 						}
-
 						meta[key] = value;
-
 						const metaNewline = parseNewline(current);
-						if (metaNewline) {
-							current = metaNewline.cursor;
-						}
+						if (metaNewline) current = metaNewline.cursor;
 					} else {
 						// Parse as posting
 						const accountResult = parseAccount(current);
 						if (!accountResult) break;
 						current = skipWhitespace(accountResult.cursor);
-
 						let amount: AmountValue | undefined;
 						const amountResult = parseAmount(current);
 						if (amountResult) {
 							amount = amountResult.value;
 							current = amountResult.cursor;
 						}
-
 						const restOfLine = parseRegex(current, REGEX_PATTERNS.REST_OF_LINE);
-						if (restOfLine) {
-							current = restOfLine.cursor;
-						}
-
+						if (restOfLine) current = restOfLine.cursor;
 						const postingNewline = parseNewline(current);
-						if (postingNewline) {
-							current = postingNewline.cursor;
-						}
-
+						if (postingNewline) current = postingNewline.cursor;
 						let postingMeta: any;
 						const postingMetaResult = parseYAML(current, 4);
 						if (postingMetaResult) {
 							postingMeta = postingMetaResult.value;
 							current = postingMetaResult.cursor;
 						}
-
 						postings.push({
 							account: accountResult.value,
 							amount,
 							meta: postingMeta || {}
 						});
 					}
+				}
+				// Depois, avance até a próxima linha que comece com data (diretiva) ou EOF
+				while (!isAtEnd(current)) {
+					let tempCursor = current;
+					tempCursor = skipWhitespace(tempCursor);
+					if (isAtEnd(tempCursor)) break;
+					if (peekChar(tempCursor) === '\n') {
+						current = advanceCursor(tempCursor, 1);
+						continue;
+					}
+					const dateMatch = parseRegex(tempCursor, REGEX_PATTERNS.DATE);
+					if (dateMatch) {
+						current = tempCursor;
+						break;
+					}
+					while (!isAtEnd(tempCursor) && peekChar(tempCursor) !== '\n') {
+						tempCursor = advanceCursor(tempCursor, 1);
+					}
+					if (!isAtEnd(tempCursor) && peekChar(tempCursor) === '\n') {
+						tempCursor = advanceCursor(tempCursor, 1);
+					}
+					current = tempCursor;
 				}
 
 				return {
@@ -326,7 +347,7 @@ const createTransactionModule = (): DirectiveModule => ({
 						payee,
 						narration,
 						postings,
-						meta: Object.keys(meta).length > 0 ? meta : {},
+						meta,
 						tags,
 						links
 					},
