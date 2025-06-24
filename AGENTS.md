@@ -9,6 +9,7 @@ This document defines standards and practices for automated agents and humans co
 ### 1. Commit Standards
 - Use descriptive commit messages in the format [type]: short description (e.g., `fix: fix transaction validation`).
 - Commits should be atomic: each commit addresses a single intent or issue.
+- **Para adicionar todos os arquivos modificados no stage, sempre use `git add -A` antes de commitar.**
 
 ### 2. Tests
 - Every relevant change must be covered by automated tests.
