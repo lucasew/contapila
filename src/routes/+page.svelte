@@ -3,8 +3,8 @@
 		createCoreBeancountModule,
 		createCustomReportingModule,
 		createTransactionModule
-	} from '$lib/beancount.js';
-	import { createParser } from '$lib/parser.js';
+	} from '$lib/core/beancount.js';
+	import { createParser } from '$lib/core/parser.js';
 	import { Table, Badge, Button, Collapse, ListGroup, ListGroupItem, Row, Col, Accordion, AccordionItem, Icon } from '@sveltestrap/sveltestrap';
 	import PostingItem from '$lib/components/PostingItem.svelte';
 	import TipoBadge from '$lib/components/TipoBadge.svelte';

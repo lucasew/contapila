@@ -69,13 +69,12 @@ function toFileList(arr: File[]): FileList {
       id="file-upload-input"
       type="file"
       multiple
+      class="d-none"
       on:change={handleChange}
-      style="display: none;"
     />
     <ListGroup>
       <ListGroupItem
         class="cursor-pointer w-100 p-4 mb-2 rounded border border-2 border-dashed d-flex flex-column align-items-center justify-content-center"
-        
         color={isDragging ? 'primary' : 'secondary'}
         on:click={() => document.getElementById('file-upload-input')?.click()}
         on:dragover={handleDragOver}

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Navbar, NavbarBrand, Container, Styles, Progress } from '@sveltestrap/sveltestrap';
+import { Navbar, NavbarBrand, Container, Styles, Progress, ThemeToggler } from '@sveltestrap/sveltestrap';
 import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 import { navigating } from '$app/stores';
 import { writable } from 'svelte/store';
@@ -14,12 +14,15 @@ setContext('processingStore', processingStore);
 $: showProgress = $navigating || $processingStore.activeTasks > 0;
 </script>
 
-<Progress 
-	striped={showProgress}
-	animated={showProgress} 
-	value={100} 
-	style="border-radius: 0" 
-/>
+<ThemeToggler let:currentColorMode>
+	<Progress 
+		striped={showProgress}
+		animated={showProgress} 
+		value={100} 
+		color={currentColorMode === 'light' ? 'dark' : 'light'}
+		class="rounded-0"
+	/>
+</ThemeToggler>
 
 <Styles/>
 <Navbar>
