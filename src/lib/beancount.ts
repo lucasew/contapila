@@ -162,7 +162,7 @@ const createTransactionModule = (): DirectiveModule => ({
 					narration = firstQuotedResult.value;
 				}
 
-				// Pule espaços e parseie tags/links
+				// Pule espaços e parseie tags/links ANTES de cortar no comentário
 				current = skipWhitespace(current);
 				let tags: string[] | undefined;
 				let links: string[] | undefined;
@@ -192,7 +192,9 @@ const createTransactionModule = (): DirectiveModule => ({
 				if (semicolonPos !== -1 && !hasIndented) {
 					// Só finalize a transação se após o ; só houver comentário ou espaço até o fim da linha
 					const afterSemicolon = restOfLine.slice(semicolonPos + 1);
-					if (/^\s*;.*$/.test(afterSemicolon) || /^\s*$/.test(afterSemicolon)) {
+					// Verifica se há tags/links após o comentário
+					const hasTagsOrLinksAfterComment = /[#^]/.test(afterSemicolon);
+					if ((/^\s*;.*$/.test(afterSemicolon) || /^\s*$/.test(afterSemicolon)) && !hasTagsOrLinksAfterComment) {
 						current = advanceCursor(current, semicolonPos);
 						while (!isAtEnd(current) && peekChar(current) !== '\n') {
 							current = advanceCursor(current, 1);
@@ -209,8 +211,8 @@ const createTransactionModule = (): DirectiveModule => ({
 								narration,
 								postings: [],
 								meta: {},
-								tags: tags && tags.length ? tags : undefined,
-								links: links && links.length ? links : undefined
+								tags: tags || [],
+								links: links || []
 							},
 							cursor: current
 						};
@@ -348,8 +350,8 @@ const createTransactionModule = (): DirectiveModule => ({
 						narration,
 						postings,
 						meta,
-						tags,
-						links
+						tags: tags || [],
+						links: links || []
 					},
 					cursor: current
 				};

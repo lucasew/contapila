@@ -489,7 +489,7 @@ export const parseDirective = (
 
 	let current = cursor;
 	const entry: any = { kind: definition.kind };
-	const startLine = current.line;
+	const startLine = cursor.text.slice(0, cursor.position).split('\n').length;
 	const startColumn = current.column;
 
 	for (const field of definition.fields) {

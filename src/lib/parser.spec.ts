@@ -393,7 +393,6 @@ describe('DEBUG: Comentários inline', () => {
 		const parser = createParser(config);
 		const text = `2015-03-01 open Assets:XXX:YYY:AAA ;; "SOME_STRING"\n  meta1: "TRUE"`;
 		const entries = parser(text);
-		console.log('DEBUG - Entries:', JSON.stringify(entries, null, 2));
 		expect(entries).toHaveLength(1);
 	});
 }); 
