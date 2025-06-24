@@ -13,6 +13,7 @@ This document defines standards and practices for automated agents and humans co
 ### 2. Tests
 - Every relevant change must be covered by automated tests.
 - Always run the tests before committing or opening a PR.
+- **CRÍTICO: Enquanto QUALQUER teste automatizado (incluindo snapshots) não passar, o código está considerado QUEBRADO e não deve ser considerado pronto para produção ou merge.**
 - The standard command to run the tests is:
   ```sh
   npm run test
