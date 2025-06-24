@@ -1,12 +1,10 @@
 // Web Worker para processar parser em background
-import { createParser } from './parser.js';
+import { createParser } from '$lib/parser.js';
 import { 
   createCoreBeancountModule, 
   createTransactionModule, 
   createCustomReportingModule 
-} from './beancount.js';
-
-console.log('Web Worker iniciado');
+} from '$lib/beancount.js';
 
 // Cria o parser no worker
 const parser = createParser({
@@ -21,13 +19,11 @@ const parser = createParser({
 
 // Listener para mensagens do main thread
 self.addEventListener('message', async (event) => {
-  console.log('Worker recebeu mensagem:', event.data);
   const { id, type, data } = event.data;
   
   try {
     switch (type) {
       case 'parse':
-        console.log('Processando arquivo único:', data.filename);
         const { text, filename } = data;
         // Cria parser com filename específico
         const parserWithFilename = createParser({
@@ -40,18 +36,15 @@ self.addEventListener('message', async (event) => {
           customValidators: {}
         }, filename);
         const entries = parserWithFilename(text);
-        console.log('Arquivo processado com sucesso, enviando resposta');
         self.postMessage({ id, type: 'success', data: entries });
         break;
         
       case 'parseMultiple':
-        console.log('Processando múltiplos arquivos:', data.files.length);
         const { files } = data;
         const results = [];
         
         for (let i = 0; i < files.length; i++) {
           const { text, filename } = files[i];
-          console.log(`Processando arquivo ${i + 1}/${files.length}: ${filename}`);
           try {
             const parserWithFilename = createParser({
               modules: [
@@ -66,7 +59,6 @@ self.addEventListener('message', async (event) => {
             results.push({ success: true, entries, error: null });
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('Erro ao processar arquivo:', filename, errorMessage);
             results.push({ 
               success: false, 
               entries: [], 
@@ -82,7 +74,6 @@ self.addEventListener('message', async (event) => {
           });
         }
         
-        console.log('Todos os arquivos processados, enviando resposta final');
         self.postMessage({ id, type: 'success', data: results });
         break;
         
@@ -91,7 +82,6 @@ self.addEventListener('message', async (event) => {
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Erro no worker:', errorMessage);
     self.postMessage({ 
       id, 
       type: 'error', 

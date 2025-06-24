@@ -11,7 +11,7 @@
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import { getContext } from 'svelte';
 	import type { Writable } from 'svelte/store';
-	import { ParserWorker } from '$lib/worker-wrapper.js';
+	import { ParserWorker } from '$lib/workers/parser/wrapper.js';
 	import { onDestroy } from 'svelte';
 
 	let files: FileList | undefined = $state();
@@ -143,7 +143,6 @@
 				);
 
 				const results = await parserWorker.parseMultipleFiles(filesData);
-				console.log('Resultados do worker:', results);
 				
 				const allEntries: any[] = [];
 				let errorFound: string | null = null;
@@ -157,8 +156,6 @@
 					}
 				}
 
-				console.log('Total de entries coletadas:', allEntries.length);
-
 				if (errorFound) {
 					erro = errorFound;
 					content = [];
@@ -166,10 +163,7 @@
 					erro = null;
 					allEntries.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 					content = allEntries;
-					console.log('Content atualizado com', content.length, 'entries');
 				}
-				
-				console.log(content);
 			} catch (error) {
 				erro = `Erro no processamento: ${error instanceof Error ? error.message : String(error)}`;
 				content = [];
