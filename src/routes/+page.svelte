@@ -9,13 +9,17 @@
 	import PostingItem from '$lib/components/PostingItem.svelte';
 	import TipoBadge from '$lib/components/TipoBadge.svelte';
 	import FileUpload from '$lib/components/FileUpload.svelte';
-	import { processingStore } from '$lib/stores';
+	import { getContext } from 'svelte';
+	import type { Writable } from 'svelte/store';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
 	let erro: string | null = $state(null);
 	let openCollapse: Record<number, boolean> = $state({});
 	let openPostings: boolean[][] = [];
+
+	// Obtém o store do layout
+	const processingStore = getContext<Writable<{ activeTasks: number }>>('processingStore');
 
 	const parser = createParser({
 		modules: [
@@ -118,37 +122,49 @@
 		if (!files || files.length === 0) {
 			content = [];
 			erro = null;
+			processingStore.update(state => ({ activeTasks: Math.max(0, state.activeTasks - 1) }));
 			return;
 		}
 		console.log(files);
 		if (files.length < 1) return;
 
-		processingStore.runTask(async () => {
+		// Inicia o processamento
+		processingStore.update(state => ({ activeTasks: state.activeTasks + 1 }));
+
+		// Usa setTimeout para não bloquear a UI
+		setTimeout(async () => {
 			const allEntries: any[] = [];
 			let errorFound: string | null = null;
-			let processedFiles = 0;
+			const fileArray = Array.from(files ?? []);
 
-			const promises = Array.from(files ?? []).map((file, index) =>
-				file.text().then(text => {
-					try {
-						const parserWithFilename = createParser({
-							modules: [
-								createCoreBeancountModule(),
-								createTransactionModule(),
-								createCustomReportingModule()
-							],
-							fieldParsers: {},
-							customValidators: {}
-						}, file.name);
-						const entries = parserWithFilename(text);
-						allEntries.push(...entries);
-					} catch (e: unknown) {
-						errorFound = `Erro no arquivo ${file.name}: ` + (e instanceof Error ? e.message : String(e));
-					}
-					processedFiles++;
-				})
-			);
-			await Promise.all(promises);
+			// Processa arquivos um por vez para não bloquear a UI
+			for (let i = 0; i < fileArray.length; i++) {
+				const file = fileArray[i];
+				
+				try {
+					const text = await file.text();
+					const parserWithFilename = createParser({
+						modules: [
+							createCoreBeancountModule(),
+							createTransactionModule(),
+							createCustomReportingModule()
+						],
+						fieldParsers: {},
+						customValidators: {}
+					}, file.name);
+					const entries = parserWithFilename(text);
+					allEntries.push(...entries);
+				} catch (e: unknown) {
+					errorFound = `Erro no arquivo ${file.name}: ` + (e instanceof Error ? e.message : String(e));
+					break;
+				}
+
+				// Dá tempo para a UI ser atualizada entre arquivos
+				if (i < fileArray.length - 1) {
+					await new Promise(resolve => setTimeout(resolve, 0));
+				}
+			}
+
 			if (errorFound) {
 				erro = errorFound;
 				content = [];
@@ -157,8 +173,11 @@
 				allEntries.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 				content = allEntries;
 			}
+			
+			// Finaliza o processamento
+			processingStore.update(state => ({ activeTasks: Math.max(0, state.activeTasks - 1) }));
 			console.log(content);
-		});
+		}, 0);
 	});
 </script>
 
