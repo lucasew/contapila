@@ -34,6 +34,15 @@ This document defines standards and practices for automated agents and humans co
 - When in doubt, run the tests and follow the commit and metadata standards.
 - Document non-trivial decisions in this file.
 
+### 6. Internacionalização (i18n)
+- Sempre que alterar os arquivos de tradução (ex: messages/en.json, messages/pt-br.json), rode o comando abaixo para atualizar os arquivos gerados do Paraglide:
+
+```
+npx paraglide-js compile
+```
+
+- Certifique-se de que todas as chaves usadas no código existem nos arquivos de tradução e vice-versa.
+
 ---
 
 ## Diretrizes de Commits (Git Guidelines)
