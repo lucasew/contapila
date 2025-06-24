@@ -1,10 +1,10 @@
 // Web Worker para processar parser em background
-import { createParser } from '$lib/parser.js';
+import { createParser } from '$lib/core/parser.js';
 import { 
   createCoreBeancountModule, 
   createTransactionModule, 
   createCustomReportingModule 
-} from '$lib/beancount.js';
+} from '$lib/core/beancount.js';
 
 // Cria o parser no worker
 const parser = createParser({
