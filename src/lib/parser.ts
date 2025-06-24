@@ -77,7 +77,8 @@ export interface ParserConfig {
 export type FieldParser = (cursor: ParseCursor) => ParseResult<any> | null;
 export type DirectiveParser = (
 	cursor: ParseCursor,
-	fields: FieldDefinition[]
+	fields: FieldDefinition[],
+	filename?: string
 ) => ParseResult<BaseEntry> | null;
 
 export type CursorTransformer = (cursor: ParseCursor) => ParseCursor;
@@ -484,7 +485,7 @@ export const parseDirective = (
 	filename: string = 'stdin'
 ): ParseResult<BaseEntry> | null => {
 	if (definition.customParser) {
-		return definition.customParser(cursor, definition.fields);
+		return definition.customParser(cursor, definition.fields, filename);
 	}
 
 	let current = cursor;

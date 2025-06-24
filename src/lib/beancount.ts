@@ -133,8 +133,9 @@ const createTransactionModule = (): DirectiveModule => ({
 	directives: [
 		{
 			kind: 'transaction',
-			customParser: (cursor, fields) => {
+			customParser: (cursor, fields, filename = 'stdin') => {
 				let current = cursor;
+				const startLine = cursor.text.slice(0, cursor.position).split('\n').length;
 
 				const dateResult = parseDate(current);
 				if (!dateResult) return null;
@@ -210,7 +211,7 @@ const createTransactionModule = (): DirectiveModule => ({
 								payee,
 								narration,
 								postings: [],
-								meta: {},
+								meta: { location: `${filename}:${startLine}` },
 								tags: tags || [],
 								links: links || []
 							},
@@ -238,7 +239,7 @@ const createTransactionModule = (): DirectiveModule => ({
 					}
 				}
 				// Agora processa todas as linhas indentadas
-				let meta: any = {};
+				let meta: any = { location: `${filename}:${startLine}` };
 				const postings: any[] = [];
 				while (!isAtEnd(current)) {
 					// Pule linhas em branco

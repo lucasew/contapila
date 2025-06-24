@@ -128,6 +128,7 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     ],
     "meta": {
       "categoria": "alimentação",
+      "location": "example.beancount:23",
       "recibo": "12345",
     },
     "narration": "Compra semanal",
@@ -163,7 +164,9 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "restaurante",
     ],
-    "meta": {},
+    "meta": {
+      "location": "example.beancount:30",
+    },
     "narration": "Almoço",
     "payee": "Restaurante",
     "postings": [
@@ -195,7 +198,9 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "salario",
     ],
-    "meta": {},
+    "meta": {
+      "location": "example.beancount:34",
+    },
     "narration": "Recebimento",
     "payee": "Salário",
     "postings": [
@@ -227,7 +232,9 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "b3",
     ],
-    "meta": {},
+    "meta": {
+      "location": "example.beancount:38",
+    },
     "narration": "Compra de ação",
     "payee": "Investimento",
     "postings": [
@@ -262,7 +269,9 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "move",
     ],
-    "meta": {},
+    "meta": {
+      "location": "example.beancount:44",
+    },
     "narration": "Entre contas",
     "payee": "Transferência",
     "postings": [
@@ -294,7 +303,9 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "amazon",
     ],
-    "meta": {},
+    "meta": {
+      "location": "example.beancount:48",
+    },
     "narration": "Amazon",
     "payee": "Compra internacional",
     "postings": [
@@ -329,7 +340,9 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "zero",
     ],
-    "meta": {},
+    "meta": {
+      "location": "example.beancount:54",
+    },
     "narration": "Com valor zero",
     "payee": "Pagamento parcial",
     "postings": [
@@ -361,7 +374,9 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "linha",
     ],
-    "meta": {},
+    "meta": {
+      "location": "example.beancount:58",
+    },
     "narration": "Linha com comentário",
     "payee": "Comentário",
     "postings": [],
@@ -385,7 +400,9 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "flag": "*",
     "kind": "transaction",
     "links": [],
-    "meta": {},
+    "meta": {
+      "location": "example.beancount:69",
+    },
     "narration": "Teste de parser",
     "payee": "Transação com ;;",
     "postings": [],
@@ -398,7 +415,9 @@ exports[`INTEGRAÇÃO: exemplo completo do arquivo example.beancount > parseia t
     "links": [
       "test",
     ],
-    "meta": {},
+    "meta": {
+      "location": "example.beancount:73",
+    },
     "narration": "Descrição com "aspas" e 
  nova linha",
     "payee": "Aspas e caracteres",

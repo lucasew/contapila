@@ -438,7 +438,8 @@ describe('Transaction Parser', () => {
 		expect(entries).toHaveLength(1);
 		expect(entries[0].meta).toEqual({
 			category: 'shopping',
-			receipt_id: 12345
+			receipt_id: 12345,
+			location: 'stdin:1'
 		});
 
 		expect(entries[0].postings[1].meta).toEqual({
@@ -496,7 +497,8 @@ describe('Transaction Parser', () => {
 		expect(entries[0].meta).toEqual({
 			'doc-nr': '20241119000001234',
 			details: '',
-			'transaction-type': 'Bond-Sale'
+			'transaction-type': 'Bond-Sale',
+			location: 'stdin:1'
 		});
 
 		expect(entries[0].postings).toHaveLength(3);
