@@ -6,7 +6,7 @@ import {
 	getModuleByName,
 	type BaseEntry,
 	type DirectiveModule
-} from '$lib/beancount.js';
+} from './beancount.js';
 import { beforeEach, describe, expect, test } from 'vitest';
 import {
 	REGEX_PATTERNS,
