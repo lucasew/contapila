@@ -1,6 +1,7 @@
 <script lang="ts">
 import { createEventDispatcher } from 'svelte';
 import { Form, FormGroup, Label, Input, Button, Icon, ListGroup, ListGroupItem, Row, Col, Badge } from '@sveltestrap/sveltestrap';
+import { m } from '$lib/paraglide/messages.js';
 
 let files: File[] = [];
 const dispatch = createEventDispatcher();
@@ -63,7 +64,7 @@ function toFileList(arr: File[]): FileList {
 <Form class="mb-3">
   <FormGroup>
     <Label for="file-upload-input" class="fw-bold mb-2">
-      <Icon name="upload" class="me-2" />Upload de arquivos Beancount
+      <Icon name="upload" class="me-2" />{m.upload_label()}
     </Label>
     <Input
       id="file-upload-input"
@@ -83,10 +84,10 @@ function toFileList(arr: File[]): FileList {
         active={isDragging}
       >
         <Icon name="upload" size="2x" class="mb-2 text-primary" />
-        <div class="fw-bold mb-1">Arraste e solte arquivos aqui ou clique para selecionar</div>
-        <div class="text-muted small">(Múltiplos arquivos suportados)</div>
+        <div class="fw-bold mb-1">{m.upload_dragdrop()}</div>
+        <div class="text-muted small">{m.upload_multiple_supported()}</div>
         {#if files.length === 0}
-          <div class="text-muted mt-2">Nenhum arquivo selecionado ainda.</div>
+          <div class="text-muted mt-2">{m.upload_none_selected()}</div>
         {/if}
         {#if files.length > 0}
           <div class="w-100 mt-3">
@@ -105,7 +106,7 @@ function toFileList(arr: File[]): FileList {
           <div class="w-100 d-flex justify-content-center mt-2">
             <span on:click|stopPropagation role="button" tabindex="0">
               <Button outline color="danger" on:click={clearFiles}>
-                <Icon name="x" class="me-1" /> Limpar tudo
+                <Icon name="x" class="me-1" /> {m.upload_clear_all()}
               </Button>
             </span>
           </div>

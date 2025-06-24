@@ -13,6 +13,7 @@
 	import type { Writable } from 'svelte/store';
 	import { ParserWorker } from '$lib/workers/parser/wrapper.js';
 	import { onDestroy } from 'svelte';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let files: FileList | undefined = $state();
 	let content: any[] = $state([]);
@@ -178,7 +179,7 @@
 <FileUpload on:change={e => files = e.detail.files} />
 
 {#if erro != null}
-	<p><b>Erro: </b>: {erro}</p>
+	<p><b>{m.error_label()}:</b> {erro}</p>
 {/if}
 
 {#if linhasTabela.length > 0}
@@ -213,7 +214,7 @@
 					{/each}
 				{/if}
 				<details class="mt-2">
-					<summary><strong>Atributos</strong></summary>
+					<summary><strong>{m.file_attributes_title()}</strong></summary>
 					{#if linha.meta && Object.keys(linha.meta).length > 0}
 						<ul class="ms-3 mb-2">
 							{#each Object.entries(linha.meta) as [k, v]}
@@ -221,12 +222,12 @@
 							{/each}
 						</ul>
 					{:else}
-						<span class="ms-3 text-muted">Sem atributos extras</span>
+						<span class="ms-3 text-muted">{m.no_extra_attributes()}</span>
 					{/if}
 				</details>
 			</AccordionItem>
 		{/each}
 	</Accordion>
 {:else}
-	<p>Nenhuma entidade encontrada.</p>
+	<p>{m.no_entities_found()}</p>
 {/if}

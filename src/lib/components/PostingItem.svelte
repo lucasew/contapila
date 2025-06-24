@@ -1,5 +1,6 @@
 <script lang="ts">
 import { Row, Col, Collapse, Icon, Accordion, AccordionItem } from '@sveltestrap/sveltestrap';
+import { m } from '$lib/paraglide/messages.js';
 const { posting, open = false } = $props();
 let isOpen = $state(open);
 </script>
@@ -21,7 +22,7 @@ let isOpen = $state(open);
           {/each}
         </ul>
       {:else}
-        <span class="ms-3 text-muted">Sem atributos extras</span>
+        <span class="ms-3 text-muted">{m.no_extra_attributes()}</span>
       {/if}
     </div>
     </AccordionItem>

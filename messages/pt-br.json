@@ -1,4 +1,17 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
-	"hello_world": "Hello, {name} from pt-br!"
+	"hello_world": "Hello, {name} from pt-br!",
+	"app_name": "Contapila",
+	"error_label": "Erro",
+	"no_extra_attributes": "Sem atributos extras",
+	"no_entities_found": "Nenhuma entidade encontrada.",
+	"upload_label": "Upload de arquivos Beancount",
+	"upload_dragdrop": "Arraste e solte arquivos aqui ou clique para selecionar",
+	"upload_multiple_supported": "(Múltiplos arquivos suportados)",
+	"upload_none_selected": "Nenhum arquivo selecionado ainda.",
+	"upload_clear_all": "Limpar tudo",
+	"demo_link": "paraglide",
+	"file_attributes_title": "Atributos",
+	"file_clear_button": "Limpar tudo",
+	"vs_code_extension_hint": "Se você usa VSCode, instale a extensão Sherlock i18n para uma experiência melhor."
 }
