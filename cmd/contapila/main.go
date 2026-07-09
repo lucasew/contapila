@@ -161,6 +161,16 @@ func balancesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Stable global order: account name, then commodity, then ledger.
+			sort.Slice(rows, func(i, j int) bool {
+				if rows[i].account != rows[j].account {
+					return rows[i].account < rows[j].account
+				}
+				if rows[i].commodity != rows[j].commodity {
+					return rows[i].commodity < rows[j].commodity
+				}
+				return rows[i].ledger < rows[j].ledger
+			})
 			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 			if showLedger {
 				fmt.Fprintln(w, "LEDGER\tACCOUNT\tAMOUNT\tCOMMODITY")

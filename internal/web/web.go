@@ -203,24 +203,20 @@ func hasWarn(ds diag.List) bool {
 }
 
 func buildBalances(bals map[string]map[string]*big.Rat) []balanceRow {
-	var accts []string
-	for a := range bals {
-		accts = append(accts, a)
-	}
-	sort.Strings(accts)
 	var rows []balanceRow
-	for _, a := range accts {
-		var cs []string
-		for c := range bals[a] {
-			cs = append(cs, c)
-		}
-		sort.Strings(cs)
-		for _, c := range cs {
+	for a, byComm := range bals {
+		for c, n := range byComm {
 			rows = append(rows, balanceRow{
-				Account: a, Commodity: c, Amount: bals[a][c].FloatString(4),
+				Account: a, Commodity: c, Amount: n.FloatString(4),
 			})
 		}
 	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Account != rows[j].Account {
+			return rows[i].Account < rows[j].Account
+		}
+		return rows[i].Commodity < rows[j].Commodity
+	})
 	return rows
 }
 
