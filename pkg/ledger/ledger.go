@@ -24,8 +24,7 @@ type Transaction struct {
 type Ledger struct {
 	Inventory *inventory.Inventory
 	Tolerance *big.Rat
-	// Balances tracks the simple "amount" balance for reporting.
-	// For inventory accounts, it tracks units.
+	// Balances tracks the simple "units" balance for reporting.
 	Balances map[string]map[string]*big.Rat // Account -> Commodity -> Total
 }
 
@@ -50,20 +49,20 @@ func (l *Ledger) addBalance(account, commodity string, units *big.Rat) {
 
 func (l *Ledger) Process(txn *Transaction) error {
 	var residualPosting *Posting
-	var costBalances = make(map[string]amount.Amount) // commodity -> amount (cost basis)
+	var txnBalances = make(map[string]amount.Amount) // commodity -> amount (sum to be balanced)
 
-	addCostBalance := func(a amount.Amount) {
+	addTxnBalance := func(a amount.Amount) {
 		if a.Commodity == "" {
 			return
 		}
-		if b, ok := costBalances[a.Commodity]; ok {
+		if b, ok := txnBalances[a.Commodity]; ok {
 			var err error
-			costBalances[a.Commodity], err = b.Add(a)
+			txnBalances[a.Commodity], err = b.Add(a)
 			if err != nil {
 				panic(err)
 			}
 		} else {
-			costBalances[a.Commodity] = a
+			txnBalances[a.Commodity] = a
 		}
 	}
 
@@ -92,17 +91,17 @@ func (l *Ledger) Process(txn *Transaction) error {
 				if err != nil {
 					return err
 				}
-				// Balancing value is units * unit_cost (Cost Basis)
+				// Balancing value for a Buy is units * cost
 				costVal := p.Cost.Mul(units.Num)
-				addCostBalance(costVal)
+				addTxnBalance(costVal)
 			} else {
 				// Regular posting
-				addCostBalance(units)
+				addTxnBalance(units)
 			}
 			pending = append(pending, pendingCommit{p.Account, units.Commodity, units.Num})
 		} else if units.Num.Sign() < 0 {
 			// Decrease (Sell)
-			// Check if it's an inventory account (has units of this commodity)
+			// Check if we have inventory of this commodity in this account
 			posUnits := l.Inventory.GetUnits(p.Account, p.Units.Commodity)
 			if posUnits.Sign() > 0 {
 				// Inventory Sell
@@ -110,40 +109,46 @@ func (l *Ledger) Process(txn *Transaction) error {
 				if err != nil {
 					return err
 				}
-				// Balancing value for Cost Basis is the cost of reduction (negative)
-				costVal := costOfReduction.Neg()
-				addCostBalance(costVal)
 
-				// Support @ and @@ proceeds
-				if p.Price != nil || p.Total != nil {
-					var proceeds amount.Amount
-					if p.Total != nil {
-						proceeds = *p.Total
-					} else {
-						proceeds = p.Price.Mul(new(big.Rat).Abs(units.Num))
-					}
-					// Gain = Proceeds - costOfReduction
-					// Gain is a CREDIT (negative).
-					gainAmount, err := proceeds.Sub(costOfReduction)
+				// Balancing value for an inventory Sell:
+				// If @/@@ provided, use that as the balancing amount.
+				// Else use the cost of reduction.
+				var proceeds *amount.Amount
+				if p.Total != nil {
+					proceeds = p.Total
+				} else if p.Price != nil {
+					pVal := p.Price.Mul(new(big.Rat).Abs(units.Num))
+					proceeds = &pVal
+				}
+
+				if proceeds != nil {
+					// Use proceeds for balancing the posting
+					addTxnBalance(proceeds.Neg())
+					// Record the realized gain: Proceeds - Cost
+					// (A gain is a credit/negative in the balance)
+					gain, err := proceeds.Sub(costOfReduction)
 					if err != nil {
 						return err
 					}
-					addCostBalance(gainAmount.Neg())
+					addTxnBalance(gain.Neg())
+				} else {
+					// No proceeds specified, balance at cost
+					addTxnBalance(costOfReduction.Neg())
 				}
 			} else {
 				// Regular posting
-				addCostBalance(units)
+				addTxnBalance(units)
 			}
 			pending = append(pending, pendingCommit{p.Account, units.Commodity, units.Num})
 		} else {
 			// Zero units
-			addCostBalance(units)
+			addTxnBalance(units)
 			pending = append(pending, pendingCommit{p.Account, units.Commodity, units.Num})
 		}
 	}
 
 	if residualPosting != nil {
-		for commodity, b := range costBalances {
+		for commodity, b := range txnBalances {
 			if !b.Zero() {
 				// Residual absorbs the negative of the balance
 				val := b.Neg()
@@ -151,9 +156,10 @@ func (l *Ledger) Process(txn *Transaction) error {
 			}
 		}
 	} else {
-		// Check that all cost balances are zero
-		for _, b := range costBalances {
+		// Check that all balances are zero
+		for _, b := range txnBalances {
 			if !b.Zero() {
+				// TODO: handle tolerance
 				return fmt.Errorf("transaction is unbalanced: %s", b.String())
 			}
 		}
