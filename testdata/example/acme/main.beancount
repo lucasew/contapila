@@ -1,0 +1,7 @@
+; acme — fictional small company (AR/AP story).
+option "operating_currency" "BRL"
+
+include "accounts.beancount"
+include "opening.beancount"
+include "sales.beancount"
+include "ops.beancount"

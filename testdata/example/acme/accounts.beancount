@@ -1,0 +1,18 @@
+; acme — small shop AR/AP
+2023-07-01 open Equity:Aporte
+2023-07-01 open Equity:DistribuicaoLucros
+2023-07-01 open Assets:BR:Alfa:ContaCorrente
+2023-07-01 open Assets:US:Wise:ContaCorrente
+2023-07-01 open Assets:Receivable:Client:Orion
+2023-07-01 open Assets:Receivable:Client:Nimbus
+2023-07-01 open Assets:Receivable:Client:Helix
+2023-07-01 open Liabilities:Payable:Supplier:CloudHost
+2023-07-01 open Liabilities:Payable:Supplier:Contador
+2023-07-01 open Liabilities:Payable:Tax:DAS
+2023-07-01 open Income:Sales:BR
+2023-07-01 open Income:Sales:US
+2023-07-01 open Expenses:Ops:Cloud
+2023-07-01 open Expenses:Ops:Contabilidade
+2023-07-01 open Expenses:Payroll:Contractor
+2023-07-01 open Expenses:Tax:DAS
+2023-07-01 open Expenses:BankFees

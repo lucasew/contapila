@@ -1,36 +1,42 @@
 # testdata
 
-## `example/`
+| Path | Role |
+|------|------|
+| **`example/`** | Default dogfood project: **depth over volume**. Multi-ledger, rich chart, domain includes, ~few hundred txns. Use this day-to-day. |
+| **`kitchensink/`** | Scale corpus: same multi-ledger ideas, **≥100k–1M transactions** for parser/booking/UI load. Not for reading by hand. |
+| **`golden/`** | Reserved for expected check/balances snapshots. |
 
-Fat **contapila project** (~1,000,008 transactions) for UI dogfood, engine scale, and anonymized BR-shaped realism.
+## `example/` (deep)
 
-| Ledger | Role |
-|--------|------|
-| `personal` | Household high-volume: banks, broker, cards-by-month, CDB maturities, multi-commodity |
-| `acme` | Small company: AR/AP, sales, payroll |
-| `ong` | Nonprofit: grants, donations, programs |
-| `smuggle` | Fictional inventory stress (`CIGPK` packs, avg-cost) |
-| `scratch/` | No `main.beancount` → ignored |
+Ledgers: `personal` · `acme` · `ong` · `smuggle` (+ ignored `scratch/`).
 
-### Layout
-
-- `contapila.cue` — commodity precision
-- `prices.beancount` — shared, irregular points per month (2021-07→2026-07)
-- Domain includes (personal expenses split by year for size)
-- Fiction brands; topology mirrors real BR books without doxxing
-
-### Commodities
-
-`BRL`, `USD`, `B3_PETR4`, `B3_WEGE3`, `B3_BBAS3`, `B3_MXRF11`, `TDBR_SELIC_2029`, `BTC`, `SPDW`, `CIGPK`
+| Ledger | What it exercises |
+|--------|-------------------|
+| personal | BR-shaped chart, cards-by-month, CDB maturities, avg-cost equities/FII/crypto/USD, FX+IOF, family loan, soft AR, payee+narration |
+| acme | AR invoices + collections, AP suppliers/tax, payroll, profit distributions |
+| ong | Grant receivable → deferred → income, donations, programs |
+| smuggle | Unit inventory (`CIGPK`), multi-cost buys, warehouse/transit/cache, residual gains, confiscation |
 
 ```bash
 cd testdata/example
 contapila status
 contapila check
-contapila balances
+contapila balances personal
 contapila web
 ```
 
-## `golden/`
+## `kitchensink/` (volume)
 
-Reserved for expected check/balances snapshots.
+Same ledgers/topology spirit, generated at high volume for stress.
+
+```bash
+cd testdata/kitchensink
+contapila check   # expect minutes on ~1M txns
+```
+
+Regenerate kitchensink (optional):
+
+```bash
+python3 /path/to/gen_fat_example.py 1000000
+# then move output into testdata/kitchensink
+```
