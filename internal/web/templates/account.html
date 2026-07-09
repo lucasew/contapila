@@ -3,18 +3,10 @@
 <head>
   {{template "head" .}}
 </head>
-<body class="min-h-screen bg-base-100 text-base-content">
-  {{template "navbar" .}}
-  <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+{{template "app-open" .}}
     <header class="mb-6">
-      <p class="text-sm text-base-content/60 mb-1">
-        <a href="{{ledgerURL .LedgerName "balances" .Time}}" class="link link-hover">Balances</a>
-        <span class="opacity-40">/</span>
-        Account
-      </p>
       <h1 class="text-2xl font-semibold tracking-tight font-mono text-balance break-all">{{.AccountName}}</h1>
       <p class="mt-1 text-sm text-base-content/70 flex flex-wrap items-center gap-2">
-        <span>Ledger <span class="font-medium text-base-content">{{.LedgerName}}</span></span>
         {{if .PeriodLabel}}
         <span class="badge badge-soft badge-sm font-mono" title="{{.Time}}">{{.PeriodLabel}}</span>
         {{end}}
@@ -111,7 +103,5 @@
       </div>
       {{end}}
     </section>
-  </main>
-  {{template "theme-script" .}}
-</body>
+  {{template "app-close" .}}
 </html>

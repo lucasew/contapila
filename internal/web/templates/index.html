@@ -3,9 +3,7 @@
 <head>
   {{template "head" .}}
 </head>
-<body class="min-h-screen bg-base-100 text-base-content">
-  {{template "navbar" .}}
-  <main class="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+{{template "app-open" .}}
     <header class="mb-8">
       <h1 class="text-2xl font-semibold tracking-tight text-balance">Ledgers</h1>
       <p class="mt-2 text-sm text-base-content/70 font-mono break-all">{{.ProjectRoot}}</p>
@@ -29,7 +27,5 @@
     </ul>
     <p class="mt-6 text-sm text-base-content/60">Read-only viewer. Edit your <span class="font-mono">.beancount</span> files in the editor you already trust.</p>
     {{end}}
-  </main>
-  {{template "theme-script" .}}
-</body>
+  {{template "app-close" .}}
 </html>

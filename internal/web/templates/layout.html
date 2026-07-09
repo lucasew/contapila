@@ -25,6 +25,8 @@
 </script>
 <style>
   .tabular { font-variant-numeric: tabular-nums; }
+  /* Fava-like fixed chrome */
+  .app-sidebar { width: 15rem; }
 </style>
 {{end}}
 
@@ -45,12 +47,11 @@
 {{end}}
 
 {{define "time-filter"}}
-{{/* Fava-style: a single Time expression field (no interval combo). */}}
 {{if .LedgerName}}
 <form method="get" action="{{if eq .Page "account"}}{{accountURL .LedgerName .AccountName ""}}{{else}}/l/{{.LedgerName}}/{{.Page}}{{end}}" class="shrink-0">
   <input id="time-filter" type="text" name="time" value="{{.Time}}"
     placeholder="2024-03"
-    class="input input-sm input-bordered w-36 sm:w-48 font-mono"
+    class="input input-sm input-bordered w-32 sm:w-44 font-mono"
     aria-label="Time filter"
     title="2024, 2024-03, 2024-Q1, month, month-1, 2020 - 2024-06"
     autocomplete="off"
@@ -59,73 +60,115 @@
 {{end}}
 {{end}}
 
-{{define "navbar"}}
-<div class="navbar bg-base-200 border-b border-base-300 px-2 sm:px-4 min-h-14 gap-1">
-  <div class="navbar-start gap-1 min-w-0">
-    <a href="/" class="btn btn-ghost text-lg font-semibold tracking-tight normal-case px-2">contapila</a>
-    {{if .LedgerName}}
-    <div class="hidden lg:flex breadcrumbs text-sm max-w-[12rem] truncate">
-      <ul>
-        <li><a href="/">Ledgers</a></li>
-        <li class="font-medium">{{.LedgerName}}</li>
-      </ul>
-    </div>
-    {{end}}
-  </div>
-
-  <div class="navbar-center hidden md:flex">
-    {{if .LedgerName}}
-    <ul class="menu menu-horizontal gap-0.5 p-0">
-      <li><a href="{{ledgerURL .LedgerName "check" .Time}}" class="{{if eq .Page "check"}}menu-active{{end}}">Check</a></li>
-      <li><a href="{{ledgerURL .LedgerName "balances" .Time}}" class="{{if eq .Page "balances"}}menu-active{{end}}">Balances</a></li>
-      <li><a href="{{ledgerURL .LedgerName "journal" .Time}}" class="{{if eq .Page "journal"}}menu-active{{end}}">Journal</a></li>
-      <li><a href="{{ledgerURL .LedgerName "pnl" .Time}}" class="{{if eq .Page "pnl"}}menu-active{{end}}">P&amp;L</a></li>
-      <li><a href="{{ledgerURL .LedgerName "networth" .Time}}" class="{{if eq .Page "networth"}}menu-active{{end}}">Net worth</a></li>
-    </ul>
-    {{end}}
-  </div>
-
-  <div class="navbar-end gap-1 sm:gap-2 flex-nowrap">
-    {{template "time-filter" .}}
-
+{{define "breadcrumbs"}}
+{{/* overflow-visible so the ledger dropdown is not clipped by breadcrumbs/navbar */}}
+<div class="breadcrumbs text-sm py-0 max-w-full overflow-visible">
+  <ul class="flex-nowrap overflow-visible">
+    <li><a href="/" class="link link-hover">contapila</a></li>
     {{if .Ledgers}}
-    <div class="dropdown dropdown-end">
-      <div tabindex="0" role="button" class="btn btn-ghost btn-sm">
-        {{if .LedgerName}}{{.LedgerName}}{{else}}Ledger{{end}}
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-      </div>
-      <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-52 p-2 shadow-sm border border-base-300">
-        {{range .Ledgers}}
-        <li>
-          {{if eq $.Page "account"}}
-          <a href="{{accountURL . $.AccountName $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
-          {{else}}
-          <a href="{{ledgerURL . $.Page $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+    <li class="overflow-visible relative z-[60]">
+      <details class="dropdown dropdown-bottom">
+        <summary class="cursor-pointer list-none font-medium after:hidden">
+          {{if .LedgerName}}{{.LedgerName}}{{else}}ledger{{end}}
+          <svg xmlns="http://www.w3.org/2000/svg" class="inline h-3.5 w-3.5 opacity-50 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <ul class="dropdown-content menu bg-base-100 rounded-box z-[70] w-52 p-2 shadow-md border border-base-300">
+          {{range .Ledgers}}
+          <li>
+            {{if and (eq $.Page "account") $.AccountName}}
+            <a href="{{accountURL . $.AccountName $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+            {{else if $.Page}}
+            <a href="{{ledgerURL . $.Page $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+            {{else}}
+            <a href="{{ledgerURL . "check" ""}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+            {{end}}
+          </li>
           {{end}}
-        </li>
-        {{end}}
-      </ul>
-    </div>
+        </ul>
+      </details>
+    </li>
     {{end}}
+    {{if and .LedgerName (eq .Page "account") .AccountName}}
+    <li class="font-mono text-xs sm:text-sm truncate max-w-[14rem]" title="{{.AccountName}}">{{.AccountName}}</li>
+    {{else if and .LedgerName .Page}}
+    <li class="capitalize">{{.Page}}</li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
 
+{{define "topbar"}}
+{{/* z-50 above drawer-side (z-40) so ledger menu is not covered by sidebar/content */}}
+<header class="navbar min-h-12 bg-base-200 border-b border-base-300 px-2 sm:px-3 gap-2 sticky top-0 z-50 overflow-visible">
+  <div class="navbar-start gap-1 min-w-0 flex-1 overflow-visible">
+    <label for="app-drawer" class="btn btn-ghost btn-sm btn-square lg:hidden" aria-label="Open menu">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+    </label>
+    {{template "breadcrumbs" .}}
+  </div>
+  <div class="navbar-end gap-2 shrink-0">
+    {{template "time-filter" .}}
     <label class="swap swap-rotate btn btn-ghost btn-sm btn-square" title="Toggle light / dark">
       <input id="theme-toggle" type="checkbox" class="theme-controller" value="dark" aria-label="Toggle dark theme" />
       <svg class="swap-off h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
       <svg class="swap-on h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21.752 15.002A9.72 9.72 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
     </label>
   </div>
-</div>
+</header>
+{{end}}
 
-{{if .LedgerName}}
-{{/* Mobile: page tabs + compact period label */}}
-<div class="md:hidden border-b border-base-300 bg-base-100 px-2 overflow-x-auto">
-  <ul class="menu menu-horizontal flex-nowrap text-sm">
+{{define "sidebar"}}
+<aside class="app-sidebar min-h-full bg-base-200 border-r border-base-300 flex flex-col">
+  <div class="px-4 py-3 border-b border-base-300">
+    <a href="/" class="font-semibold tracking-tight text-base">contapila</a>
+    {{if .ProjectRoot}}
+    <p class="mt-1 text-[0.65rem] leading-snug font-mono text-base-content/50 break-all line-clamp-2" title="{{.ProjectRoot}}">{{.ProjectRoot}}</p>
+    {{end}}
+  </div>
+
+  {{if .LedgerName}}
+  <ul class="menu menu-md px-2 py-3 gap-0.5 flex-1">
+    <li class="menu-title"><span>Reports</span></li>
     <li><a href="{{ledgerURL .LedgerName "check" .Time}}" class="{{if eq .Page "check"}}menu-active{{end}}">Check</a></li>
     <li><a href="{{ledgerURL .LedgerName "balances" .Time}}" class="{{if eq .Page "balances"}}menu-active{{end}}">Balances</a></li>
     <li><a href="{{ledgerURL .LedgerName "journal" .Time}}" class="{{if eq .Page "journal"}}menu-active{{end}}">Journal</a></li>
-    <li><a href="{{ledgerURL .LedgerName "pnl" .Time}}" class="{{if eq .Page "pnl"}}menu-active{{end}}">P&amp;L</a></li>
+    <li><a href="{{ledgerURL .LedgerName "pnl" .Time}}" class="{{if eq .Page "pnl"}}menu-active{{end}}">Income statement</a></li>
     <li><a href="{{ledgerURL .LedgerName "networth" .Time}}" class="{{if eq .Page "networth"}}menu-active{{end}}">Net worth</a></li>
+    {{if eq .Page "account"}}
+    <li class="menu-title mt-2"><span>Account</span></li>
+    <li><a class="menu-active font-mono text-xs break-all">{{.AccountName}}</a></li>
+    {{end}}
   </ul>
-</div>
+  {{else if .Ledgers}}
+  <ul class="menu menu-md px-2 py-3 gap-0.5 flex-1">
+    <li class="menu-title"><span>Ledgers</span></li>
+    {{range .Ledgers}}
+    <li><a href="{{ledgerURL . "check" ""}}">{{.}}</a></li>
+    {{end}}
+  </ul>
+  {{else}}
+  <p class="p-4 text-sm text-base-content/60">No ledgers in this project.</p>
+  {{end}}
+</aside>
 {{end}}
+
+{{define "app-open"}}
+<body class="bg-base-100 text-base-content min-h-screen">
+<div class="drawer lg:drawer-open">
+  <input id="app-drawer" type="checkbox" class="drawer-toggle" />
+  <div class="drawer-content flex flex-col min-h-screen overflow-visible">
+    {{template "topbar" .}}
+    <main class="flex-1 w-full max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+{{end}}
+
+{{define "app-close"}}
+    </main>
+  </div>
+  <div class="drawer-side z-40 is-drawer-close:overflow-visible">
+    <label for="app-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+    {{template "sidebar" .}}
+  </div>
+</div>
+{{template "theme-script" .}}
+</body>
 {{end}}
