@@ -87,13 +87,31 @@
 }
 
 @layer components {
-  .app-sidebar {
-    width: 12.5rem;
-  }
   .money-highlight {
     color: var(--color-accent);
   }
   [data-theme="contapila-light"] .money-highlight {
     color: color-mix(in oklch, var(--color-secondary) 85%, var(--color-base-content));
+  }
+
+  /* Full-bleed sidebar rail: items span entire sidebar width */
+  .app-sidebar .menu {
+    width: 100%;
+    padding: 0;
+    border-radius: 0;
+  }
+  .app-sidebar .menu > li {
+    width: 100%;
+    margin: 0;
+    border-radius: 0;
+  }
+  .app-sidebar .menu > li > :not(ul, .menu-title, details, .btn) {
+    width: 100%;
+    border-radius: 0;
+  }
+  .app-sidebar .menu li > *.menu-active {
+    background-color: color-mix(in oklch, var(--color-primary) 14%, transparent);
+    color: var(--color-primary);
+    font-weight: 600;
   }
 }
