@@ -49,11 +49,6 @@ func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 			}
 			return u
 		},
-		"intervalURL": func(ledger, page, kind, current string) string {
-			now := time.Now()
-			next := period.SetInterval(current, now, kind)
-			return "/l/" + url.PathEscape(ledger) + "/" + url.PathEscape(page) + "?time=" + url.QueryEscape(next)
-		},
 	}
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
@@ -90,12 +85,9 @@ type pageData struct {
 	NetWorthRows []nwRow
 	NetWorthTot  string
 	AsOf         string
-	Time         string
-	PeriodLabel  string
-	TimePrev     string
-	TimeNext     string
-	Interval     string
-	Error        string
+	Time        string
+	PeriodLabel string
+	Error       string
 }
 
 type balanceRow struct {
@@ -153,24 +145,8 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Optional: change interval via ?interval=month
-	if iv := q.Get("interval"); iv != "" {
-		timeStr = period.SetInterval(timeStr, now, iv)
-		// redirect to clean URL with only time=
-		http.Redirect(w, r, "/l/"+url.PathEscape(name)+"/"+url.PathEscape(page)+"?time="+url.QueryEscape(timeStr), http.StatusFound)
-		return
-	}
-
 	pr, perr := period.Parse(timeStr, now)
-	interval := period.Kind(timeStr, now)
 	periodLabel := period.DisplayLabel(timeStr, now)
-	timePrev, _ := period.Shift(timeStr, now, -1)
-	timeNext, _ := period.Shift(timeStr, now, 1)
-	if timeStr == "" {
-		// Prev/next from empty jump into current month then step
-		timePrev, _ = period.Shift(period.At(period.KindMonth, now), now, -1)
-		timeNext = period.At(period.KindMonth, now)
-	}
 
 	// as-of: explicit flag wins; else end of time filter; else far future
 	asOfStr := q.Get("as-of")
@@ -201,9 +177,6 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		AsOf:        asOfStr,
 		Time:        timeStr,
 		PeriodLabel: periodLabel,
-		TimePrev:    timePrev,
-		TimeNext:    timeNext,
-		Interval:    interval,
 	}
 	if perr != nil {
 		data.Error = perr.Error()

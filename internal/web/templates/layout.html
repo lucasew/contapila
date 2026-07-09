@@ -45,48 +45,17 @@
 {{end}}
 
 {{define "time-filter"}}
-{{/* Fava-style period control: prev | interval | expression | next */}}
+{{/* Fava-style: a single Time expression field (no interval combo). */}}
 {{if .LedgerName}}
-<div class="join join-horizontal shrink-0">
-  <a class="btn btn-sm join-item btn-square"
-     href="{{ledgerURL .LedgerName .Page .TimePrev}}"
-     title="Previous period"
-     aria-label="Previous period">‹</a>
-
-  <div class="dropdown join-item">
-    <div tabindex="0" role="button" class="btn btn-sm rounded-none min-w-24 capitalize">
-      {{if eq .Interval "year"}}Year
-      {{else if eq .Interval "quarter"}}Quarter
-      {{else if eq .Interval "month"}}Month
-      {{else if eq .Interval "week"}}Week
-      {{else if eq .Interval "day"}}Day
-      {{else if eq .Interval "custom"}}Custom
-      {{else}}Month{{end}}
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-    </div>
-    <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-40 p-2 shadow-sm border border-base-300">
-      <li><a href="{{ledgerURL .LedgerName .Page ""}}">All time</a></li>
-      <li><a href="{{intervalURL .LedgerName .Page "year" .Time}}" class="{{if eq .Interval "year"}}menu-active{{end}}">Year</a></li>
-      <li><a href="{{intervalURL .LedgerName .Page "quarter" .Time}}" class="{{if eq .Interval "quarter"}}menu-active{{end}}">Quarter</a></li>
-      <li><a href="{{intervalURL .LedgerName .Page "month" .Time}}" class="{{if eq .Interval "month"}}menu-active{{end}}">Month</a></li>
-      <li><a href="{{intervalURL .LedgerName .Page "week" .Time}}" class="{{if eq .Interval "week"}}menu-active{{end}}">Week</a></li>
-      <li><a href="{{intervalURL .LedgerName .Page "day" .Time}}" class="{{if eq .Interval "day"}}menu-active{{end}}">Day</a></li>
-    </ul>
-  </div>
-
-  <form method="get" action="/l/{{.LedgerName}}/{{.Page}}" class="contents">
-    <input type="text" name="time" value="{{.Time}}"
-      placeholder="2024-03"
-      class="input input-sm join-item input-bordered w-28 sm:w-36 font-mono"
-      aria-label="Time filter"
-      title="Fava-style: 2024, 2024-03, 2024-Q1, month-1, 2020 - 2024-06" />
-  </form>
-
-  <a class="btn btn-sm join-item btn-square"
-     href="{{ledgerURL .LedgerName .Page .TimeNext}}"
-     title="Next period"
-     aria-label="Next period">›</a>
-</div>
+<form method="get" action="/l/{{.LedgerName}}/{{.Page}}" class="shrink-0">
+  <input id="time-filter" type="text" name="time" value="{{.Time}}"
+    placeholder="2024-03"
+    class="input input-sm input-bordered w-36 sm:w-48 font-mono"
+    aria-label="Time filter"
+    title="2024, 2024-03, 2024-Q1, month, month-1, 2020 - 2024-06"
+    autocomplete="off"
+    spellcheck="false" />
+</form>
 {{end}}
 {{end}}
 
