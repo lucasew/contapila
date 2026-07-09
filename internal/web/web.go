@@ -1,130 +1,239 @@
 package web
 
 import (
+	"embed"
 	"fmt"
 	"html/template"
+	"math/big"
 	"net/http"
 	"sort"
 	"time"
 
+	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/engine"
 	"github.com/lucasew/contapila-go/internal/prices"
 	"github.com/lucasew/contapila-go/pkg/project"
 )
 
-func Listen(p *project.Project, pdb *prices.DB, defaultLedger string, port int) error {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		names := engine.LedgerNames(p)
-		_ = indexTmpl.Execute(w, names)
-	})
-	mux.HandleFunc("/ledger/", func(w http.ResponseWriter, r *http.Request) {
-		name := r.URL.Path[len("/ledger/"):]
-		if name == "" {
-			http.Redirect(w, r, "/", http.StatusFound)
-			return
-		}
-		// strip subpath
-		page := "check"
-		if i := len(name); i > 0 {
-			for j, c := range name {
-				if c == '/' {
-					page = name[j+1:]
-					name = name[:j]
-					break
-				}
-			}
-		}
-		l, err := engine.OpenLedger(p, pdb, name)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-		switch page {
-		case "", "check":
-			_ = checkTmpl.Execute(w, l)
-		case "balances":
-			asOf := r.URL.Query().Get("as-of")
-			t, _ := engine.ParseDate(asOf)
-			if t.IsZero() {
-				t = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
-			}
-			bals := l.BalancesAsOf(t)
-			type row struct{ Account, Commodity, Amount string }
-			var rows []row
-			var accts []string
-			for a := range bals {
-				accts = append(accts, a)
-			}
-			sort.Strings(accts)
-			for _, a := range accts {
-				var cs []string
-				for c := range bals[a] {
-					cs = append(cs, c)
-				}
-				sort.Strings(cs)
-				for _, c := range cs {
-					rows = append(rows, row{a, c, bals[a][c].FloatString(4)})
-				}
-			}
-			_ = balancesTmpl.Execute(w, map[string]any{"Ledger": l, "Rows": rows})
-		case "journal":
-			_ = journalTmpl.Execute(w, map[string]any{"Ledger": l, "Entries": l.Journal(time.Time{}, time.Time{})})
-		case "pnl":
-			_ = pnlTmpl.Execute(w, map[string]any{"Ledger": l, "PnL": l.PnL(time.Time{}, time.Time{})})
-		case "networth":
-			lines, total, err := l.NetWorth(time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC))
-			if err != nil {
-				http.Error(w, err.Error(), 400)
-				return
-			}
-			_ = nwTmpl.Execute(w, map[string]any{"Ledger": l, "Lines": lines, "Total": total.FloatString(2)})
-		default:
-			http.NotFound(w, r)
-		}
-	})
+//go:embed templates/*
+var templateFS embed.FS
 
+type Server struct {
+	Project *project.Project
+	Prices  *prices.DB
+	Tmpl    *template.Template
+}
+
+func Listen(p *project.Project, pdb *prices.DB, defaultLedger string, port int) error {
+	s, err := New(p, pdb)
+	if err != nil {
+		return err
+	}
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	fmt.Printf("contapila web on http://%s/\n", addr)
 	if defaultLedger != "" {
-		fmt.Printf("  ledger: http://%s/ledger/%s/check\n", addr, defaultLedger)
+		fmt.Printf("  ledger: http://%s/l/%s/check\n", addr, defaultLedger)
 	}
-	return http.ListenAndServe(addr, mux)
+	return http.ListenAndServe(addr, s.Handler())
 }
 
-var indexTmpl = template.Must(template.New("i").Parse(`<!doctype html><title>contapila</title>
-<h1>Ledgers</h1><ul>{{range .}}<li><a href="/ledger/{{.}}/check">{{.}}</a>
- — <a href="/ledger/{{.}}/balances">balances</a>
- — <a href="/ledger/{{.}}/journal">journal</a>
- — <a href="/ledger/{{.}}/pnl">pnl</a>
- — <a href="/ledger/{{.}}/networth">networth</a></li>{{end}}</ul>`))
+func New(p *project.Project, pdb *prices.DB) (*Server, error) {
+	funcMap := template.FuncMap{
+		"eq": func(a, b string) bool { return a == b },
+		"severity": func(s string) string {
+			if s == "" {
+				return "—"
+			}
+			return s
+		},
+	}
+	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
+	if err != nil {
+		return nil, err
+	}
+	return &Server{Project: p, Prices: pdb, Tmpl: tmpl}, nil
+}
 
-var checkTmpl = template.Must(template.New("c").Parse(`<!doctype html><title>{{.Name}} check</title>
-<p><a href="/">home</a></p><h1>{{.Name}} check</h1>
-{{if .Diags}}<ul>{{range .Diags}}<li>{{.}}</li>{{end}}</ul>{{else}}<p>OK</p>{{end}}`))
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", s.handleIndex)
+	mux.HandleFunc("GET /l/{ledger}/{page}", s.handleLedgerPage)
+	mux.HandleFunc("GET /l/{ledger}/{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/l/"+r.PathValue("ledger")+"/check", http.StatusFound)
+	})
+	return mux
+}
 
-var balancesTmpl = template.Must(template.New("b").Parse(`<!doctype html><title>{{.Ledger.Name}} balances</title>
-<p><a href="/">home</a></p><h1>{{.Ledger.Name}} balances</h1>
-<table border=1 cellpadding=4><tr><th>Account</th><th>Amount</th><th>Commodity</th></tr>
-{{range .Rows}}<tr><td>{{.Account}}</td><td align=right>{{.Amount}}</td><td>{{.Commodity}}</td></tr>{{end}}
-</table>`))
+type pageData struct {
+	Title        string
+	Page         string
+	LedgerName   string
+	Ledgers      []string
+	ProjectRoot  string
+	OpCurrency   string
+	Diags        diag.List
+	HasErrors    bool
+	HasWarnings  bool
+	OK           bool
+	BalanceRows  []balanceRow
+	Journal      []engine.JournalEntry
+	IncomeRows   []kvRow
+	ExpenseRows  []kvRow
+	NetWorthRows []nwRow
+	NetWorthTot  string
+	AsOf         string
+	From         string
+	To           string
+	Error        string
+}
 
-var journalTmpl = template.Must(template.New("j").Parse(`<!doctype html><title>{{.Ledger.Name}} journal</title>
-<p><a href="/">home</a></p><h1>{{.Ledger.Name}} journal</h1>
-{{range .Entries}}<div><strong>{{.Date.Format "2006-01-02"}}</strong> {{.Kind}} {{.Narration}} {{.Comment}}
-{{if .Postings}}<ul>{{range .Postings}}<li>{{.Account}} {{if .Units}}{{.Units.Number.FloatString 4}} {{.Units.Commodity}}{{end}}</li>{{end}}</ul>{{end}}
-</div>{{end}}`))
+type balanceRow struct {
+	Account   string
+	Commodity string
+	Amount    string
+}
 
-var pnlTmpl = template.Must(template.New("p").Parse(`<!doctype html><title>{{.Ledger.Name}} pnl</title>
-<p><a href="/">home</a></p><h1>{{.Ledger.Name}} P&amp;L</h1>
-<h2>Income</h2><ul>{{range $k,$v := .PnL.Income}}<li>{{$k}}: {{$v.FloatString 4}}</li>{{end}}</ul>
-<h2>Expenses</h2><ul>{{range $k,$v := .PnL.Expenses}}<li>{{$k}}: {{$v.FloatString 4}}</li>{{end}}</ul>`))
+type kvRow struct {
+	Key   string
+	Value string
+}
 
-var nwTmpl = template.Must(template.New("n").Parse(`<!doctype html><title>{{.Ledger.Name}} networth</title>
-<p><a href="/">home</a></p><h1>{{.Ledger.Name}} net worth ({{.Ledger.OpCurrency}})</h1>
-<ul>{{range .Lines}}<li>{{.Account}} {{.Units.FloatString 4}} {{.Commodity}} => {{.Value.FloatString 2}}</li>{{end}}</ul>
-<p><strong>TOTAL {{.Total}} {{.Ledger.OpCurrency}}</strong></p>`))
+type nwRow struct {
+	Account   string
+	Commodity string
+	Units     string
+	Value     string
+	UsedCost  bool
+}
+
+func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	data := pageData{
+		Title:       "Ledgers",
+		Page:        "home",
+		Ledgers:     engine.LedgerNames(s.Project),
+		ProjectRoot: s.Project.Root,
+	}
+	s.render(w, "index.html", data)
+}
+
+func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("ledger")
+	page := r.PathValue("page")
+	l, err := engine.OpenLedger(s.Project, s.Prices, name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	q := r.URL.Query()
+	asOfStr := q.Get("as-of")
+	asOf, _ := engine.ParseDate(asOfStr)
+	if asOf.IsZero() {
+		asOf = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+		asOfStr = ""
+	} else {
+		asOfStr = asOf.Format("2006-01-02")
+	}
+	fromStr := q.Get("from")
+	toStr := q.Get("to")
+	from, _ := engine.ParseDate(fromStr)
+	to, _ := engine.ParseDate(toStr)
+
+	data := pageData{
+		Title:       name + " · " + page,
+		Page:        page,
+		LedgerName:  name,
+		Ledgers:     engine.LedgerNames(s.Project),
+		ProjectRoot: s.Project.Root,
+		OpCurrency:  l.OpCurrency,
+		Diags:       l.Diags,
+		HasErrors:   l.Diags.HasErrors(),
+		HasWarnings: hasWarn(l.Diags),
+		OK:          !l.Diags.HasErrors(),
+		AsOf:        asOfStr,
+		From:        fromStr,
+		To:          toStr,
+	}
+
+	switch page {
+	case "check":
+		// fields already set
+	case "balances":
+		data.BalanceRows = buildBalances(l.BalancesAsOf(asOf))
+	case "journal":
+		data.Journal = l.Journal(from, to)
+	case "pnl":
+		p := l.PnL(from, to)
+		data.IncomeRows = ratMapRows(p.Income)
+		data.ExpenseRows = ratMapRows(p.Expenses)
+	case "networth":
+		lines, total, err := l.NetWorth(asOf)
+		if err != nil {
+			data.Error = err.Error()
+		} else {
+			data.NetWorthTot = total.FloatString(2)
+			for _, ln := range lines {
+				data.NetWorthRows = append(data.NetWorthRows, nwRow{
+					Account: ln.Account, Commodity: ln.Commodity,
+					Units: ln.Units.FloatString(4), Value: ln.Value.FloatString(2),
+					UsedCost: ln.UsedCost,
+				})
+			}
+		}
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	s.render(w, "ledger.html", data)
+}
+
+func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.Tmpl.ExecuteTemplate(w, name, data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func hasWarn(ds diag.List) bool {
+	for _, d := range ds {
+		if d.Severity == diag.Warn {
+			return true
+		}
+	}
+	return false
+}
+
+func buildBalances(bals map[string]map[string]*big.Rat) []balanceRow {
+	var accts []string
+	for a := range bals {
+		accts = append(accts, a)
+	}
+	sort.Strings(accts)
+	var rows []balanceRow
+	for _, a := range accts {
+		var cs []string
+		for c := range bals[a] {
+			cs = append(cs, c)
+		}
+		sort.Strings(cs)
+		for _, c := range cs {
+			rows = append(rows, balanceRow{
+				Account: a, Commodity: c, Amount: bals[a][c].FloatString(4),
+			})
+		}
+	}
+	return rows
+}
+
+func ratMapRows(m map[string]*big.Rat) []kvRow {
+	var keys []string
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var rows []kvRow
+	for _, k := range keys {
+		rows = append(rows, kvRow{Key: k, Value: m[k].FloatString(4)})
+	}
+	return rows
+}

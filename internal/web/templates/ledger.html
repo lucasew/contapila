@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  {{template "head" .}}
+</head>
+<body class="min-h-screen bg-base-100 text-base-content">
+  {{template "navbar" .}}
+  <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <header class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight capitalize text-balance">{{.Page}}</h1>
+        <p class="mt-1 text-sm text-base-content/70">
+          Ledger <span class="font-medium text-base-content">{{.LedgerName}}</span>
+          {{if .OpCurrency}} · op currency <span class="badge badge-soft badge-sm align-middle">{{.OpCurrency}}</span>{{end}}
+        </p>
+      </div>
+      {{if or (eq .Page "balances") (eq .Page "networth")}}
+      <form method="get" class="join">
+        <input type="date" name="as-of" value="{{.AsOf}}" class="input input-sm join-item input-bordered" aria-label="As of date" />
+        <button type="submit" class="btn btn-sm join-item">As of</button>
+      </form>
+      {{end}}
+      {{if or (eq .Page "journal") (eq .Page "pnl")}}
+      <form method="get" class="flex flex-wrap items-center gap-2">
+        <input type="date" name="from" value="{{.From}}" class="input input-sm input-bordered" aria-label="From date" />
+        <input type="date" name="to" value="{{.To}}" class="input input-sm input-bordered" aria-label="To date" />
+        <button type="submit" class="btn btn-sm">Filter</button>
+      </form>
+      {{end}}
+    </header>
+
+    {{if eq .Page "check"}}
+      {{if .OK}}
+      <div role="alert" class="alert alert-success alert-soft mb-6">
+        <span class="font-medium">Check passed</span>
+        <span class="opacity-80">No hard errors. Warnings may still be listed below.</span>
+      </div>
+      {{else}}
+      <div role="alert" class="alert alert-error alert-soft mb-6">
+        <span class="font-medium">Check failed</span>
+        <span class="opacity-80">Fix errors before trusting reports.</span>
+      </div>
+      {{end}}
+
+      {{if .Diags}}
+      <div class="overflow-x-auto rounded-box border border-base-300">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Severity</th>
+              <th>Message</th>
+              <th>File</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Diags}}
+            <tr>
+              <td>
+                {{if .IsError}}
+                <span class="badge badge-error badge-soft">error</span>
+                {{else}}
+                <span class="badge badge-warning badge-soft">warn</span>
+                {{end}}
+              </td>
+              <td class="max-w-xl">{{.Message}}</td>
+              <td class="font-mono text-xs opacity-70">{{.File}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}
+      <p class="text-sm text-base-content/60">No diagnostics.</p>
+      {{end}}
+    {{end}}
+
+    {{if eq .Page "balances"}}
+      {{if not .BalanceRows}}
+      <div role="alert" class="alert"><span>No balances for this as-of date.</span></div>
+      {{else}}
+      <div class="overflow-x-auto rounded-box border border-base-300">
+        <table class="table table-sm table-zebra">
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th class="text-right">Amount</th>
+              <th>Commodity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .BalanceRows}}
+            <tr>
+              <td class="font-mono text-sm">{{.Account}}</td>
+              <td class="text-right tabular font-medium">{{.Amount}}</td>
+              <td><span class="badge badge-ghost badge-sm">{{.Commodity}}</span></td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{end}}
+    {{end}}
+
+    {{if eq .Page "journal"}}
+      {{if not .Journal}}
+      <div role="alert" class="alert"><span>No journal entries in this range.</span></div>
+      {{else}}
+      <div class="flex flex-col gap-3">
+        {{range .Journal}}
+        <article class="rounded-box border border-base-300 bg-base-200/40 px-4 py-3">
+          <div class="flex flex-wrap items-baseline gap-2 text-sm">
+            <time class="font-mono tabular text-base-content/80">{{.Date.Format "2006-01-02"}}</time>
+            <span class="badge badge-soft badge-sm">{{.Kind}}</span>
+            {{if .Narration}}<span class="font-medium">{{.Narration}}</span>{{end}}
+            {{if .Comment}}<span class="text-base-content/70">{{.Comment}}</span>{{end}}
+            {{if .Account}}<span class="font-mono text-xs">{{.Account}}</span>{{end}}
+          </div>
+          {{if .Postings}}
+          <ul class="mt-2 space-y-0.5 font-mono text-sm">
+            {{range .Postings}}
+            <li class="flex flex-wrap justify-between gap-2">
+              <span>{{.Account}}</span>
+              {{if .Units}}
+              <span class="tabular text-base-content/90">{{.Units.Number.FloatString 4}} {{.Units.Commodity}}</span>
+              {{end}}
+            </li>
+            {{end}}
+          </ul>
+          {{end}}
+        </article>
+        {{end}}
+      </div>
+      {{end}}
+    {{end}}
+
+    {{if eq .Page "pnl"}}
+      <div class="grid gap-6 md:grid-cols-2">
+        <section>
+          <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-base-content/60">Income</h2>
+          {{if not .IncomeRows}}
+          <p class="text-sm text-base-content/60">No income postings.</p>
+          {{else}}
+          <div class="overflow-x-auto rounded-box border border-base-300">
+            <table class="table table-sm">
+              <tbody>
+                {{range .IncomeRows}}
+                <tr>
+                  <td class="font-mono text-sm">{{.Key}}</td>
+                  <td class="text-right tabular">{{.Value}}</td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{end}}
+        </section>
+        <section>
+          <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-base-content/60">Expenses</h2>
+          {{if not .ExpenseRows}}
+          <p class="text-sm text-base-content/60">No expense postings.</p>
+          {{else}}
+          <div class="overflow-x-auto rounded-box border border-base-300">
+            <table class="table table-sm">
+              <tbody>
+                {{range .ExpenseRows}}
+                <tr>
+                  <td class="font-mono text-sm">{{.Key}}</td>
+                  <td class="text-right tabular">{{.Value}}</td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          {{end}}
+        </section>
+      </div>
+    {{end}}
+
+    {{if eq .Page "networth"}}
+      {{if .Error}}
+      <div role="alert" class="alert alert-warning alert-soft">
+        <span>{{.Error}}</span>
+      </div>
+      {{else}}
+      <div class="stats stats-vertical sm:stats-horizontal bg-base-200 border border-base-300 mb-6 w-full">
+        <div class="stat">
+          <div class="stat-title">Net worth</div>
+          <div class="stat-value text-primary text-3xl tabular">{{.NetWorthTot}}</div>
+          <div class="stat-desc">{{.OpCurrency}}{{if .AsOf}} · as of {{.AsOf}}{{end}}</div>
+        </div>
+      </div>
+      {{if not .NetWorthRows}}
+      <p class="text-sm text-base-content/60">No asset/liability positions.</p>
+      {{else}}
+      <div class="overflow-x-auto rounded-box border border-base-300">
+        <table class="table table-sm table-zebra">
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th class="text-right">Units</th>
+              <th></th>
+              <th class="text-right">Value</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .NetWorthRows}}
+            <tr>
+              <td class="font-mono text-sm">{{.Account}}</td>
+              <td class="text-right tabular">{{.Units}}</td>
+              <td><span class="badge badge-ghost badge-sm">{{.Commodity}}</span></td>
+              <td class="text-right tabular font-medium">{{.Value}}</td>
+              <td>{{if .UsedCost}}<span class="badge badge-warning badge-soft badge-xs">cost</span>{{end}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{end}}
+      {{end}}
+    {{end}}
+  </main>
+  {{template "theme-script" .}}
+</body>
+</html>

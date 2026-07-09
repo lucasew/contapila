@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  {{template "head" .}}
+</head>
+<body class="min-h-screen bg-base-100 text-base-content">
+  {{template "navbar" .}}
+  <main class="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+    <header class="mb-8">
+      <h1 class="text-2xl font-semibold tracking-tight text-balance">Ledgers</h1>
+      <p class="mt-2 text-sm text-base-content/70 font-mono break-all">{{.ProjectRoot}}</p>
+    </header>
+
+    {{if not .Ledgers}}
+    <div role="alert" class="alert">
+      <span>No ledgers found. Add <code class="font-mono text-sm">&lt;name&gt;/main.beancount</code> under the project root.</span>
+    </div>
+    {{else}}
+    <ul class="menu bg-base-200 rounded-box w-full border border-base-300">
+      <li class="menu-title">Open ledger</li>
+      {{range .Ledgers}}
+      <li>
+        <a href="/l/{{.}}/check" class="justify-between">
+          <span class="font-medium">{{.}}</span>
+          <span class="text-xs opacity-60">check →</span>
+        </a>
+      </li>
+      {{end}}
+    </ul>
+    <p class="mt-6 text-sm text-base-content/60">Read-only viewer. Edit your <span class="font-mono">.beancount</span> files in the editor you already trust.</p>
+    {{end}}
+  </main>
+  {{template "theme-script" .}}
+</body>
+</html>

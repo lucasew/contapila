@@ -23,6 +23,9 @@ type Diagnostic struct {
 	Line     int
 }
 
+func (d Diagnostic) IsError() bool { return d.Severity == Error }
+func (d Diagnostic) IsWarn() bool  { return d.Severity == Warn }
+
 func (d Diagnostic) String() string {
 	loc := d.File
 	if d.Line > 0 {
