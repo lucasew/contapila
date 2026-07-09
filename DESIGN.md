@@ -27,8 +27,8 @@ Dark: deep base, muted gold for contrast.
 
 Implementation (daisyUI way):
 
-- Source: `web/styles/input.css` with `@plugin "daisyui"` and `@plugin "daisyui/theme"` for **`contapila-light`** / **`contapila-dark`**
-- Build: `cd web && bun install && bun run build:css` (mise provides `bun`) → `internal/web/static/app.css`
+- Source: `styles/input.css` with `@plugin "daisyui"` and `@plugin "daisyui/theme"` for **`contapila-light`** / **`contapila-dark`**
+- Build: `bun install && bun run build:css` (mise provides `bun`) → `internal/web/static/app.css`
 - Serve: embedded `/static/app.css` (not CDN `themes.css` / browser Tailwind)
 - Toggle: `data-theme="contapila-light"` | `contapila-dark` + `theme-controller`
 

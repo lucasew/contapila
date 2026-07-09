@@ -1,8 +1,8 @@
 {
-  "name": "contapila-web",
+  "name": "contapila",
   "private": true,
   "scripts": {
-    "build:css": "bunx @tailwindcss/cli -i ./styles/input.css -o ../internal/web/static/app.css --minify"
+    "build:css": "bunx @tailwindcss/cli -i ./styles/input.css -o ./internal/web/static/app.css --minify"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.11",
