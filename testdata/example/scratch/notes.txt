@@ -1,1 +1,0 @@
-Not a ledger — no main.beancount here. Discovery must ignore this directory.
