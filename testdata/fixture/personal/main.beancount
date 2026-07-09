@@ -1,0 +1,12 @@
+2024-01-01 * "Opening Balance"
+  Assets:Cash  100 BRL
+
+2024-01-02 note Assets:Cash "Found a coin"
+
+2024-01-03 event "vacation" "Starting vacation"
+
+2024-01-04 * "Lunch"
+  Expenses:Food  20 BRL
+  Assets:Cash
+
+2024-01-05 note Expenses:Food "Great sushi"

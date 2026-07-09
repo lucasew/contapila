@@ -1,39 +1,32 @@
 package ledger
 
 import (
-	"os"
-	"sort"
+	"fmt"
+	"io"
 
-	"github.com/contapila/contapila/pkg/core"
-	"github.com/contapila/contapila/pkg/parser"
+	"github.com/lucasew/contapila-go/pkg/core"
 )
 
+// Ledger represents a loaded Beancount ledger.
 type Ledger struct {
 	Stream []core.Directive
 }
 
-func Load(filename string) (*Ledger, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
+// Journal prints the ledger stream to the given writer.
+func (l *Ledger) Journal(w io.Writer) {
+	for _, d := range l.Stream {
+		dateStr := d.GetDate().Format("2006-01-02")
+		switch v := d.(type) {
+		case *core.Transaction:
+			fmt.Fprintf(w, "%s %s", dateStr, v.Flag)
+			if v.Payee != "" {
+				fmt.Fprintf(w, " \"%s\"", v.Payee)
+			}
+			fmt.Fprintf(w, " \"%s\"\n", v.Narration)
+		case core.Note:
+			fmt.Fprintf(w, "%s note %s \"%s\"\n", dateStr, v.Account, v.Comment)
+		case core.Event:
+			fmt.Fprintf(w, "%s event \"%s\" \"%s\"\n", dateStr, v.Type, v.Description)
+		}
 	}
-	defer f.Close()
-
-	directives, err := parser.Parse(f)
-	if err != nil {
-		return nil, err
-	}
-
-	// Beancount files are generally chronological, but we can ensure it.
-	// For this MVP, we'll keep the order as parsed (stream).
-
-	return &Ledger{
-		Stream: directives,
-	}, nil
-}
-
-func (l *Ledger) Sort() {
-	sort.SliceStable(l.Stream, func(i, j int) bool {
-		return l.Stream[i].GetDate().Before(l.Stream[j].GetDate())
-	})
 }
