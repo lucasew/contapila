@@ -1,7 +1,7 @@
 package price
 
 import (
-	"contapila/internal/model"
+	"github.com/lucasew/contapila-go/internal/model"
 	"math/big"
 	"testing"
 	"time"

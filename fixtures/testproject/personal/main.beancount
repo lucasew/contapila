@@ -1,5 +1,0 @@
-option "operating_currency" "BRL"
-
-2024-01-02 * "Buy UU"
-  Assets:Wallet  10 UU {10.00 BRL}
-  Assets:Cash

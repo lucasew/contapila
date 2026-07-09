@@ -1,14 +1,14 @@
 package price
 
 import (
-	"contapila/internal/model"
+	"github.com/lucasew/contapila-go/internal/model"
 	"math/big"
 	"sort"
 	"time"
 )
 
 type PriceDB struct {
-	prices map[string][]model.Price // key: Commodity + "|" + Target
+	prices map[string][]model.Price
 }
 
 func NewPriceDB(directives []model.Directive) *PriceDB {
@@ -21,7 +21,6 @@ func NewPriceDB(directives []model.Directive) *PriceDB {
 			db.prices[key] = append(db.prices[key], pd.Price)
 		}
 	}
-	// Sort prices by date for each pair
 	for key := range db.prices {
 		sort.Slice(db.prices[key], func(i, j int) bool {
 			return db.prices[key][i].Date.Before(db.prices[key][j].Date)
@@ -40,7 +39,6 @@ func (db *PriceDB) GetPrice(commodity, target string, asOf time.Time) (*big.Rat,
 		return nil, false
 	}
 
-	// Walk backward from asOf
 	var bestPrice *model.Price
 	for i := len(prices) - 1; i >= 0; i-- {
 		if !prices[i].Date.After(asOf) {

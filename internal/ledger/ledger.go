@@ -1,7 +1,7 @@
 package ledger
 
 import (
-	"contapila/internal/model"
+	"github.com/lucasew/contapila-go/internal/model"
 	"math/big"
 	"time"
 )
@@ -11,20 +11,16 @@ type Ledger struct {
 	Directives []model.Directive
 }
 
-func (l *Ledger) ResolveOperatingCurrency() (string, bool) {
-	// 1. Check options
-	for _, d := range l.Directives {
-		if opt, ok := d.(*model.Option); ok && opt.Name == "operating_currency" {
-			return opt.Value, true
-		}
+func (l *Ledger) ResolveOperatingCurrency(cueCurrencies []string) (string, bool) {
+	if len(cueCurrencies) > 0 {
+		return cueCurrencies[0], true
 	}
 
-	// 2. Infer from first transaction
 	for _, d := range l.Directives {
 		if txn, ok := d.(*model.Transaction); ok {
 			for _, p := range txn.Postings {
 				if p.Units.Currency != "" && p.Units.Value != nil {
-					return p.Units.Currency, false // false means inferred (should warn)
+					return p.Units.Currency, false
 				}
 			}
 		}
@@ -46,7 +42,6 @@ func (l *Ledger) GetPositions(asOf time.Time) []model.Position {
 			continue
 		}
 
-		// Handle unbalanced transactions (one missing amount)
 		missingIdx := -1
 		totalCost := make(map[string]*big.Rat)
 
@@ -80,14 +75,13 @@ func (l *Ledger) GetPositions(asOf time.Time) []model.Position {
 			costVal := p.Cost
 
 			if i == missingIdx {
-				// We only handle simple balancing if there's exactly one currency in totalCost
 				if len(totalCost) == 1 {
 					for curr, total := range totalCost {
 						units = new(big.Rat).Neg(total)
 						currency = curr
 					}
 				} else {
-					continue // Cannot balance multi-currency or zero-currency easily here
+					continue
 				}
 			}
 
@@ -101,14 +95,12 @@ func (l *Ledger) GetPositions(asOf time.Time) []model.Position {
 				pos = &model.Position{
 					Account:   p.Account,
 					Units:     new(big.Rat),
-					Commodity: p.Units.Currency,
+					Commodity: currency,
 				}
 				positions[k] = pos
 			}
 
-			// Update units and average cost
 			if units.Sign() > 0 {
-				// Increase: update average cost if cost is specified
 				if costVal != nil {
 					newUnits := new(big.Rat).Add(pos.Units, units)
 					if newUnits.Sign() != 0 {
@@ -126,7 +118,6 @@ func (l *Ledger) GetPositions(asOf time.Time) []model.Position {
 					pos.Units.Add(pos.Units, units)
 				}
 			} else if units.Sign() < 0 {
-				// Decrease: units change, average cost stays same (Model A)
 				pos.Units.Add(pos.Units, units)
 			}
 		}
