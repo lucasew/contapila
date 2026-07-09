@@ -47,7 +47,7 @@
 {{define "time-filter"}}
 {{/* Fava-style: a single Time expression field (no interval combo). */}}
 {{if .LedgerName}}
-<form method="get" action="/l/{{.LedgerName}}/{{.Page}}" class="shrink-0">
+<form method="get" action="{{if eq .Page "account"}}{{accountURL .LedgerName .AccountName ""}}{{else}}/l/{{.LedgerName}}/{{.Page}}{{end}}" class="shrink-0">
   <input id="time-filter" type="text" name="time" value="{{.Time}}"
     placeholder="2024-03"
     class="input input-sm input-bordered w-36 sm:w-48 font-mono"
@@ -96,7 +96,13 @@
       </div>
       <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-52 p-2 shadow-sm border border-base-300">
         {{range .Ledgers}}
-        <li><a href="{{ledgerURL . $.Page $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a></li>
+        <li>
+          {{if eq $.Page "account"}}
+          <a href="{{accountURL . $.AccountName $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+          {{else}}
+          <a href="{{ledgerURL . $.Page $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+          {{end}}
+        </li>
         {{end}}
       </ul>
     </div>

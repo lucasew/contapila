@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/lucasew/contapila-go/internal/ast"
@@ -133,37 +134,113 @@ type JournalEntry struct {
 }
 
 func (l *Ledger) Journal(from, to time.Time) []JournalEntry {
-	var out []JournalEntry
-	in := func(d time.Time) bool {
-		if !from.IsZero() && d.Before(from) {
-			return false
-		}
-		if !to.IsZero() && d.After(to) {
-			return false
-		}
+	return l.journalFiltered(from, to, "")
+}
+
+// JournalForAccount returns journal entries that touch account (exact or subaccount).
+func (l *Ledger) JournalForAccount(account string, from, to time.Time) []JournalEntry {
+	return l.journalFiltered(from, to, account)
+}
+
+func inRange(d, from, to time.Time) bool {
+	if !from.IsZero() && d.Before(from) {
+		return false
+	}
+	if !to.IsZero() && d.After(to) {
+		return false
+	}
+	return true
+}
+
+// AccountMatches reports whether acct is account or a subaccount (Assets:Cash matches Assets:Cash:Wallet).
+func AccountMatches(acct, account string) bool {
+	if account == "" {
 		return true
 	}
+	return acct == account || strings.HasPrefix(acct, account+":")
+}
+
+func (l *Ledger) journalFiltered(from, to time.Time, account string) []JournalEntry {
+	var out []JournalEntry
 	for _, bt := range l.Book.Txns {
-		if !in(bt.Txn.Date) {
+		if !inRange(bt.Txn.Date, from, to) {
 			continue
+		}
+		if account != "" {
+			touch := false
+			for _, p := range bt.Postings {
+				if AccountMatches(p.Account, account) {
+					touch = true
+					break
+				}
+			}
+			if !touch {
+				continue
+			}
 		}
 		out = append(out, JournalEntry{
 			Date: bt.Txn.Date, Kind: "txn", Narration: bt.Txn.Narration, Postings: bt.Postings,
 		})
 	}
 	for _, n := range l.Book.Notes {
-		if !in(n.Date) {
+		if !inRange(n.Date, from, to) {
+			continue
+		}
+		if account != "" && !AccountMatches(n.Account, account) {
 			continue
 		}
 		out = append(out, JournalEntry{Date: n.Date, Kind: "note", Account: n.Account, Comment: n.Comment})
 	}
 	for _, e := range l.Book.Events {
-		if !in(e.Date) {
+		if account != "" {
+			continue // events are not account-scoped
+		}
+		if !inRange(e.Date, from, to) {
 			continue
 		}
 		out = append(out, JournalEntry{Date: e.Date, Kind: "event", Narration: e.Type, Comment: e.Desc})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Date.Before(out[j].Date) })
+	return out
+}
+
+// AccountBalances returns balances for one account (and optional subaccounts rolled separately).
+func (l *Ledger) AccountBalances(account string, asOf time.Time) map[string]*big.Rat {
+	all := l.BalancesAsOf(asOf)
+	out := map[string]*big.Rat{}
+	for acct, byComm := range all {
+		if !AccountMatches(acct, account) {
+			continue
+		}
+		// only exact account for the summary strip; subaccounts listed separately in tree later
+		if acct != account {
+			continue
+		}
+		for c, n := range byComm {
+			out[c] = new(big.Rat).Set(n)
+		}
+	}
+	return out
+}
+
+// AccountActivity sums postings to account (exact match only) in [from,to].
+func (l *Ledger) AccountActivity(account string, from, to time.Time) map[string]*big.Rat {
+	out := map[string]*big.Rat{}
+	for _, bt := range l.Book.Txns {
+		if !inRange(bt.Txn.Date, from, to) {
+			continue
+		}
+		for _, p := range bt.Postings {
+			if p.Account != account || p.Units == nil {
+				continue
+			}
+			c := p.Units.Commodity
+			if out[c] == nil {
+				out[c] = big.NewRat(0, 1)
+			}
+			out[c].Add(out[c], p.Units.Number)
+		}
+	}
 	return out
 }
 

@@ -49,6 +49,14 @@ func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 			}
 			return u
 		},
+		"accountURL": func(ledger, account, timeFilter string) string {
+			// Keep ":" readable in URLs; escape only reserved bits.
+			u := "/l/" + url.PathEscape(ledger) + "/account/" + url.PathEscape(account)
+			if timeFilter != "" {
+				u += "?time=" + url.QueryEscape(timeFilter)
+			}
+			return u
+		},
 	}
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
@@ -60,6 +68,8 @@ func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
+	// Account before generic page so "account" is not a page name.
+	mux.HandleFunc("GET /l/{ledger}/account/{account...}", s.handleAccount)
 	mux.HandleFunc("GET /l/{ledger}/{page}", s.handleLedgerPage)
 	mux.HandleFunc("GET /l/{ledger}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/l/"+r.PathValue("ledger")+"/check", http.StatusFound)
@@ -88,6 +98,10 @@ type pageData struct {
 	Time        string
 	PeriodLabel string
 	Error       string
+	// Account page
+	AccountName     string
+	AccountBalances []balanceRow
+	AccountActivity []balanceRow
 }
 
 type balanceRow struct {
@@ -216,6 +230,83 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "ledger.html", data)
+}
+
+
+func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("ledger")
+	account := r.PathValue("account")
+	account, _ = url.PathUnescape(account)
+	// Wildcard may use slashes if any; join
+	if account == "" {
+		http.NotFound(w, r)
+		return
+	}
+	l, err := engine.OpenLedger(s.Project, s.Prices, name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	q := r.URL.Query()
+	now := time.Now()
+	timeStr := q.Get("time")
+	pr, perr := period.Parse(timeStr, now)
+	periodLabel := period.DisplayLabel(timeStr, now)
+
+	asOf := pr.End
+	asOfStr := ""
+	if asOf.IsZero() {
+		asOf = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+	} else {
+		asOfStr = asOf.Format("2006-01-02")
+	}
+
+	data := pageData{
+		Title:       account,
+		Page:        "account",
+		LedgerName:  name,
+		Ledgers:     engine.LedgerNames(s.Project),
+		ProjectRoot: s.Project.Root,
+		OpCurrency:  l.OpCurrency,
+		Time:        timeStr,
+		PeriodLabel: periodLabel,
+		AsOf:        asOfStr,
+		AccountName: account,
+	}
+	if perr != nil {
+		data.Error = perr.Error()
+		s.render(w, "account.html", data)
+		return
+	}
+
+	// balances for this account
+	bals := l.AccountBalances(account, asOf)
+	var brow []balanceRow
+	var comms []string
+	for c := range bals {
+		comms = append(comms, c)
+	}
+	sort.Strings(comms)
+	for _, c := range comms {
+		brow = append(brow, balanceRow{Account: account, Commodity: c, Amount: bals[c].FloatString(4)})
+	}
+	data.AccountBalances = brow
+
+	// activity in period
+	act := l.AccountActivity(account, pr.Start, pr.End)
+	comms = nil
+	for c := range act {
+		comms = append(comms, c)
+	}
+	sort.Strings(comms)
+	var arow []balanceRow
+	for _, c := range comms {
+		arow = append(arow, balanceRow{Account: account, Commodity: c, Amount: act[c].FloatString(4)})
+	}
+	data.AccountActivity = arow
+
+	data.Journal = l.JournalForAccount(account, pr.Start, pr.End)
+	s.render(w, "account.html", data)
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data pageData) {

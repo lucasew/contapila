@@ -24,7 +24,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), parseCmd(), webCmd())
+	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), accountCmd(), parseCmd(), webCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -335,6 +335,94 @@ func networthCmd() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&asOf, "as-of", "", "YYYY-MM-DD")
+	return c
+}
+
+func accountCmd() *cobra.Command {
+	var timeFilter, from, to string
+	c := &cobra.Command{
+		Use:   "account <ledger> <account>",
+		Short: "Show one account (balance, period change, journal)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			r, err := resolvePeriod(timeFilter, from, to)
+			if err != nil {
+				return err
+			}
+			p, pdb, pdiags, err := engine.OpenProject(mustCwd())
+			if err != nil {
+				return err
+			}
+			printDiags(pdiags)
+			l, err := engine.OpenLedger(p, pdb, args[0])
+			if err != nil {
+				return err
+			}
+			acct := args[1]
+			asOf := r.End
+			if asOf.IsZero() {
+				asOf = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+			}
+			fmt.Printf("== %s · %s ==", l.Name, acct)
+			if !r.Empty() {
+				fmt.Printf("  [%s]", r.Label())
+			}
+			fmt.Println()
+			fmt.Println("Balance:")
+			bals := l.AccountBalances(acct, asOf)
+			if len(bals) == 0 {
+				fmt.Println("  (zero)")
+			} else {
+				var cs []string
+				for c := range bals {
+					cs = append(cs, c)
+				}
+				sort.Strings(cs)
+				w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+				for _, c := range cs {
+					fmt.Fprintf(w, "  %s\t%s\n", bals[c].FloatString(6), c)
+				}
+				w.Flush()
+			}
+			fmt.Println("Change in period:")
+			act := l.AccountActivity(acct, r.Start, r.End)
+			if len(act) == 0 {
+				fmt.Println("  (none)")
+			} else {
+				var cs []string
+				for c := range act {
+					cs = append(cs, c)
+				}
+				sort.Strings(cs)
+				w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+				for _, c := range cs {
+					fmt.Fprintf(w, "  %s\t%s\n", act[c].FloatString(6), c)
+				}
+				w.Flush()
+			}
+			fmt.Println("Journal:")
+			for _, e := range l.JournalForAccount(acct, r.Start, r.End) {
+				if e.Kind != "txn" {
+					fmt.Printf("%s %s %s\n", e.Date.Format("2006-01-02"), e.Kind, e.Comment)
+					continue
+				}
+				fmt.Printf("%s * %q\n", e.Date.Format("2006-01-02"), e.Narration)
+				for _, p := range e.Postings {
+					mark := "  "
+					if p.Account == acct {
+						mark = "* "
+					}
+					if p.Units == nil {
+						fmt.Printf("%s%s\n", mark, p.Account)
+						continue
+					}
+					fmt.Printf("%s%-40s %s %s\n", mark, p.Account, p.Units.Number.FloatString(4), p.Units.Commodity)
+				}
+			}
+			return nil
+		},
+	}
+	addTimeFlags(c, &timeFilter, &from, &to)
 	return c
 }
 

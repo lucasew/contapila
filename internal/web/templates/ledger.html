@@ -85,7 +85,7 @@
           <tbody>
             {{range .BalanceRows}}
             <tr>
-              <td class="font-mono text-sm">{{.Account}}</td>
+              <td class="font-mono text-sm"><a class="link link-hover" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
               <td class="text-right tabular font-medium">{{.Amount}}</td>
               <td><span class="badge badge-ghost badge-sm">{{.Commodity}}</span></td>
             </tr>
@@ -114,7 +114,7 @@
           <ul class="mt-2 space-y-0.5 font-mono text-sm">
             {{range .Postings}}
             <li class="flex flex-wrap justify-between gap-2">
-              <span>{{.Account}}</span>
+              <a class="link link-hover font-mono" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
               {{if .Units}}
               <span class="tabular text-base-content/90">{{.Units.Number.FloatString 4}} {{.Units.Commodity}}</span>
               {{end}}
@@ -140,7 +140,7 @@
               <tbody>
                 {{range .IncomeRows}}
                 <tr>
-                  <td class="font-mono text-sm">{{.Key}}</td>
+                  <td class="font-mono text-sm"><a class="link link-hover" href="{{accountURL $.LedgerName .Key $.Time}}">{{.Key}}</a></td>
                   <td class="text-right tabular">{{.Value}}</td>
                 </tr>
                 {{end}}
@@ -159,7 +159,7 @@
               <tbody>
                 {{range .ExpenseRows}}
                 <tr>
-                  <td class="font-mono text-sm">{{.Key}}</td>
+                  <td class="font-mono text-sm"><a class="link link-hover" href="{{accountURL $.LedgerName .Key $.Time}}">{{.Key}}</a></td>
                   <td class="text-right tabular">{{.Value}}</td>
                 </tr>
                 {{end}}
@@ -201,7 +201,7 @@
           <tbody>
             {{range .NetWorthRows}}
             <tr>
-              <td class="font-mono text-sm">{{.Account}}</td>
+              <td class="font-mono text-sm"><a class="link link-hover" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
               <td class="text-right tabular">{{.Units}}</td>
               <td><span class="badge badge-ghost badge-sm">{{.Commodity}}</span></td>
               <td class="text-right tabular font-medium">{{.Value}}</td>
