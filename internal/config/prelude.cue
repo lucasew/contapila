@@ -1,2 +1,11 @@
-operating_currency: *"" | string
-default_precision: *5 | int
+#Commodity: {
+    precision: int | *5
+}
+
+#Config: {
+    commodities: [string]: #Commodity
+    operating_currency?: [...string]
+}
+
+// Default instance
+commodities: [string]: #Commodity

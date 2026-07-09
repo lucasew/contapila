@@ -1,7 +1,7 @@
 package config
 
 import (
-	_ "embed"
+	"embed"
 	"fmt"
 
 	"cuelang.org/go/cue"
@@ -9,38 +9,36 @@ import (
 )
 
 //go:embed prelude.cue
-var Prelude string
+var fs embed.FS
+
+const PreludeFilename = "prelude.cue"
 
 type Config struct {
-	OperatingCurrency string `json:"operating_currency"`
-	DefaultPrecision  int    `json:"default_precision"`
+	Value cue.Value
 }
 
-func Load(userCUE string) (*Config, error) {
+func Load(userCue []byte, userFilename string) (*Config, error) {
 	ctx := cuecontext.New()
 
-	// Unify prelude and user CUE
-	v := ctx.CompileString(Prelude, cue.Filename("prelude.cue"))
-	if v.Err() != nil {
-		return nil, fmt.Errorf("error compiling prelude: %w", v.Err())
+	preludeBytes, err := fs.ReadFile(PreludeFilename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read embedded prelude: %w", err)
 	}
 
-	if userCUE != "" {
-		uv := ctx.CompileString(userCUE, cue.Filename("contapila.cue"))
-		if uv.Err() != nil {
-			return nil, fmt.Errorf("error compiling user cue: %w", uv.Err())
-		}
-		v = v.Unify(uv)
+	prelude := ctx.CompileBytes(preludeBytes, cue.Filename(PreludeFilename))
+	if err := prelude.Err(); err != nil {
+		return nil, fmt.Errorf("failed to compile prelude: %w", err)
 	}
 
-	if err := v.Validate(); err != nil {
-		return nil, fmt.Errorf("config validation error: %w", err)
+	user := ctx.CompileBytes(userCue, cue.Filename(userFilename))
+	if err := user.Err(); err != nil {
+		return nil, fmt.Errorf("failed to compile user config: %w", err)
 	}
 
-	var cfg Config
-	if err := v.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("error decoding config: %w", err)
+	unified := prelude.Unify(user)
+	if err := unified.Validate(); err != nil {
+		return nil, fmt.Errorf("config unification failed: %w", err)
 	}
 
-	return &cfg, nil
+	return &Config{Value: unified}, nil
 }
