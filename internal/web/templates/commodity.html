@@ -5,8 +5,9 @@
 </head>
 {{template "app-open" .}}
     <header class="mb-3">
-      <h1 class="text-base font-semibold tracking-tight font-mono break-all">{{.AccountName}}</h1>
+      <h1 class="text-base font-semibold tracking-tight font-mono break-all">{{.CommodityName}}</h1>
       <p class="mt-0.5 text-xs text-base-content/60 flex flex-wrap items-center gap-1.5">
+        <span>Commodity</span>
         {{if .PeriodLabel}}
         <span class="font-mono text-base-content/80" title="{{.Time}}">{{.PeriodLabel}}</span>
         {{end}}
@@ -22,17 +23,23 @@
 
     <div class="grid gap-4 md:grid-cols-2 mb-4">
       <section>
-        <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Balance</h2>
-        {{if not .AccountBalances}}
-        <p class="text-xs text-base-content/60">Zero / never posted.</p>
+        <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Balance by account</h2>
+        {{if not .CommodityBalances}}
+        <p class="text-xs text-base-content/60">Zero / never held.</p>
         {{else}}
         <div class="overflow-x-auto border border-base-300">
           <table class="table table-xs">
-            <tbody>
-              {{range .AccountBalances}}
+            <thead>
               <tr>
+                <th>Account</th>
+                <th class="text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .CommodityBalances}}
+              <tr>
+                <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
                 <td class="text-right tabular text-xs font-medium">{{.Amount}}</td>
-                <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a></td>
               </tr>
               {{end}}
             </tbody>
@@ -42,16 +49,22 @@
       </section>
       <section>
         <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Change in period</h2>
-        {{if not .AccountActivity}}
+        {{if not .CommodityActivity}}
         <p class="text-xs text-base-content/60">No activity.</p>
         {{else}}
         <div class="overflow-x-auto border border-base-300">
           <table class="table table-xs">
-            <tbody>
-              {{range .AccountActivity}}
+            <thead>
               <tr>
+                <th>Account</th>
+                <th class="text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .CommodityActivity}}
+              <tr>
+                <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
                 <td class="text-right tabular text-xs font-medium">{{.Amount}}</td>
-                <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a></td>
               </tr>
               {{end}}
             </tbody>
@@ -77,10 +90,10 @@
           {{if .Postings}}
           <ul class="mt-0.5 space-y-0 font-mono text-xs">
             {{range .Postings}}
-            <li class="flex flex-wrap justify-between gap-2 leading-5 {{if eq .Account $.AccountName}}text-primary font-semibold{{end}}">
+            <li class="flex flex-wrap justify-between gap-2 leading-5 {{if and .Units (eq .Units.Commodity $.CommodityName)}}text-primary font-semibold{{end}}">
               <a class="link link-hover" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
               {{if .Units}}
-              <span class="tabular">{{.Units.Number.FloatString 4}} <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Units.Commodity $.Time}}">{{.Units.Commodity}}</a></span>
+              <span class="tabular">{{.Units.Number.FloatString 4}} <a class="link link-hover" href="{{commodityURL $.LedgerName .Units.Commodity $.Time}}">{{.Units.Commodity}}</a></span>
               {{end}}
             </li>
             {{end}}

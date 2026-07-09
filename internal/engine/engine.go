@@ -244,6 +244,63 @@ func (l *Ledger) AccountActivity(account string, from, to time.Time) map[string]
 	return out
 }
 
+// CommodityBalances returns non-zero balances of commodity per account as-of.
+func (l *Ledger) CommodityBalances(commodity string, asOf time.Time) map[string]*big.Rat {
+	all := l.BalancesAsOf(asOf)
+	out := map[string]*big.Rat{}
+	for acct, byComm := range all {
+		if n, ok := byComm[commodity]; ok && n.Sign() != 0 {
+			out[acct] = new(big.Rat).Set(n)
+		}
+	}
+	return out
+}
+
+// CommodityActivity sums postings in commodity per account in [from,to].
+func (l *Ledger) CommodityActivity(commodity string, from, to time.Time) map[string]*big.Rat {
+	out := map[string]*big.Rat{}
+	for _, bt := range l.Book.Txns {
+		if !inRange(bt.Txn.Date, from, to) {
+			continue
+		}
+		for _, p := range bt.Postings {
+			if p.Units == nil || p.Units.Commodity != commodity {
+				continue
+			}
+			if out[p.Account] == nil {
+				out[p.Account] = big.NewRat(0, 1)
+			}
+			out[p.Account].Add(out[p.Account], p.Units.Number)
+		}
+	}
+	return out
+}
+
+// JournalForCommodity returns journal entries with at least one posting in commodity.
+func (l *Ledger) JournalForCommodity(commodity string, from, to time.Time) []JournalEntry {
+	var out []JournalEntry
+	for _, bt := range l.Book.Txns {
+		if !inRange(bt.Txn.Date, from, to) {
+			continue
+		}
+		touch := false
+		for _, p := range bt.Postings {
+			if p.Units != nil && p.Units.Commodity == commodity {
+				touch = true
+				break
+			}
+		}
+		if !touch {
+			continue
+		}
+		out = append(out, JournalEntry{
+			Date: bt.Txn.Date, Kind: "txn", Narration: bt.Txn.Narration, Postings: bt.Postings,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Date.Before(out[j].Date) })
+	return out
+}
+
 type PnL struct {
 	Income   map[string]*big.Rat // account -> amount in native commodity summed naively
 	Expenses map[string]*big.Rat

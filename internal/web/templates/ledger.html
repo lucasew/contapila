@@ -75,7 +75,7 @@
             <tr>
               <th>Account</th>
               <th class="text-right">Amount</th>
-              <th>Cmdty</th>
+              <th>Commodity</th>
             </tr>
           </thead>
           <tbody>
@@ -83,7 +83,7 @@
             <tr>
               <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
               <td class="text-right tabular text-xs font-medium">{{.Amount}}</td>
-              <td class="font-mono text-xs opacity-70">{{.Commodity}}</td>
+              <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a></td>
             </tr>
             {{end}}
           </tbody>
@@ -112,7 +112,7 @@
             <li class="flex flex-wrap justify-between gap-2 leading-5">
               <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
               {{if .Units}}
-              <span class="tabular text-base-content/90">{{.Units.Number.FloatString 4}} {{.Units.Commodity}}</span>
+              <span class="tabular text-base-content/90">{{.Units.Number.FloatString 4}} <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Units.Commodity $.Time}}">{{.Units.Commodity}}</a></span>
               {{end}}
             </li>
             {{end}}
@@ -185,7 +185,7 @@
             <tr>
               <th>Account</th>
               <th class="text-right">Units</th>
-              <th></th>
+              <th>Commodity</th>
               <th class="text-right">Value</th>
               <th></th>
             </tr>
@@ -195,7 +195,7 @@
             <tr>
               <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
               <td class="text-right tabular text-xs">{{.Units}}</td>
-              <td class="font-mono text-xs opacity-70">{{.Commodity}}</td>
+              <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a></td>
               <td class="text-right tabular text-xs font-medium">{{.Value}}</td>
               <td class="text-[0.65rem] text-warning">{{if .UsedCost}}cost{{end}}</td>
             </tr>

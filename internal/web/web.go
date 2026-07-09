@@ -43,7 +43,7 @@ func Listen(p *project.Project, pdb *prices.DB, defaultLedger string, addr strin
 
 func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 	funcMap := template.FuncMap{
-		"eq": func(a, b string) bool { return a == b },
+		"eq":          func(a, b string) bool { return a == b },
 		"queryEscape": url.QueryEscape,
 		"ledgerURL": func(ledger, page, timeFilter string) string {
 			u := "/l/" + url.PathEscape(ledger) + "/" + url.PathEscape(page)
@@ -55,6 +55,13 @@ func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 		"accountURL": func(ledger, account, timeFilter string) string {
 			// Keep ":" readable in URLs; escape only reserved bits.
 			u := "/l/" + url.PathEscape(ledger) + "/account/" + url.PathEscape(account)
+			if timeFilter != "" {
+				u += "?time=" + url.QueryEscape(timeFilter)
+			}
+			return u
+		},
+		"commodityURL": func(ledger, commodity, timeFilter string) string {
+			u := "/l/" + url.PathEscape(ledger) + "/commodity/" + url.PathEscape(commodity)
 			if timeFilter != "" {
 				u += "?time=" + url.QueryEscape(timeFilter)
 			}
@@ -73,8 +80,9 @@ func (s *Server) Handler() http.Handler {
 	// Built CSS (daisyUI themes via @plugin) — correct text/css MIME.
 	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
 	mux.HandleFunc("GET /{$}", s.handleIndex)
-	// Account before generic page so "account" is not a page name.
+	// Named entity routes before generic page so "account"/"commodity" are not page names.
 	mux.HandleFunc("GET /l/{ledger}/account/{account...}", s.handleAccount)
+	mux.HandleFunc("GET /l/{ledger}/commodity/{commodity...}", s.handleCommodity)
 	mux.HandleFunc("GET /l/{ledger}/{page}", s.handleLedgerPage)
 	mux.HandleFunc("GET /l/{ledger}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/l/"+r.PathValue("ledger")+"/check", http.StatusFound)
@@ -107,6 +115,10 @@ type pageData struct {
 	AccountName     string
 	AccountBalances []balanceRow
 	AccountActivity []balanceRow
+	// Commodity page
+	CommodityName     string
+	CommodityBalances []balanceRow // Account + Amount for this commodity
+	CommodityActivity []balanceRow
 }
 
 type balanceRow struct {
@@ -312,6 +324,79 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 
 	data.Journal = l.JournalForAccount(account, pr.Start, pr.End)
 	s.render(w, "account.html", data)
+}
+
+func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("ledger")
+	commodity := r.PathValue("commodity")
+	commodity, _ = url.PathUnescape(commodity)
+	if commodity == "" {
+		http.NotFound(w, r)
+		return
+	}
+	l, err := engine.OpenLedger(s.Project, s.Prices, name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	q := r.URL.Query()
+	now := time.Now()
+	timeStr := q.Get("time")
+	pr, perr := period.Parse(timeStr, now)
+	periodLabel := period.DisplayLabel(timeStr, now)
+
+	asOf := pr.End
+	asOfStr := ""
+	if asOf.IsZero() {
+		asOf = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+	} else {
+		asOfStr = asOf.Format("2006-01-02")
+	}
+
+	data := pageData{
+		Title:         commodity,
+		Page:          "commodity",
+		LedgerName:    name,
+		Ledgers:       engine.LedgerNames(s.Project),
+		ProjectRoot:   s.Project.Root,
+		OpCurrency:    l.OpCurrency,
+		Time:          timeStr,
+		PeriodLabel:   periodLabel,
+		AsOf:          asOfStr,
+		CommodityName: commodity,
+	}
+	if perr != nil {
+		data.Error = perr.Error()
+		s.render(w, "commodity.html", data)
+		return
+	}
+
+	bals := l.CommodityBalances(commodity, asOf)
+	var accts []string
+	for a := range bals {
+		accts = append(accts, a)
+	}
+	sort.Strings(accts)
+	for _, a := range accts {
+		data.CommodityBalances = append(data.CommodityBalances, balanceRow{
+			Account: a, Commodity: commodity, Amount: bals[a].FloatString(4),
+		})
+	}
+
+	act := l.CommodityActivity(commodity, pr.Start, pr.End)
+	accts = nil
+	for a := range act {
+		accts = append(accts, a)
+	}
+	sort.Strings(accts)
+	for _, a := range accts {
+		data.CommodityActivity = append(data.CommodityActivity, balanceRow{
+			Account: a, Commodity: commodity, Amount: act[a].FloatString(4),
+		})
+	}
+
+	data.Journal = l.JournalForCommodity(commodity, pr.Start, pr.End)
+	s.render(w, "commodity.html", data)
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
