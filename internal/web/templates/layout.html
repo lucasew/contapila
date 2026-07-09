@@ -3,7 +3,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>{{.Title}} · contapila</title>
+{{/* Browser Tailwind cannot load @plugin / @import "tailwindcss" (resolves to /tailwindcss with wrong MIME). Use official CDN pair. */}}
+<link href="https://cdn.jsdelivr.net/npm/daisyui@5/daisyui.css" rel="stylesheet" type="text/css" />
+<link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23c2410c'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16' font-family='system-ui' fill='white'%3Ec%3C/text%3E%3C/svg%3E" />
 <script>
   // Apply saved theme before paint to avoid flash
   (function () {
@@ -21,77 +25,7 @@
     }
   })();
 </script>
-<style type="text/tailwindcss">
-  @import "tailwindcss";
-  @plugin "daisyui" {
-    themes: light --default, dark --prefersdark;
-  }
-  @plugin "daisyui/theme" {
-    name: "light";
-    default: true;
-    color-scheme: light;
-    --color-base-100: oklch(100% 0 0);
-    --color-base-200: oklch(97% 0.004 55);
-    --color-base-300: oklch(93% 0.008 55);
-    --color-base-content: oklch(22% 0.02 45);
-    --color-primary: oklch(52% 0.14 38);
-    --color-primary-content: oklch(99% 0.01 38);
-    --color-secondary: oklch(45% 0.04 250);
-    --color-secondary-content: oklch(98% 0.01 250);
-    --color-accent: oklch(58% 0.1 160);
-    --color-accent-content: oklch(98% 0.01 160);
-    --color-neutral: oklch(30% 0.02 45);
-    --color-neutral-content: oklch(98% 0.005 45);
-    --color-info: oklch(55% 0.1 230);
-    --color-info-content: oklch(98% 0.01 230);
-    --color-success: oklch(52% 0.12 150);
-    --color-success-content: oklch(98% 0.01 150);
-    --color-warning: oklch(75% 0.14 75);
-    --color-warning-content: oklch(25% 0.04 75);
-    --color-error: oklch(55% 0.18 25);
-    --color-error-content: oklch(98% 0.01 25);
-    --radius-selector: 0.5rem;
-    --radius-field: 0.35rem;
-    --radius-box: 0.5rem;
-    --size-selector: 0.25rem;
-    --size-field: 0.25rem;
-    --border: 1px;
-    --depth: 0;
-    --noise: 0;
-  }
-  @plugin "daisyui/theme" {
-    name: "dark";
-    prefersdark: true;
-    color-scheme: dark;
-    --color-base-100: oklch(18% 0.012 45);
-    --color-base-200: oklch(22% 0.014 45);
-    --color-base-300: oklch(28% 0.016 45);
-    --color-base-content: oklch(92% 0.01 55);
-    --color-primary: oklch(72% 0.12 38);
-    --color-primary-content: oklch(18% 0.02 38);
-    --color-secondary: oklch(65% 0.04 250);
-    --color-secondary-content: oklch(18% 0.02 250);
-    --color-accent: oklch(70% 0.1 160);
-    --color-accent-content: oklch(18% 0.02 160);
-    --color-neutral: oklch(70% 0.02 45);
-    --color-neutral-content: oklch(18% 0.01 45);
-    --color-info: oklch(70% 0.1 230);
-    --color-info-content: oklch(18% 0.02 230);
-    --color-success: oklch(70% 0.12 150);
-    --color-success-content: oklch(18% 0.02 150);
-    --color-warning: oklch(80% 0.12 75);
-    --color-warning-content: oklch(22% 0.04 75);
-    --color-error: oklch(68% 0.16 25);
-    --color-error-content: oklch(18% 0.02 25);
-    --radius-selector: 0.5rem;
-    --radius-field: 0.35rem;
-    --radius-box: 0.5rem;
-    --size-selector: 0.25rem;
-    --size-field: 0.25rem;
-    --border: 1px;
-    --depth: 0;
-    --noise: 0;
-  }
+<style>
   .tabular { font-variant-numeric: tabular-nums; }
 </style>
 {{end}}
