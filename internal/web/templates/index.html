@@ -4,10 +4,9 @@
   {{template "head" .}}
 </head>
 {{template "app-open" .}}
-    <header class="mb-3">
-      <h1 class="text-base font-semibold tracking-tight">Ledgers</h1>
-      <p class="mt-0.5 text-xs font-mono text-base-content/50 break-all">{{.ProjectRoot}}</p>
-    </header>
+    {{if .ProjectRoot}}
+    <p class="mb-3 text-xs font-mono text-base-content/50 break-all">{{.ProjectRoot}}</p>
+    {{end}}
 
     {{if not .Ledgers}}
     <div role="alert" class="alert alert-soft py-2 text-xs">

@@ -103,8 +103,8 @@ type pageData struct {
 	OK           bool
 	BalanceRows  []balanceRow
 	Journal      []engine.JournalEntry
-	IncomeRows   []kvRow
-	ExpenseRows  []kvRow
+	IncomeRows   []balanceRow
+	ExpenseRows  []balanceRow
 	NetWorthRows []nwRow
 	NetWorthTot  string
 	AsOf         string
@@ -125,11 +125,6 @@ type balanceRow struct {
 	Account   string
 	Commodity string
 	Amount    string
-}
-
-type kvRow struct {
-	Key   string
-	Value string
 }
 
 type nwRow struct {
@@ -225,8 +220,8 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 	case "pnl":
 		if perr == nil {
 			p := l.PnL(pr.Start, pr.End)
-			data.IncomeRows = ratMapRows(p.Income)
-			data.ExpenseRows = ratMapRows(p.Expenses)
+			data.IncomeRows = buildBalances(p.Income)
+			data.ExpenseRows = buildBalances(p.Expenses)
 		}
 	case "networth":
 		lines, total, err := l.NetWorth(asOf)
@@ -433,15 +428,4 @@ func buildBalances(bals map[string]map[string]*big.Rat) []balanceRow {
 	return rows
 }
 
-func ratMapRows(m map[string]*big.Rat) []kvRow {
-	var keys []string
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var rows []kvRow
-	for _, k := range keys {
-		rows = append(rows, kvRow{Key: k, Value: m[k].FloatString(4)})
-	}
-	return rows
-}
+

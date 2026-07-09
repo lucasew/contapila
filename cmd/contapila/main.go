@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
@@ -247,24 +248,26 @@ func pnlCmd() *cobra.Command {
 				}
 				fmt.Println()
 				p := l.PnL(r.Start, r.End)
-				fmt.Println("Income:")
-				var keys []string
-				for k := range p.Income {
-					keys = append(keys, k)
+				printPnLSection := func(title string, m map[string]map[string]*big.Rat) {
+					fmt.Println(title)
+					var accts []string
+					for a := range m {
+						accts = append(accts, a)
+					}
+					sort.Strings(accts)
+					for _, a := range accts {
+						var comms []string
+						for c := range m[a] {
+							comms = append(comms, c)
+						}
+						sort.Strings(comms)
+						for _, c := range comms {
+							fmt.Printf("  %-40s %s %s\n", a, m[a][c].FloatString(4), c)
+						}
+					}
 				}
-				sort.Strings(keys)
-				for _, k := range keys {
-					fmt.Printf("  %-40s %s\n", k, p.Income[k].FloatString(4))
-				}
-				fmt.Println("Expenses:")
-				keys = nil
-				for k := range p.Expenses {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				for _, k := range keys {
-					fmt.Printf("  %-40s %s\n", k, p.Expenses[k].FloatString(4))
-				}
+				printPnLSection("Income:", p.Income)
+				printPnLSection("Expenses:", p.Expenses)
 				return nil
 			})
 		},

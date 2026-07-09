@@ -4,18 +4,16 @@
   {{template "head" .}}
 </head>
 {{template "app-open" .}}
-    <header class="mb-3">
-      <h1 class="text-base font-semibold tracking-tight font-mono break-all">{{.CommodityName}}</h1>
-      <p class="mt-0.5 text-xs text-base-content/60 flex flex-wrap items-center gap-1.5">
-        <span>Commodity</span>
-        {{if .PeriodLabel}}
-        <span class="font-mono text-base-content/80" title="{{.Time}}">{{.PeriodLabel}}</span>
-        {{end}}
-        {{if .AsOf}}
-        <span>as of {{.AsOf}}</span>
-        {{end}}
-      </p>
-    </header>
+    {{if or .PeriodLabel .AsOf}}
+    <p class="mb-3 text-xs text-base-content/60 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      {{if .PeriodLabel}}
+      <span class="font-mono text-base-content/80" title="{{.Time}}">{{.PeriodLabel}}</span>
+      {{end}}
+      {{if .AsOf}}
+      <span>as of {{.AsOf}}</span>
+      {{end}}
+    </p>
+    {{end}}
 
     {{if .Error}}
     <div role="alert" class="alert alert-error alert-soft py-2 text-xs mb-3"><span>{{.Error}}</span></div>

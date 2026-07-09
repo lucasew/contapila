@@ -301,18 +301,26 @@ func (l *Ledger) JournalForCommodity(commodity string, from, to time.Time) []Jou
 	return out
 }
 
+// PnL holds income/expense totals keyed by account then commodity.
+// Amounts are native units (not converted); never mix commodities in one cell.
 type PnL struct {
-	Income   map[string]*big.Rat // account -> amount in native commodity summed naively
-	Expenses map[string]*big.Rat
+	Income   map[string]map[string]*big.Rat // account -> commodity -> amount
+	Expenses map[string]map[string]*big.Rat
 }
 
 func (l *Ledger) PnL(from, to time.Time) PnL {
-	res := PnL{Income: map[string]*big.Rat{}, Expenses: map[string]*big.Rat{}}
-	add := func(m map[string]*big.Rat, acct string, n *big.Rat) {
+	res := PnL{
+		Income:   map[string]map[string]*big.Rat{},
+		Expenses: map[string]map[string]*big.Rat{},
+	}
+	add := func(m map[string]map[string]*big.Rat, acct, comm string, n *big.Rat) {
 		if m[acct] == nil {
-			m[acct] = big.NewRat(0, 1)
+			m[acct] = map[string]*big.Rat{}
 		}
-		m[acct].Add(m[acct], n)
+		if m[acct][comm] == nil {
+			m[acct][comm] = big.NewRat(0, 1)
+		}
+		m[acct][comm].Add(m[acct][comm], n)
 	}
 	for _, bt := range l.Book.Txns {
 		d := bt.Txn.Date
@@ -326,11 +334,12 @@ func (l *Ledger) PnL(from, to time.Time) PnL {
 			if p.Units == nil {
 				continue
 			}
+			comm := p.Units.Commodity
 			if booking.IsIncome(p.Account) {
-				add(res.Income, p.Account, p.Units.Number)
+				add(res.Income, p.Account, comm, p.Units.Number)
 			}
 			if booking.IsExpense(p.Account) {
-				add(res.Expenses, p.Account, p.Units.Number)
+				add(res.Expenses, p.Account, comm, p.Units.Number)
 			}
 		}
 	}
