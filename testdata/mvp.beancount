@@ -1,0 +1,18 @@
+2024-01-01 open Assets:Checking BRL
+2024-01-01 open Expenses:Food
+
+2024-01-02 * "Supermarket" "Weekly groceries"
+  Assets:Checking  -100.00 BRL
+  Expenses:Food     100.00 BRL
+
+2024-01-03 balance Assets:Checking 900.00 BRL
+
+option "operating_currency" "BRL"
+include "others.beancount"
+
+2024-01-04 price AAPL 150.00 USD
+2024-01-05 pad Assets:Checking Equity:OpeningBalances
+2024-01-06 note Assets:Checking "Checked balance"
+2024-01-07 event "type" "value"
+2024-01-08 close Assets:Checking
+2024-01-01 commodity BRL
