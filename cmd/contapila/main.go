@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"text/tabwriter"
 	"time"
 
 	"github.com/lucasew/contapila-go/internal/diag"
@@ -128,8 +129,12 @@ func balancesCmd() *cobra.Command {
 			if t.IsZero() {
 				t = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 			}
-			return withLedgers(args, func(l *engine.Ledger) error {
-				fmt.Printf("== %s ==\n", l.Name)
+			showLedger := len(args) == 0
+			type row struct {
+				ledger, account, amount, commodity string
+			}
+			var rows []row
+			err = withLedgers(args, func(l *engine.Ledger) error {
 				bals := l.BalancesAsOf(t)
 				var accts []string
 				for a := range bals {
@@ -143,11 +148,32 @@ func balancesCmd() *cobra.Command {
 					}
 					sort.Strings(cs)
 					for _, c := range cs {
-						fmt.Printf("  %-40s %20s %s\n", a, bals[a][c].FloatString(6), c)
+						rows = append(rows, row{
+							ledger:    l.Name,
+							account:   a,
+							amount:    bals[a][c].FloatString(6),
+							commodity: c,
+						})
 					}
 				}
 				return nil
 			})
+			if err != nil {
+				return err
+			}
+			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+			if showLedger {
+				fmt.Fprintln(w, "LEDGER\tACCOUNT\tAMOUNT\tCOMMODITY")
+				for _, r := range rows {
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.ledger, r.account, r.amount, r.commodity)
+				}
+			} else {
+				fmt.Fprintln(w, "ACCOUNT\tAMOUNT\tCOMMODITY")
+				for _, r := range rows {
+					fmt.Fprintf(w, "%s\t%s\t%s\n", r.account, r.amount, r.commodity)
+				}
+			}
+			return w.Flush()
 		},
 	}
 	c.Flags().StringVar(&asOf, "as-of", "", "YYYY-MM-DD")
@@ -295,9 +321,9 @@ func parseCmd() *cobra.Command {
 }
 
 func webCmd() *cobra.Command {
-	var port int
+	var addr string
 	c := &cobra.Command{
-		Use: "web [ledger]", Short: "Read-only web UI on 127.0.0.1", Args: cobra.MaximumNArgs(1),
+		Use: "web [ledger]", Short: "Read-only web UI", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, pdb, _, err := engine.OpenProject(mustCwd())
 			if err != nil {
@@ -307,9 +333,9 @@ func webCmd() *cobra.Command {
 			if len(args) == 1 {
 				name = args[0]
 			}
-			return web.Listen(p, pdb, name, port)
+			return web.Listen(p, pdb, name, addr)
 		},
 	}
-	c.Flags().IntVar(&port, "port", 8765, "port")
+	c.Flags().StringVar(&addr, "addr", "127.0.0.1:8765", "listen address (host:port)")
 	return c
 }

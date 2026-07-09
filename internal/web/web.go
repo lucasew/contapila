@@ -24,12 +24,11 @@ type Server struct {
 	Tmpl    *template.Template
 }
 
-func Listen(p *project.Project, pdb *prices.DB, defaultLedger string, port int) error {
+func Listen(p *project.Project, pdb *prices.DB, defaultLedger string, addr string) error {
 	s, err := New(p, pdb)
 	if err != nil {
 		return err
 	}
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	fmt.Printf("contapila web on http://%s/\n", addr)
 	if defaultLedger != "" {
 		fmt.Printf("  ledger: http://%s/l/%s/check\n", addr, defaultLedger)
