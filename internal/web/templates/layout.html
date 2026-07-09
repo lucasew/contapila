@@ -6,7 +6,7 @@
 <link href="https://cdn.jsdelivr.net/npm/daisyui@5/daisyui.css" rel="stylesheet" type="text/css" />
 <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23c2410c'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16' font-family='system-ui' fill='white'%3Ec%3C/text%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%231a5632'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-size='14' font-family='system-ui,sans-serif' font-weight='600' fill='%23e8c547'%3Ec%3C/text%3E%3C/svg%3E" />
 <script>
   (function () {
     try {
@@ -24,9 +24,71 @@
   })();
 </script>
 <style>
+  /* contapila tokens: dark green primary, rare gold accent (subtle) */
+  [data-theme="light"] {
+    --color-base-100: oklch(100% 0 0);
+    --color-base-200: oklch(97.5% 0.004 150);
+    --color-base-300: oklch(92% 0.01 150);
+    --color-base-content: oklch(22% 0.02 150);
+    --color-primary: oklch(38% 0.09 155);
+    --color-primary-content: oklch(98% 0.01 155);
+    --color-secondary: oklch(72% 0.12 90);
+    --color-secondary-content: oklch(22% 0.04 90);
+    --color-accent: oklch(78% 0.13 92);
+    --color-accent-content: oklch(22% 0.04 90);
+    --color-neutral: oklch(32% 0.02 150);
+    --color-neutral-content: oklch(98% 0.005 150);
+    --color-success: oklch(45% 0.11 155);
+    --color-success-content: oklch(98% 0.01 155);
+    --color-warning: oklch(78% 0.12 85);
+    --color-warning-content: oklch(25% 0.04 85);
+    --color-error: oklch(52% 0.18 25);
+    --color-error-content: oklch(98% 0.01 25);
+    --color-info: oklch(50% 0.08 220);
+    --color-info-content: oklch(98% 0.01 220);
+  }
+  [data-theme="dark"] {
+    --color-base-100: oklch(18% 0.02 155);
+    --color-base-200: oklch(22% 0.025 155);
+    --color-base-300: oklch(28% 0.03 155);
+    --color-base-content: oklch(92% 0.015 150);
+    --color-primary: oklch(68% 0.1 155);
+    --color-primary-content: oklch(16% 0.03 155);
+    --color-secondary: oklch(78% 0.11 90);
+    --color-secondary-content: oklch(20% 0.04 90);
+    --color-accent: oklch(82% 0.12 92);
+    --color-accent-content: oklch(18% 0.04 90);
+    --color-neutral: oklch(70% 0.02 150);
+    --color-neutral-content: oklch(16% 0.02 150);
+    --color-success: oklch(70% 0.1 155);
+    --color-success-content: oklch(16% 0.03 155);
+    --color-warning: oklch(80% 0.11 85);
+    --color-warning-content: oklch(22% 0.04 85);
+    --color-error: oklch(68% 0.15 25);
+    --color-error-content: oklch(16% 0.03 25);
+    --color-info: oklch(72% 0.08 220);
+    --color-info-content: oklch(16% 0.03 220);
+  }
   .tabular { font-variant-numeric: tabular-nums; }
-  /* Fava-like fixed chrome */
-  .app-sidebar { width: 15rem; }
+  .app-sidebar { width: 12.5rem; }
+  /* denser menu active: green tint, not soft candy */
+  .menu li > a.menu-active {
+    background-color: color-mix(in oklch, var(--color-primary) 14%, transparent);
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+  [data-theme="dark"] .menu li > a.menu-active {
+    background-color: color-mix(in oklch, var(--color-primary) 18%, transparent);
+  }
+  /* gold sprinkle: key totals only */
+  .stat-value.text-primary,
+  .money-highlight {
+    color: var(--color-accent);
+  }
+  [data-theme="light"] .stat-value.text-primary,
+  [data-theme="light"] .money-highlight {
+    color: color-mix(in oklch, var(--color-secondary) 85%, var(--color-base-content));
+  }
 </style>
 {{end}}
 
@@ -51,7 +113,7 @@
 <form method="get" action="{{if eq .Page "account"}}{{accountURL .LedgerName .AccountName ""}}{{else}}/l/{{.LedgerName}}/{{.Page}}{{end}}" class="shrink-0">
   <input id="time-filter" type="text" name="time" value="{{.Time}}"
     placeholder="2024-03"
-    class="input input-sm input-bordered w-32 sm:w-44 font-mono"
+    class="input input-xs input-bordered w-28 sm:w-40 font-mono h-8"
     aria-label="Time filter"
     title="2024, 2024-03, 2024-Q1, month, month-1, 2020 - 2024-06"
     autocomplete="off"
@@ -60,9 +122,19 @@
 {{end}}
 {{end}}
 
+{{define "page-title"}}
+{{if eq .Page "pnl"}}Income statement
+{{else if eq .Page "networth"}}Net worth
+{{else if eq .Page "check"}}Check
+{{else if eq .Page "balances"}}Balances
+{{else if eq .Page "journal"}}Journal
+{{else if eq .Page "account"}}{{.AccountName}}
+{{else if .Page}}{{.Page}}
+{{else}}Ledgers{{end}}
+{{end}}
+
 {{define "breadcrumbs"}}
-{{/* overflow-visible so the ledger dropdown is not clipped by breadcrumbs/navbar */}}
-<div class="breadcrumbs text-sm py-0 max-w-full overflow-visible">
+<div class="breadcrumbs text-xs sm:text-sm py-0 max-w-full overflow-visible">
   <ul class="flex-nowrap overflow-visible">
     <li><a href="/" class="link link-hover">contapila</a></li>
     {{if .Ledgers}}
@@ -70,9 +142,9 @@
       <details class="dropdown dropdown-bottom">
         <summary class="cursor-pointer list-none font-medium after:hidden">
           {{if .LedgerName}}{{.LedgerName}}{{else}}ledger{{end}}
-          <svg xmlns="http://www.w3.org/2000/svg" class="inline h-3.5 w-3.5 opacity-50 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="inline h-3 w-3 opacity-50 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </summary>
-        <ul class="dropdown-content menu bg-base-100 rounded-box z-[70] w-52 p-2 shadow-md border border-base-300">
+        <ul class="dropdown-content menu menu-sm bg-base-100 rounded-box z-[70] w-48 p-1.5 shadow-md border border-base-300">
           {{range .Ledgers}}
           <li>
             {{if and (eq $.Page "account") $.AccountName}}
@@ -89,29 +161,28 @@
     </li>
     {{end}}
     {{if and .LedgerName (eq .Page "account") .AccountName}}
-    <li class="font-mono text-xs sm:text-sm truncate max-w-[14rem]" title="{{.AccountName}}">{{.AccountName}}</li>
+    <li class="font-mono text-xs truncate max-w-[12rem]" title="{{.AccountName}}">{{.AccountName}}</li>
     {{else if and .LedgerName .Page}}
-    <li class="capitalize">{{.Page}}</li>
+    <li>{{template "page-title" .}}</li>
     {{end}}
   </ul>
 </div>
 {{end}}
 
 {{define "topbar"}}
-{{/* z-50 above drawer-side (z-40) so ledger menu is not covered by sidebar/content */}}
-<header class="navbar min-h-12 bg-base-200 border-b border-base-300 px-2 sm:px-3 gap-2 sticky top-0 z-50 overflow-visible">
+<header class="navbar min-h-10 bg-base-200 border-b border-base-300 px-2 sm:px-3 gap-2 sticky top-0 z-50 overflow-visible">
   <div class="navbar-start gap-1 min-w-0 flex-1 overflow-visible">
-    <label for="app-drawer" class="btn btn-ghost btn-sm btn-square lg:hidden" aria-label="Open menu">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+    <label for="app-drawer" class="btn btn-ghost btn-xs btn-square lg:hidden" aria-label="Open menu">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
     </label>
     {{template "breadcrumbs" .}}
   </div>
-  <div class="navbar-end gap-2 shrink-0">
+  <div class="navbar-end gap-1.5 shrink-0">
     {{template "time-filter" .}}
-    <label class="swap swap-rotate btn btn-ghost btn-sm btn-square" title="Toggle light / dark">
+    <label class="swap swap-rotate btn btn-ghost btn-xs btn-square" title="Toggle light / dark">
       <input id="theme-toggle" type="checkbox" class="theme-controller" value="dark" aria-label="Toggle dark theme" />
-      <svg class="swap-off h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
-      <svg class="swap-on h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21.752 15.002A9.72 9.72 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
+      <svg class="swap-off h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
+      <svg class="swap-on h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21.752 15.002A9.72 9.72 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
     </label>
   </div>
 </header>
@@ -119,52 +190,49 @@
 
 {{define "sidebar"}}
 <aside class="app-sidebar min-h-full bg-base-200 border-r border-base-300 flex flex-col">
-  <div class="px-4 py-3 border-b border-base-300">
-    <a href="/" class="font-semibold tracking-tight text-base">contapila</a>
-    {{if .ProjectRoot}}
-    <p class="mt-1 text-[0.65rem] leading-snug font-mono text-base-content/50 break-all line-clamp-2" title="{{.ProjectRoot}}">{{.ProjectRoot}}</p>
-    {{end}}
+  <div class="px-3 py-2 border-b border-base-300">
+    <a href="/" class="text-sm font-semibold tracking-tight">contapila</a>
   </div>
 
   {{if .LedgerName}}
-  <ul class="menu menu-md px-2 py-3 gap-0.5 flex-1">
-    <li class="menu-title"><span>Reports</span></li>
-    <li><a href="{{ledgerURL .LedgerName "check" .Time}}" class="{{if eq .Page "check"}}menu-active{{end}}">Check</a></li>
-    <li><a href="{{ledgerURL .LedgerName "balances" .Time}}" class="{{if eq .Page "balances"}}menu-active{{end}}">Balances</a></li>
-    <li><a href="{{ledgerURL .LedgerName "journal" .Time}}" class="{{if eq .Page "journal"}}menu-active{{end}}">Journal</a></li>
-    <li><a href="{{ledgerURL .LedgerName "pnl" .Time}}" class="{{if eq .Page "pnl"}}menu-active{{end}}">Income statement</a></li>
-    <li><a href="{{ledgerURL .LedgerName "networth" .Time}}" class="{{if eq .Page "networth"}}menu-active{{end}}">Net worth</a></li>
+  <ul class="menu menu-sm px-1.5 py-2 gap-0 flex-1">
+    <li class="menu-title text-[0.65rem] py-1"><span>Reports</span></li>
+    <li><a href="{{ledgerURL .LedgerName "check" .Time}}" class="py-1.5 {{if eq .Page "check"}}menu-active{{end}}">Check</a></li>
+    <li><a href="{{ledgerURL .LedgerName "balances" .Time}}" class="py-1.5 {{if eq .Page "balances"}}menu-active{{end}}">Balances</a></li>
+    <li><a href="{{ledgerURL .LedgerName "journal" .Time}}" class="py-1.5 {{if eq .Page "journal"}}menu-active{{end}}">Journal</a></li>
+    <li><a href="{{ledgerURL .LedgerName "pnl" .Time}}" class="py-1.5 {{if eq .Page "pnl"}}menu-active{{end}}">Income statement</a></li>
+    <li><a href="{{ledgerURL .LedgerName "networth" .Time}}" class="py-1.5 {{if eq .Page "networth"}}menu-active{{end}}">Net worth</a></li>
     {{if eq .Page "account"}}
-    <li class="menu-title mt-2"><span>Account</span></li>
-    <li><a class="menu-active font-mono text-xs break-all">{{.AccountName}}</a></li>
+    <li class="menu-title text-[0.65rem] mt-2 py-1"><span>Account</span></li>
+    <li><span class="menu-active font-mono text-[0.7rem] break-all py-1.5">{{.AccountName}}</span></li>
     {{end}}
   </ul>
   {{else if .Ledgers}}
-  <ul class="menu menu-md px-2 py-3 gap-0.5 flex-1">
-    <li class="menu-title"><span>Ledgers</span></li>
+  <ul class="menu menu-sm px-1.5 py-2 gap-0 flex-1">
+    <li class="menu-title text-[0.65rem] py-1"><span>Ledgers</span></li>
     {{range .Ledgers}}
-    <li><a href="{{ledgerURL . "check" ""}}">{{.}}</a></li>
+    <li><a href="{{ledgerURL . "check" ""}}" class="py-1.5">{{.}}</a></li>
     {{end}}
   </ul>
   {{else}}
-  <p class="p-4 text-sm text-base-content/60">No ledgers in this project.</p>
+  <p class="p-3 text-xs text-base-content/60">No ledgers.</p>
   {{end}}
 </aside>
 {{end}}
 
 {{define "app-open"}}
-<body class="bg-base-100 text-base-content min-h-screen">
+<body class="bg-base-100 text-base-content min-h-screen text-sm">
 <div class="drawer lg:drawer-open">
   <input id="app-drawer" type="checkbox" class="drawer-toggle" />
   <div class="drawer-content flex flex-col min-h-screen overflow-visible">
     {{template "topbar" .}}
-    <main class="flex-1 w-full max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+    <main class="flex-1 w-full px-3 py-3 sm:px-4 sm:py-4">
 {{end}}
 
 {{define "app-close"}}
     </main>
   </div>
-  <div class="drawer-side z-40 is-drawer-close:overflow-visible">
+  <div class="drawer-side z-40">
     <label for="app-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
     {{template "sidebar" .}}
   </div>

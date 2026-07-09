@@ -1,23 +1,86 @@
 # Contapila web UI
 
-## Theme
-- daisyUI 5 + Tailwind CSS 4 (CDN in MVP single-binary server)
-- Themes: `light` (default), `dark` (toggle + prefers-color-scheme via daisyUI)
-- Restrained color strategy: base surfaces dominate; `primary` only for active nav / key total
-- Semantic colors only: `base-*`, `primary`, `error`, `warning`, `success`, `info`
+Status: density-shell pass (Cmd+K and Fava graphs follow later).
+
+## Intent
+
+Fix **generic daisyUI** look and **too much air**. Keep working light/dark toggle.  
+Composition: **Fava-like data/reports/time** + **Linear/Raycast-class density** for chrome and keyboard (Cmd+K next).
+
+## Personality (visual)
+
+Quiet · Precise · Helix-ready · money-tool, not marketing.
+
+**Mood:** AUVP-like **dark green + gold**, subtle Hermes-dashboard craft later — **token sprinkles only** in this pass.
+
+## Color
+
+| Role | Use |
+|------|-----|
+| **Dark green** | Primary: active nav, links, focus, chart series base |
+| **Gold** | Rare accent (≤10%): key totals, selection highlight later (Cmd+K) |
+| **Base** | Near-pure neutral surfaces (not cream SaaS); dark = deep green-black tint |
+| **Semantic** | error / warning / success / info for check only |
+
+Light: green as primary on white/near-white bases — **not** a green page wash.  
+Dark: deep base, muted gold for contrast.
+
+Implementation: CSS variables overriding daisyUI 5 `[data-theme="light|dark"]` (CDN-safe; no Tailwind `@plugin`).
 
 ## Typography
-- System UI stack (`font-sans` / daisyUI default)
-- Fixed rem scale; tabular nums for money (`tabular-nums`)
+
+- System UI stack
+- **Dense** scale: page titles ~1.125rem–1.25rem, not display sizes
+- **Tabular nums** for all money (`tabular-nums` / `.tabular`)
+- Account names: `font-mono` at compact size
+- Breadcrumb labels use report names (Income statement, not “pnl”)
 
 ## Layout
-- App shell: top navbar + horizontal page menu under title
-- Content max-width readable for tables; full width on xl for data
-- Mobile: stack navbar, scrollable tabs
-- Period filters (journal / P&amp;L): Fava-style `time` string — `2024`, `2024-03`, `month-1`, `2020 - 2024-06`
 
-## Components (daisyUI)
-navbar, menu, table, alert, badge, stats, theme-controller, breadcrumbs, button (default)
+```
+┌─ sticky filter bar ──────────────────────────────┐
+│ ☰  contapila › [ledger ▾] › page    [time]  ☀   │
+├────────┬─────────────────────────────────────────┤
+│ Reports│  full-bleed main (no floating max-width)│
+│ …      │  tight page header + dense tables       │
+└────────┴─────────────────────────────────────────┘
+```
+
+- Left **reports rail** (~13rem), menu-sm, minimal brand block
+- **Ledger selector in breadcrumbs** (not a separate end control)
+- **Time** = single Fava expression field
+- Main content **full width** of drawer content (drop decorative max-width padding sea)
+- Mobile: drawer + hamburger
+
+## Density rules
+
+- Prefer `table-xs` / `table-sm`, less `rounded-box` theater
+- Page header margin small; section titles uppercase compact
+- Journal: compact rows, not large cards
+- Soft badges sparingly; prefer text + color for severity
+
+## Components
+
+navbar/topbar, drawer, menu, table, alert, badge, breadcrumbs, input, theme-controller  
+(Cmd+K modal later; charts later)
+
+## Cmd+K (next phase)
+
+- Fuzzy jump + slash-ish (`time`, `ledger`, `check`, reports, accounts)
+- Not required to type full strings
+
+## Graphs (later phase)
+
+Steal **Fava chart scheme**: net worth over time, income vs expenses by interval, hierarchy breakdown, account balance over time.
 
 ## Motion
-None beyond 150ms hover/focus on interactive controls; respect prefers-reduced-motion (browser defaults)
+
+Minimal 150–200ms state only; no page-load choreography.
+
+## Anti-patterns (do not ship)
+
+- Glassmorphism, gradient text, hero KPI theater
+- Gold headings / gold everywhere
+- Cream/sand body backgrounds
+- Fat left accent borders on every card
+- Airy marketing card grids

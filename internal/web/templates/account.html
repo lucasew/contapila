@@ -4,95 +4,83 @@
   {{template "head" .}}
 </head>
 {{template "app-open" .}}
-    <header class="mb-6">
-      <h1 class="text-2xl font-semibold tracking-tight font-mono text-balance break-all">{{.AccountName}}</h1>
-      <p class="mt-1 text-sm text-base-content/70 flex flex-wrap items-center gap-2">
+    <header class="mb-3">
+      <h1 class="text-base font-semibold tracking-tight font-mono break-all">{{.AccountName}}</h1>
+      <p class="mt-0.5 text-xs text-base-content/60 flex flex-wrap items-center gap-1.5">
         {{if .PeriodLabel}}
-        <span class="badge badge-soft badge-sm font-mono" title="{{.Time}}">{{.PeriodLabel}}</span>
+        <span class="font-mono text-base-content/80" title="{{.Time}}">{{.PeriodLabel}}</span>
         {{end}}
         {{if .AsOf}}
-        <span class="text-base-content/60">balance as of {{.AsOf}}</span>
+        <span>as of {{.AsOf}}</span>
         {{end}}
       </p>
     </header>
 
     {{if .Error}}
-    <div role="alert" class="alert alert-error alert-soft mb-6"><span>{{.Error}}</span></div>
+    <div role="alert" class="alert alert-error alert-soft py-2 text-xs mb-3"><span>{{.Error}}</span></div>
     {{end}}
 
-    <section class="mb-8">
-      <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-base-content/60">Balance</h2>
-      {{if not .AccountBalances}}
-      <p class="text-sm text-base-content/60">No balance (zero or never posted).</p>
-      {{else}}
-      <div class="overflow-x-auto rounded-box border border-base-300">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th class="text-right">Amount</th>
-              <th>Commodity</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{range .AccountBalances}}
-            <tr>
-              <td class="text-right tabular font-medium">{{.Amount}}</td>
-              <td><span class="badge badge-ghost badge-sm">{{.Commodity}}</span></td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
-      </div>
-      {{end}}
-    </section>
-
-    <section class="mb-8">
-      <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-base-content/60">Change in period</h2>
-      {{if not .AccountActivity}}
-      <p class="text-sm text-base-content/60">No activity in this period.</p>
-      {{else}}
-      <div class="overflow-x-auto rounded-box border border-base-300">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th class="text-right">Amount</th>
-              <th>Commodity</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{range .AccountActivity}}
-            <tr>
-              <td class="text-right tabular font-medium">{{.Amount}}</td>
-              <td><span class="badge badge-ghost badge-sm">{{.Commodity}}</span></td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
-      </div>
-      {{end}}
-    </section>
+    <div class="grid gap-4 md:grid-cols-2 mb-4">
+      <section>
+        <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Balance</h2>
+        {{if not .AccountBalances}}
+        <p class="text-xs text-base-content/60">Zero / never posted.</p>
+        {{else}}
+        <div class="overflow-x-auto border border-base-300">
+          <table class="table table-xs">
+            <tbody>
+              {{range .AccountBalances}}
+              <tr>
+                <td class="text-right tabular text-xs font-medium">{{.Amount}}</td>
+                <td class="font-mono text-xs opacity-70">{{.Commodity}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{end}}
+      </section>
+      <section>
+        <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Change in period</h2>
+        {{if not .AccountActivity}}
+        <p class="text-xs text-base-content/60">No activity.</p>
+        {{else}}
+        <div class="overflow-x-auto border border-base-300">
+          <table class="table table-xs">
+            <tbody>
+              {{range .AccountActivity}}
+              <tr>
+                <td class="text-right tabular text-xs font-medium">{{.Amount}}</td>
+                <td class="font-mono text-xs opacity-70">{{.Commodity}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{end}}
+      </section>
+    </div>
 
     <section>
-      <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-base-content/60">Journal</h2>
+      <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Journal</h2>
       {{if not .Journal}}
-      <div role="alert" class="alert"><span>No journal entries for this account in the selected period.</span></div>
+      <p class="text-xs text-base-content/60">No entries in this period.</p>
       {{else}}
-      <div class="flex flex-col gap-3">
+      <div class="border border-base-300 divide-y divide-base-300">
         {{range .Journal}}
-        <article class="rounded-box border border-base-300 bg-base-200/40 px-4 py-3">
-          <div class="flex flex-wrap items-baseline gap-2 text-sm">
-            <time class="font-mono tabular text-base-content/80">{{.Date.Format "2006-01-02"}}</time>
-            <span class="badge badge-soft badge-sm">{{.Kind}}</span>
+        <article class="px-2 py-1.5">
+          <div class="flex flex-wrap items-baseline gap-x-2 text-xs">
+            <time class="font-mono tabular text-base-content/70">{{.Date.Format "2006-01-02"}}</time>
             {{if .Narration}}<span class="font-medium">{{.Narration}}</span>{{end}}
-            {{if .Comment}}<span class="text-base-content/70">{{.Comment}}</span>{{end}}
+            {{if .Comment}}<span class="text-base-content/60">{{.Comment}}</span>{{end}}
           </div>
           {{if .Postings}}
-          <ul class="mt-2 space-y-0.5 font-mono text-sm">
+          <ul class="mt-0.5 space-y-0 font-mono text-xs">
             {{range .Postings}}
-            <li class="flex flex-wrap justify-between gap-2 {{if eq .Account $.AccountName}}font-semibold{{end}}">
+            <li class="flex flex-wrap justify-between gap-2 leading-5 {{if eq .Account $.AccountName}}text-primary font-semibold{{end}}">
               <a class="link link-hover" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
               {{if .Units}}
-              <span class="tabular text-base-content/90">{{.Units.Number.FloatString 4}} {{.Units.Commodity}}</span>
+              <span class="tabular">{{.Units.Number.FloatString 4}} {{.Units.Commodity}}</span>
               {{end}}
             </li>
             {{end}}
