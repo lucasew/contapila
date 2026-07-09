@@ -1,0 +1,6 @@
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+
+2020-01-02 * "Lunch"
+  Assets:Cash       -30.00 BRL
+  Expenses:Food
