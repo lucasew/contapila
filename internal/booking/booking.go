@@ -1,7 +1,7 @@
 package booking
 
 import (
-	"contapila/internal/ledger"
+	"github.com/lucasew/contapila-go/internal/ledger"
 	"fmt"
 	"math/big"
 	"sort"

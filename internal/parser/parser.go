@@ -2,7 +2,7 @@ package parser
 
 import (
 	"bufio"
-	"contapila/internal/ledger"
+	"github.com/lucasew/contapila-go/internal/ledger"
 	"io"
 	"math/big"
 	"strings"

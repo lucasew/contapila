@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"contapila/internal/ledger"
+	"github.com/lucasew/contapila-go/internal/ledger"
 	"math/big"
 	"strings"
 	"testing"
