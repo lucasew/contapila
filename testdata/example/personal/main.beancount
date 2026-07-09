@@ -1,0 +1,5 @@
+; personal — dogfood ledger (avg-cost equities, residual cash, includes).
+option "operating_currency" "BRL"
+
+include "accounts.beancount"
+include "journal/*.beancount"

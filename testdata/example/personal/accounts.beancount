@@ -1,0 +1,11 @@
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Bank:Checking
+2020-01-01 open Assets:Broker:X
+2020-01-01 open Assets:Broker:USD
+2020-01-01 open Liabilities:CreditCard
+2020-01-01 open Equity:Opening-Balances
+2020-01-01 open Income:Salary
+2020-01-01 open Income:Gains
+2020-01-01 open Expenses:Food
+2020-01-01 open Expenses:Rent
+2020-01-01 open Expenses:Fees

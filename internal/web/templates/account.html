@@ -70,7 +70,9 @@
         <article class="px-2 py-1.5">
           <div class="flex flex-wrap items-baseline gap-x-2 text-xs">
             <time class="font-mono tabular text-base-content/70">{{.Date.Format "2006-01-02"}}</time>
-            {{if .Narration}}<span class="font-medium">{{.Narration}}</span>{{end}}
+            {{if .Payee}}<span class="font-medium">{{.Payee}}</span>{{end}}
+            {{if and .Payee .Narration}}<span class="opacity-40">·</span>{{end}}
+            {{if .Narration}}<span class="{{if .Payee}}text-base-content/80{{else}}font-medium{{end}}">{{.Narration}}</span>{{end}}
             {{if .Comment}}<span class="text-base-content/60">{{.Comment}}</span>{{end}}
           </div>
           {{if .Postings}}

@@ -1,0 +1,27 @@
+; empresa — second ledger; inventories isolated from personal.
+option "operating_currency" "BRL"
+
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Receivable
+2020-01-01 open Income:Sales
+2020-01-01 open Expenses:Ops
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-01 * "Seed capital"
+  Assets:Cash                 10000.00 BRL
+  Equity:Opening-Balances
+
+2020-03-15 * "Acme Client" "Invoice paid"
+  Assets:Cash                  2500.00 BRL
+  Income:Sales
+
+2020-03-20 * "Ops"
+  Assets:Cash                  -400.00 BRL
+  Expenses:Ops
+
+; Same ticker symbol as personal, but this is a different inventory
+; (isolation assumption — never merge ledgers).
+2020-04-01 open Assets:Broker:X
+2020-04-05 * "Brokerage" "Treasury buy X"
+  Assets:Broker:X                 2 X {50.00 BRL}
+  Assets:Cash

@@ -99,7 +99,9 @@
           <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
             <time class="font-mono tabular text-base-content/70">{{.Date.Format "2006-01-02"}}</time>
             <span class="text-[0.65rem] uppercase tracking-wide opacity-50">{{.Kind}}</span>
-            {{if .Narration}}<span class="font-medium">{{.Narration}}</span>{{end}}
+            {{if .Payee}}<span class="font-medium">{{.Payee}}</span>{{end}}
+            {{if and .Payee .Narration}}<span class="opacity-40">·</span>{{end}}
+            {{if .Narration}}<span class="{{if .Payee}}text-base-content/80{{else}}font-medium{{end}}">{{.Narration}}</span>{{end}}
             {{if .Comment}}<span class="text-base-content/60">{{.Comment}}</span>{{end}}
             {{if .Account}}<span class="font-mono text-[0.7rem]">{{.Account}}</span>{{end}}
           </div>

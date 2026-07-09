@@ -210,7 +210,7 @@ func journalCmd() *cobra.Command {
 				for _, e := range l.Journal(r.Start, r.End) {
 					switch e.Kind {
 					case "txn":
-						fmt.Printf("%s * %q\n", e.Date.Format("2006-01-02"), e.Narration)
+						fmt.Printf("%s * %s\n", e.Date.Format("2006-01-02"), formatPayeeNarration(e.Payee, e.Narration))
 						for _, p := range e.Postings {
 							if p.Units == nil || p.Units.Commodity == "" && p.Units.Number.Sign() == 0 {
 								fmt.Printf("  %s\n", p.Account)
@@ -409,7 +409,7 @@ func accountCmd() *cobra.Command {
 					fmt.Printf("%s %s %s\n", e.Date.Format("2006-01-02"), e.Kind, e.Comment)
 					continue
 				}
-				fmt.Printf("%s * %q\n", e.Date.Format("2006-01-02"), e.Narration)
+				fmt.Printf("%s * %s\n", e.Date.Format("2006-01-02"), formatPayeeNarration(e.Payee, e.Narration))
 				for _, p := range e.Postings {
 					mark := "  "
 					if p.Account == acct {
@@ -427,6 +427,18 @@ func accountCmd() *cobra.Command {
 	}
 	addTimeFlags(c, &timeFilter, &from, &to)
 	return c
+}
+
+// formatPayeeNarration prints Beancount-style "Payee" "Narration" or a single string.
+func formatPayeeNarration(payee, narration string) string {
+	switch {
+	case payee != "" && narration != "":
+		return fmt.Sprintf("%q %q", payee, narration)
+	case payee != "":
+		return fmt.Sprintf("%q", payee)
+	default:
+		return fmt.Sprintf("%q", narration)
+	}
 }
 
 func parseCmd() *cobra.Command {

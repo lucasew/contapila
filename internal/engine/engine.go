@@ -127,7 +127,8 @@ func (l *Ledger) BalancesAsOf(asOf time.Time) map[string]map[string]*big.Rat {
 type JournalEntry struct {
 	Date      time.Time
 	Kind      string // txn, note, event, pad
-	Narration string
+	Payee     string // txn payee (optional; first quoted string when both present)
+	Narration string // txn narration, or event type
 	Postings  []booking.FilledPosting
 	Account   string
 	Comment   string
@@ -179,7 +180,9 @@ func (l *Ledger) journalFiltered(from, to time.Time, account string) []JournalEn
 			}
 		}
 		out = append(out, JournalEntry{
-			Date: bt.Txn.Date, Kind: "txn", Narration: bt.Txn.Narration, Postings: bt.Postings,
+			Date: bt.Txn.Date, Kind: "txn",
+			Payee: bt.Txn.Payee, Narration: bt.Txn.Narration,
+			Postings: bt.Postings,
 		})
 	}
 	for _, n := range l.Book.Notes {
@@ -294,7 +297,9 @@ func (l *Ledger) JournalForCommodity(commodity string, from, to time.Time) []Jou
 			continue
 		}
 		out = append(out, JournalEntry{
-			Date: bt.Txn.Date, Kind: "txn", Narration: bt.Txn.Narration, Postings: bt.Postings,
+			Date: bt.Txn.Date, Kind: "txn",
+			Payee: bt.Txn.Payee, Narration: bt.Txn.Narration,
+			Postings: bt.Postings,
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Date.Before(out[j].Date) })
