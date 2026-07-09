@@ -1,0 +1,16 @@
+{
+  "ledgers": {
+    "main_ledger": {
+      "balances": {
+        "Assets:Checking": { "USD": "-70.00000" },
+        "Expenses:Food": { "USD": "65.00000" },
+        "Income:Gains": { "USD": "5.00000" }
+      },
+      "errors": [
+        "unbalanced txn at 2024-01-20: -5.00000 USD",
+        "unbalanced txn at 2024-01-30: more than one residual leg"
+      ],
+      "warnings": []
+    }
+  }
+}

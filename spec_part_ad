@@ -1,0 +1,47 @@
+name:
+  parse main.beancount + include graph   # tree-sitter (deferred)
+  split config-ish directives vs stream
+  encode config facts → CUE
+  unify: prelude & contapila.cue & ledgerFacts
+  decode RuntimeConfig
+  apply stream: tags/meta (none in MVP), booking, pads, assertions
+  reports
+```
+
+Internal stages are separate packages; the public surface stays a deep module (single entry, hidden stages).
+
+### 5.3 Parser bootstrap
+
+- **Wait** for Beancount grammar via [modernc / ccgo-tree-sitter](https://github.com/modernc-tree-sitter/ccgo-tree-sitter).
+- No temporary hand parser, no Python subprocess, no alternate long-term cgo binding as the product path.
+- Design freezes the AST/config/booking contracts so the grammar drops into one adapter.
+
+### 5.4 Numeric types
+
+- Engine amounts and costs: **`math/big.Rat`** (never `float64` for money).
+- Display/tolerance from commodity policy (§7).
+
+---
+
+## 6. CUE config plane
+
+### 6.1 Runtime
+
+- **Embed** CUE (`cuelang.org/go`), workspaced-style — no `cue` CLI required for normal use.
+- Shipped **prelude** (schema, defaults, asset-class short-circuits) unified with user `contapila.cue` and **ledger-derived config facts**.
+- **CUE decides** conflicts on the config plane (unification failure → load error). Do not implement ad hoc “who wins” tables in Go for config.
+
+### 6.2 What goes into CUE
+
+| In CUE (config plane) | Not in CUE |
+|-----------------------|------------|
+| Options (e.g. operating currency) | Transactions / postings |
+| Commodities + precision/tolerance/class | `price` time series |
+| Per-ledger account open/close facts | `balance`, `pad` |
+| Project overlays in `contapila.cue` | `note`, `event`, journal stream |
+| Prelude defaults | Include graph resolution (Go first) |
+
+### 6.3 Dual definition
+
+- Commodities (and policy) may be declared in CUE and/or `commodity` directives; facts are encoded and **unified in CUE**.
+- Accounts are **per ledger**: from that ledger’s `open`/`close` (and only that ledger’s

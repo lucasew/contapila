@@ -1,0 +1,42 @@
+# Contapila — Specification
+
+Status: agreed design (grilling). Implementation deferred until the modernc tree-sitter Beancount grammar is available.
+
+Contapila is a self-contained **Go** reimplementation of a Beancount-class ledger engine plus a Fava-class read-only web UI: **one binary** (Cobra CLI + HTTP server with Go templates). Philosophy is **Helix, not Neovim**: good defaults, batteries included, no plugin system, poetic license on tooling.
+
+---
+
+## 1. Goals
+
+| Goal | Detail |
+|------|--------|
+| Self-contained | Single Go binary; no Python Beancount at runtime; embedded CUE |
+| Drop-in language | Parse and interpret real `.beancount` journals with high fidelity |
+| Semantics bar **B** | Same balances/lots on **plugin-free** ledgers for supported features; document intentional divergences |
+| Ready to use | Enough reports for a normal person: month-end balances, activity, P&L, net worth, `check` |
+| Project-oriented | Git-like project root + conventional multi-ledger layout |
+
+### Non-goals (MVP)
+
+- Python plugin compatibility
+- Full BQL / `bean-query` parity
+- Fava editor / write-back
+- Multi-user auth / remote multi-tenant hosting
+- Tooling flag-compatibility with upstream Beancount CLIs
+- Second/temporary parser before modernc grammar lands
+
+---
+
+## 2. Compatibility
+
+### 2.1 Contract
+
+- **In scope:** syntax + loader + booking + validation for the MVP directive set, without plugins.
+- **Tooling:** poetic license (Cobra command names/flags need not match `bean-*`).
+- **Plugins:** none. Unknown/unsupported constructs: **warn + skip** via `log/slog` where safe; **error** when continuing would corrupt inventory or lie about balances.
+
+### 2.2 Intentional divergence: booking default
+
+Upstream Beancount is lot-centric; average-cost is not its comfortable default.
+
+Contapila defaults to **merged average-cost inventory** (model A below), aimed at real use (e.g. Receita Federal / preço médio for equities). Files that never set a booking policy may **disagree** w

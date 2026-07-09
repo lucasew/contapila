@@ -1,0 +1,13 @@
+{
+  "ledgers": {
+    "main_ledger": {
+      "balances": {
+        "Assets:Broker": { "AAPL": "15.00000" },
+        "Assets:Cash": { "USD": "-2200.00000" },
+        "Income:Gains": { "USD": "200.00000" }
+      },
+      "errors": [],
+      "warnings": []
+    }
+  }
+}

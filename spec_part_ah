@@ -1,0 +1,14 @@
+pen at implement time (non-blocking)
+
+- Exact CUE prelude schema field names and class set.
+- Exact Cobra flag set (dates, output formats).
+- HTTP routes and template structure.
+- Whether `contapila init` scaffolds root + empty cue + sample ledger dirs.
+- Tolerance combination rules when a transaction touches multiple commodities.
+- Optional `option "booking_method"` surface once more methods exist.
+
+---
+
+## 15. Summary one-liner
+
+**Contapila** = conventional multi-ledger Beancount project (`contapila.cue` + `*/main.beancount` + `prices.beancount`) with embedded CUE policy, average-cost inventory, and a single Go binary for check/reports/read-only web — semantics-first, plugins never, tree-sitter when modernc is ready.

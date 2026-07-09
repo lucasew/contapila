@@ -1,0 +1,19 @@
+2024-01-01 open Assets:Checking
+2024-01-01 open Expenses:Food
+2024-01-01 open Income:Gains
+
+; Pass: one residual leg
+2024-01-10 * "Balanced with residual"
+  Assets:Checking  -50.00 USD
+  Expenses:Food
+
+; Fail: unbalanced, no residual
+2024-01-20 * "Unbalanced"
+  Assets:Checking  -10.00 USD
+  Expenses:Food     5.00 USD
+
+; Fail: two residual legs
+2024-01-30 * "Two residuals"
+  Assets:Checking  -10.00 USD
+  Expenses:Food
+  Income:Gains

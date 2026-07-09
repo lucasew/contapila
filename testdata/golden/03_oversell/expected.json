@@ -1,0 +1,15 @@
+{
+  "ledgers": {
+    "main_ledger": {
+      "balances": {
+        "Assets:Broker": { "AAPL": "10.00000" },
+        "Assets:Cash": { "USD": "-1500.00000" }
+      },
+      "errors": [
+        "2024-03-10: over-sell: selling 11.00000 but only have 10.00000",
+        "unbalanced txn at 2024-03-10: 1650.00000 USD"
+      ],
+      "warnings": []
+    }
+  }
+}

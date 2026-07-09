@@ -1,0 +1,19 @@
+2024-01-01 open Assets:Broker
+2024-01-01 open Assets:Cash
+2024-01-01 open Income:Gains
+
+; Buy 10 AAPL at 150
+2024-03-01 * "Buy 1"
+  Assets:Broker  10 AAPL {150.00 USD}
+  Assets:Cash   -1500.00 USD
+
+; Buy 10 more at 170. Avg cost = 160
+2024-03-05 * "Buy 2"
+  Assets:Broker  10 AAPL {170.00 USD}
+  Assets:Cash   -1700.00 USD
+
+; Sell 5 AAPL at 200. Cost basis = 5 * 160 = 800. Gain = 200
+2024-03-10 * "Sell"
+  Assets:Broker  -5 AAPL @@ 1000.00 USD
+  Assets:Cash    1000.00 USD
+  Income:Gains

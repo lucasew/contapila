@@ -1,0 +1,63 @@
+lling more units than inventory → **error**.
+
+---
+
+## 8. Operating currency and prices
+
+### 8.1 Operating currency
+
+1. Prefer explicit option / CUE option for `operating_currency`.
+2. If missing: **warn**, then after includes are resolved, walk directives and take the commodity from the **first transaction that carries a posting amount commodity**.
+3. If still none: currency-denominated reports error at report time.
+
+### 8.2 Shared PriceDB
+
+- Built from project `prices.beancount`.
+- All ledgers consult the same DB for conversion / net worth.
+
+### 8.3 Price lookup for as-of date D
+
+1. Look for a `price` on D for the pair needed.
+2. If missing, try D−1, D−2, … (walk backward).
+3. If no price on or before D exists at all: **warn** and fall back to the **cost basis that introduced** the position (average cost under model A).
+4. Do not silently use future prices for past as-of dates.
+
+### 8.4 Net worth
+
+- Convert positions to operating currency with §8.3.
+- Net worth is **market** value when prices exist; cost fallback is warned.
+
+---
+
+## 9. Directives (MVP)
+
+| Directive | MVP | Plane |
+|-----------|-----|--------|
+| `option` | yes | → CUE |
+| `include` (+ globs) | yes | Go load |
+| `commodity` | yes | → CUE |
+| `open` / `close` | yes | → CUE (per ledger) |
+| `*` / `!` transactions, postings, metadata | yes | Go |
+| cost `{}`, price `@` / `@@` | yes | Go |
+| empty residual posting | yes | Go |
+| `price` | yes (shared file) | Go PriceDB |
+| `balance` | yes | Go |
+| `pad` | yes | Go |
+| `note` | yes | Go (store/display) |
+| `event` | yes | Go (store/display) |
+| `document` | no | — |
+| `query` | no | — |
+| `pushtag` / `poptag` / `pushmeta` / `popmeta` | no | — |
+| `plugin` | no | — |
+| `custom` / unknown | warn + skip | — |
+
+---
+
+## 10. Diagnostics severity
+
+Use **`log/slog`** for warnings. `check` fails only on **errors**.
+
+| Event | Severity |
+|-------|----------|
+| Unopened account used | **warn** + allow |
+| Posting after `close` | **error** |

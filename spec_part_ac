@@ -1,0 +1,55 @@
+rices.beancount        # shared prices (empty/missing → warn)
+  personal/
+    main.beancount        # ledger name = "personal"
+  empresa/
+    main.beancount        # ledger name = "empresa"
+  scratch/                # no main.beancount → ignore
+```
+
+| Rule | Behavior |
+|------|----------|
+| Config marker | `contapila.cue` at project root; **empty file is valid** (prelude supplies defaults) |
+| Ledgers | Exactly one level: `<root>/*/main.beancount` |
+| Ledger name | **Directory name** |
+| Dir without `main.beancount` | **Ignore** |
+| Recursive `**/main.beancount` | **No** |
+| Root-level `main.beancount` | Not an entrypoint |
+| Zero ledgers found | Error when running check/web/reports |
+| Shared prices | `<root>/prices.beancount` |
+| Prices empty or missing | **Warn**; empty price DB; conversion falls back per §8 |
+| Includes | Paths relative to the **including file's directory**; globs allowed |
+
+### 4.3 Isolation and sharing
+
+| Concern | Scope |
+|---------|--------|
+| Inventory, transactions, pads, balance assertions, accounts (`open`/`close`) | **Per ledger** (isolated) |
+| Commodity policy (precision, tolerance, class) | **Shared** (project CUE) |
+| Market `price` directives | **Shared** (`prices.beancount` → one PriceDB for all ledgers) |
+
+Multiple entrypoints are **named parallel ledgers**, never merged into one inventory.
+
+---
+
+## 5. Architecture
+
+### 5.1 Public API shape
+
+- Open project from CWD → project handle (root, config, PriceDB, ledger names).
+- Open/load each named ledger → `*Ledger`.
+- Surfaces (CLI, HTTP) call only project/`Ledger` methods — no parsing in handlers.
+
+Suggested capabilities on `*Ledger`:
+
+- `Check() error` (hard errors fail; warnings via slog)
+- `Balances(asOf)`
+- `Journal(from, to)`
+- `PnL(from, to)`
+- `NetWorth(asOf)` — uses shared PriceDB + operating currency rules
+
+### 5.2 Pipeline (per ledger)
+
+```text
+resolve project root (contapila.cue)
+load prices.beancount → PriceDB          # once per project
+for each ledger
