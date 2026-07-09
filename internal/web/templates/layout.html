@@ -3,13 +3,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>{{.Title}} · contapila</title>
-{{/* Browser Tailwind cannot load @plugin / @import "tailwindcss" (resolves to /tailwindcss with wrong MIME). Use official CDN pair. */}}
 <link href="https://cdn.jsdelivr.net/npm/daisyui@5/daisyui.css" rel="stylesheet" type="text/css" />
 <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23c2410c'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16' font-family='system-ui' fill='white'%3Ec%3C/text%3E%3C/svg%3E" />
 <script>
-  // Apply saved theme before paint to avoid flash
   (function () {
     try {
       var t = localStorage.getItem("contapila-theme");
@@ -46,12 +44,58 @@
 </script>
 {{end}}
 
+{{define "time-filter"}}
+{{/* Fava-style period control: prev | interval | expression | next */}}
+{{if .LedgerName}}
+<div class="join join-horizontal shrink-0">
+  <a class="btn btn-sm join-item btn-square"
+     href="{{ledgerURL .LedgerName .Page .TimePrev}}"
+     title="Previous period"
+     aria-label="Previous period">‹</a>
+
+  <div class="dropdown join-item">
+    <div tabindex="0" role="button" class="btn btn-sm rounded-none min-w-24 capitalize">
+      {{if eq .Interval "year"}}Year
+      {{else if eq .Interval "quarter"}}Quarter
+      {{else if eq .Interval "month"}}Month
+      {{else if eq .Interval "week"}}Week
+      {{else if eq .Interval "day"}}Day
+      {{else if eq .Interval "custom"}}Custom
+      {{else}}Month{{end}}
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </div>
+    <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-40 p-2 shadow-sm border border-base-300">
+      <li><a href="{{ledgerURL .LedgerName .Page ""}}">All time</a></li>
+      <li><a href="{{intervalURL .LedgerName .Page "year" .Time}}" class="{{if eq .Interval "year"}}menu-active{{end}}">Year</a></li>
+      <li><a href="{{intervalURL .LedgerName .Page "quarter" .Time}}" class="{{if eq .Interval "quarter"}}menu-active{{end}}">Quarter</a></li>
+      <li><a href="{{intervalURL .LedgerName .Page "month" .Time}}" class="{{if eq .Interval "month"}}menu-active{{end}}">Month</a></li>
+      <li><a href="{{intervalURL .LedgerName .Page "week" .Time}}" class="{{if eq .Interval "week"}}menu-active{{end}}">Week</a></li>
+      <li><a href="{{intervalURL .LedgerName .Page "day" .Time}}" class="{{if eq .Interval "day"}}menu-active{{end}}">Day</a></li>
+    </ul>
+  </div>
+
+  <form method="get" action="/l/{{.LedgerName}}/{{.Page}}" class="contents">
+    <input type="text" name="time" value="{{.Time}}"
+      placeholder="2024-03"
+      class="input input-sm join-item input-bordered w-28 sm:w-36 font-mono"
+      aria-label="Time filter"
+      title="Fava-style: 2024, 2024-03, 2024-Q1, month-1, 2020 - 2024-06" />
+  </form>
+
+  <a class="btn btn-sm join-item btn-square"
+     href="{{ledgerURL .LedgerName .Page .TimeNext}}"
+     title="Next period"
+     aria-label="Next period">›</a>
+</div>
+{{end}}
+{{end}}
+
 {{define "navbar"}}
-<div class="navbar bg-base-200 border-b border-base-300 px-3 sm:px-6 min-h-14">
-  <div class="navbar-start gap-2">
+<div class="navbar bg-base-200 border-b border-base-300 px-2 sm:px-4 min-h-14 gap-1">
+  <div class="navbar-start gap-1 min-w-0">
     <a href="/" class="btn btn-ghost text-lg font-semibold tracking-tight normal-case px-2">contapila</a>
     {{if .LedgerName}}
-    <div class="hidden sm:flex breadcrumbs text-sm">
+    <div class="hidden lg:flex breadcrumbs text-sm max-w-[12rem] truncate">
       <ul>
         <li><a href="/">Ledgers</a></li>
         <li class="font-medium">{{.LedgerName}}</li>
@@ -59,18 +103,22 @@
     </div>
     {{end}}
   </div>
+
   <div class="navbar-center hidden md:flex">
     {{if .LedgerName}}
-    <ul class="menu menu-horizontal gap-0.5">
-      <li><a href="/l/{{.LedgerName}}/check" class="{{if eq .Page "check"}}menu-active{{end}}">Check</a></li>
-      <li><a href="/l/{{.LedgerName}}/balances" class="{{if eq .Page "balances"}}menu-active{{end}}">Balances</a></li>
-      <li><a href="/l/{{.LedgerName}}/journal" class="{{if eq .Page "journal"}}menu-active{{end}}">Journal</a></li>
-      <li><a href="/l/{{.LedgerName}}/pnl" class="{{if eq .Page "pnl"}}menu-active{{end}}">P&amp;L</a></li>
-      <li><a href="/l/{{.LedgerName}}/networth" class="{{if eq .Page "networth"}}menu-active{{end}}">Net worth</a></li>
+    <ul class="menu menu-horizontal gap-0.5 p-0">
+      <li><a href="{{ledgerURL .LedgerName "check" .Time}}" class="{{if eq .Page "check"}}menu-active{{end}}">Check</a></li>
+      <li><a href="{{ledgerURL .LedgerName "balances" .Time}}" class="{{if eq .Page "balances"}}menu-active{{end}}">Balances</a></li>
+      <li><a href="{{ledgerURL .LedgerName "journal" .Time}}" class="{{if eq .Page "journal"}}menu-active{{end}}">Journal</a></li>
+      <li><a href="{{ledgerURL .LedgerName "pnl" .Time}}" class="{{if eq .Page "pnl"}}menu-active{{end}}">P&amp;L</a></li>
+      <li><a href="{{ledgerURL .LedgerName "networth" .Time}}" class="{{if eq .Page "networth"}}menu-active{{end}}">Net worth</a></li>
     </ul>
     {{end}}
   </div>
-  <div class="navbar-end gap-2">
+
+  <div class="navbar-end gap-1 sm:gap-2 flex-nowrap">
+    {{template "time-filter" .}}
+
     {{if .Ledgers}}
     <div class="dropdown dropdown-end">
       <div tabindex="0" role="button" class="btn btn-ghost btn-sm">
@@ -79,28 +127,29 @@
       </div>
       <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-52 p-2 shadow-sm border border-base-300">
         {{range .Ledgers}}
-        <li><a href="/l/{{.}}/check" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a></li>
+        <li><a href="{{ledgerURL . $.Page $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a></li>
         {{end}}
       </ul>
     </div>
     {{end}}
+
     <label class="swap swap-rotate btn btn-ghost btn-sm btn-square" title="Toggle light / dark">
       <input id="theme-toggle" type="checkbox" class="theme-controller" value="dark" aria-label="Toggle dark theme" />
-      <!-- sun -->
       <svg class="swap-off h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
-      <!-- moon -->
       <svg class="swap-on h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21.752 15.002A9.72 9.72 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
     </label>
   </div>
 </div>
+
 {{if .LedgerName}}
+{{/* Mobile: page tabs + compact period label */}}
 <div class="md:hidden border-b border-base-300 bg-base-100 px-2 overflow-x-auto">
   <ul class="menu menu-horizontal flex-nowrap text-sm">
-    <li><a href="/l/{{.LedgerName}}/check" class="{{if eq .Page "check"}}menu-active{{end}}">Check</a></li>
-    <li><a href="/l/{{.LedgerName}}/balances" class="{{if eq .Page "balances"}}menu-active{{end}}">Balances</a></li>
-    <li><a href="/l/{{.LedgerName}}/journal" class="{{if eq .Page "journal"}}menu-active{{end}}">Journal</a></li>
-    <li><a href="/l/{{.LedgerName}}/pnl" class="{{if eq .Page "pnl"}}menu-active{{end}}">P&amp;L</a></li>
-    <li><a href="/l/{{.LedgerName}}/networth" class="{{if eq .Page "networth"}}menu-active{{end}}">Net worth</a></li>
+    <li><a href="{{ledgerURL .LedgerName "check" .Time}}" class="{{if eq .Page "check"}}menu-active{{end}}">Check</a></li>
+    <li><a href="{{ledgerURL .LedgerName "balances" .Time}}" class="{{if eq .Page "balances"}}menu-active{{end}}">Balances</a></li>
+    <li><a href="{{ledgerURL .LedgerName "journal" .Time}}" class="{{if eq .Page "journal"}}menu-active{{end}}">Journal</a></li>
+    <li><a href="{{ledgerURL .LedgerName "pnl" .Time}}" class="{{if eq .Page "pnl"}}menu-active{{end}}">P&amp;L</a></li>
+    <li><a href="{{ledgerURL .LedgerName "networth" .Time}}" class="{{if eq .Page "networth"}}menu-active{{end}}">Net worth</a></li>
   </ul>
 </div>
 {{end}}

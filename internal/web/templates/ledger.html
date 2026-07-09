@@ -6,28 +6,23 @@
 <body class="min-h-screen bg-base-100 text-base-content">
   {{template "navbar" .}}
   <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-    <header class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight capitalize text-balance">{{.Page}}</h1>
-        <p class="mt-1 text-sm text-base-content/70">
-          Ledger <span class="font-medium text-base-content">{{.LedgerName}}</span>
-          {{if .OpCurrency}} · op currency <span class="badge badge-soft badge-sm align-middle">{{.OpCurrency}}</span>{{end}}
-        </p>
-      </div>
-      {{if or (eq .Page "balances") (eq .Page "networth")}}
-      <form method="get" class="join">
-        <input type="date" name="as-of" value="{{.AsOf}}" class="input input-sm join-item input-bordered" aria-label="As of date" />
-        <button type="submit" class="btn btn-sm join-item">As of</button>
-      </form>
-      {{end}}
-      {{if or (eq .Page "journal") (eq .Page "pnl")}}
-      <form method="get" class="flex flex-wrap items-center gap-2">
-        <input type="date" name="from" value="{{.From}}" class="input input-sm input-bordered" aria-label="From date" />
-        <input type="date" name="to" value="{{.To}}" class="input input-sm input-bordered" aria-label="To date" />
-        <button type="submit" class="btn btn-sm">Filter</button>
-      </form>
-      {{end}}
+    <header class="mb-6">
+      <h1 class="text-2xl font-semibold tracking-tight capitalize text-balance">{{.Page}}</h1>
+      <p class="mt-1 text-sm text-base-content/70 flex flex-wrap items-center gap-2">
+        <span>Ledger <span class="font-medium text-base-content">{{.LedgerName}}</span></span>
+        {{if .OpCurrency}}<span class="badge badge-soft badge-sm">{{.OpCurrency}}</span>{{end}}
+        {{if .PeriodLabel}}
+        <span class="badge badge-soft badge-sm font-mono" title="{{.Time}}">{{.PeriodLabel}}</span>
+        {{end}}
+        {{if and (or (eq .Page "balances") (eq .Page "networth")) .AsOf}}
+        <span class="text-base-content/60">as of {{.AsOf}}</span>
+        {{end}}
+      </p>
     </header>
+
+    {{if .Error}}
+    <div role="alert" class="alert alert-error alert-soft mb-6"><span>{{.Error}}</span></div>
+    {{end}}
 
     {{if eq .Page "check"}}
       {{if .OK}}

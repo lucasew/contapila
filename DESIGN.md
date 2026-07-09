@@ -14,6 +14,7 @@
 - App shell: top navbar + horizontal page menu under title
 - Content max-width readable for tables; full width on xl for data
 - Mobile: stack navbar, scrollable tabs
+- Period filters (journal / P&amp;L): Fava-style `time` string — `2024`, `2024-03`, `month-1`, `2020 - 2024-06`
 
 ## Components (daisyUI)
 navbar, menu, table, alert, badge, stats, theme-controller, breadcrumbs, button (default)

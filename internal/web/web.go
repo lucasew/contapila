@@ -6,11 +6,13 @@ import (
 	"html/template"
 	"math/big"
 	"net/http"
+	"net/url"
 	"sort"
 	"time"
 
 	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/engine"
+	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/prices"
 	"github.com/lucasew/contapila-go/pkg/project"
 )
@@ -39,11 +41,18 @@ func Listen(p *project.Project, pdb *prices.DB, defaultLedger string, addr strin
 func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 	funcMap := template.FuncMap{
 		"eq": func(a, b string) bool { return a == b },
-		"severity": func(s string) string {
-			if s == "" {
-				return "—"
+		"queryEscape": url.QueryEscape,
+		"ledgerURL": func(ledger, page, timeFilter string) string {
+			u := "/l/" + url.PathEscape(ledger) + "/" + url.PathEscape(page)
+			if timeFilter != "" {
+				u += "?time=" + url.QueryEscape(timeFilter)
 			}
-			return s
+			return u
+		},
+		"intervalURL": func(ledger, page, kind, current string) string {
+			now := time.Now()
+			next := period.SetInterval(current, now, kind)
+			return "/l/" + url.PathEscape(ledger) + "/" + url.PathEscape(page) + "?time=" + url.QueryEscape(next)
 		},
 	}
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
@@ -81,8 +90,11 @@ type pageData struct {
 	NetWorthRows []nwRow
 	NetWorthTot  string
 	AsOf         string
-	From         string
-	To           string
+	Time         string
+	PeriodLabel  string
+	TimePrev     string
+	TimeNext     string
+	Interval     string
 	Error        string
 }
 
@@ -125,18 +137,55 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
+	now := time.Now()
+	timeStr := q.Get("time")
+	if timeStr == "" {
+		fromStr := q.Get("from")
+		toStr := q.Get("to")
+		if fromStr != "" || toStr != "" {
+			if fromStr != "" && toStr != "" {
+				timeStr = fromStr + " - " + toStr
+			} else if fromStr != "" {
+				timeStr = fromStr
+			} else {
+				timeStr = toStr
+			}
+		}
+	}
+
+	// Optional: change interval via ?interval=month
+	if iv := q.Get("interval"); iv != "" {
+		timeStr = period.SetInterval(timeStr, now, iv)
+		// redirect to clean URL with only time=
+		http.Redirect(w, r, "/l/"+url.PathEscape(name)+"/"+url.PathEscape(page)+"?time="+url.QueryEscape(timeStr), http.StatusFound)
+		return
+	}
+
+	pr, perr := period.Parse(timeStr, now)
+	interval := period.Kind(timeStr, now)
+	periodLabel := period.DisplayLabel(timeStr, now)
+	timePrev, _ := period.Shift(timeStr, now, -1)
+	timeNext, _ := period.Shift(timeStr, now, 1)
+	if timeStr == "" {
+		// Prev/next from empty jump into current month then step
+		timePrev, _ = period.Shift(period.At(period.KindMonth, now), now, -1)
+		timeNext = period.At(period.KindMonth, now)
+	}
+
+	// as-of: explicit flag wins; else end of time filter; else far future
 	asOfStr := q.Get("as-of")
-	asOf, _ := engine.ParseDate(asOfStr)
+	var asOf time.Time
+	if asOfStr != "" {
+		asOf, _ = engine.ParseDate(asOfStr)
+	}
+	if asOf.IsZero() && !pr.End.IsZero() {
+		asOf = pr.End
+		asOfStr = asOf.Format("2006-01-02")
+	}
 	if asOf.IsZero() {
 		asOf = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 		asOfStr = ""
-	} else {
-		asOfStr = asOf.Format("2006-01-02")
 	}
-	fromStr := q.Get("from")
-	toStr := q.Get("to")
-	from, _ := engine.ParseDate(fromStr)
-	to, _ := engine.ParseDate(toStr)
 
 	data := pageData{
 		Title:       name + " · " + page,
@@ -150,21 +199,31 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		HasWarnings: hasWarn(l.Diags),
 		OK:          !l.Diags.HasErrors(),
 		AsOf:        asOfStr,
-		From:        fromStr,
-		To:          toStr,
+		Time:        timeStr,
+		PeriodLabel: periodLabel,
+		TimePrev:    timePrev,
+		TimeNext:    timeNext,
+		Interval:    interval,
+	}
+	if perr != nil {
+		data.Error = perr.Error()
 	}
 
 	switch page {
 	case "check":
-		// fields already set
+		// ok
 	case "balances":
 		data.BalanceRows = buildBalances(l.BalancesAsOf(asOf))
 	case "journal":
-		data.Journal = l.Journal(from, to)
+		if perr == nil {
+			data.Journal = l.Journal(pr.Start, pr.End)
+		}
 	case "pnl":
-		p := l.PnL(from, to)
-		data.IncomeRows = ratMapRows(p.Income)
-		data.ExpenseRows = ratMapRows(p.Expenses)
+		if perr == nil {
+			p := l.PnL(pr.Start, pr.End)
+			data.IncomeRows = ratMapRows(p.Income)
+			data.ExpenseRows = ratMapRows(p.Expenses)
+		}
 	case "networth":
 		lines, total, err := l.NetWorth(asOf)
 		if err != nil {

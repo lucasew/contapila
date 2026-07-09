@@ -11,6 +11,7 @@ import (
 	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/engine"
 	"github.com/lucasew/contapila-go/internal/parser"
+	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/web"
 	"github.com/lucasew/contapila-go/pkg/project"
 	"github.com/spf13/cobra"
@@ -191,21 +192,21 @@ func balancesCmd() *cobra.Command {
 }
 
 func journalCmd() *cobra.Command {
-	var from, to string
+	var timeFilter, from, to string
 	c := &cobra.Command{
 		Use: "journal [ledger]", Short: "Journal", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			f, err := engine.ParseDate(from)
-			if err != nil {
-				return err
-			}
-			t, err := engine.ParseDate(to)
+			r, err := resolvePeriod(timeFilter, from, to)
 			if err != nil {
 				return err
 			}
 			return withLedgers(args, func(l *engine.Ledger) error {
-				fmt.Printf("== %s ==\n", l.Name)
-				for _, e := range l.Journal(f, t) {
+				fmt.Printf("== %s ==", l.Name)
+				if !r.Empty() {
+					fmt.Printf("  [%s]", r.Label())
+				}
+				fmt.Println()
+				for _, e := range l.Journal(r.Start, r.End) {
 					switch e.Kind {
 					case "txn":
 						fmt.Printf("%s * %q\n", e.Date.Format("2006-01-02"), e.Narration)
@@ -226,27 +227,26 @@ func journalCmd() *cobra.Command {
 			})
 		},
 	}
-	c.Flags().StringVar(&from, "from", "", "YYYY-MM-DD")
-	c.Flags().StringVar(&to, "to", "", "YYYY-MM-DD")
+	addTimeFlags(c, &timeFilter, &from, &to)
 	return c
 }
 
 func pnlCmd() *cobra.Command {
-	var from, to string
+	var timeFilter, from, to string
 	c := &cobra.Command{
-		Use: "pnl [ledger]", Short: "P&L", Args: cobra.MaximumNArgs(1),
+		Use: "pnl [ledger]", Short: "P&L for a Fava-style period", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			f, err := engine.ParseDate(from)
-			if err != nil {
-				return err
-			}
-			t, err := engine.ParseDate(to)
+			r, err := resolvePeriod(timeFilter, from, to)
 			if err != nil {
 				return err
 			}
 			return withLedgers(args, func(l *engine.Ledger) error {
-				fmt.Printf("== %s ==\n", l.Name)
-				p := l.PnL(f, t)
+				fmt.Printf("== %s ==", l.Name)
+				if !r.Empty() {
+					fmt.Printf("  [%s]", r.Label())
+				}
+				fmt.Println()
+				p := l.PnL(r.Start, r.End)
 				fmt.Println("Income:")
 				var keys []string
 				for k := range p.Income {
@@ -269,9 +269,38 @@ func pnlCmd() *cobra.Command {
 			})
 		},
 	}
-	c.Flags().StringVar(&from, "from", "", "YYYY-MM-DD")
-	c.Flags().StringVar(&to, "to", "", "YYYY-MM-DD")
+	addTimeFlags(c, &timeFilter, &from, &to)
 	return c
+}
+
+// addTimeFlags registers Fava-style --time plus optional --from/--to overrides.
+func addTimeFlags(c *cobra.Command, timeFilter, from, to *string) {
+	c.Flags().StringVar(timeFilter, "time", "", "Fava-style period: 2024, 2024-03, 2024-Q1, month, month-1, year, 2020 - 2024-06")
+	c.Flags().StringVar(from, "from", "", "inclusive start YYYY-MM-DD (overrides --time start if set alone with --to)")
+	c.Flags().StringVar(to, "to", "", "inclusive end YYYY-MM-DD")
+}
+
+// resolvePeriod prefers --time; if empty, uses --from/--to; if both empty, all time.
+func resolvePeriod(timeFilter, from, to string) (period.Range, error) {
+	if timeFilter != "" {
+		if from != "" || to != "" {
+			return period.Range{}, fmt.Errorf("use either --time or --from/--to, not both")
+		}
+		return period.Parse(timeFilter, time.Now())
+	}
+	f, err := engine.ParseDate(from)
+	if err != nil {
+		return period.Range{}, err
+	}
+	t, err := engine.ParseDate(to)
+	if err != nil {
+		return period.Range{}, err
+	}
+	raw := ""
+	if from != "" || to != "" {
+		raw = from + " … " + to
+	}
+	return period.Range{Start: f, End: t, Raw: raw}, nil
 }
 
 func networthCmd() *cobra.Command {
