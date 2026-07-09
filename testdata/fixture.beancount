@@ -1,0 +1,13 @@
+2024-01-01 * "Opening Balance"
+  Assets:Bank           1000.00 USD
+  Equity:OpeningBalances
+
+2024-01-02 note Assets:Bank "Checked balance online"
+
+2024-01-03 event "holiday" "Trip to Japan"
+
+2024-01-05 * "Grocery Store"
+  Expenses:Food           50.00 USD
+  Assets:Bank
+
+2024-01-06 note Expenses:Food "Bought some sushi"
