@@ -1,6 +1,6 @@
 # Contapila — Specification
 
-Status: agreed design (grilling). Implementation deferred until the modernc tree-sitter Beancount grammar is available.
+Status: MVP implementation in progress (tree-sitter grammar wired via modernc-tree-sitter/ccgo-tree-sitter).
 
 Contapila is a self-contained **Go** reimplementation of a Beancount-class ledger engine plus a Fava-class read-only web UI: **one binary** (Cobra CLI + HTTP server with Go templates). Philosophy is **Helix, not Neovim**: good defaults, batteries included, no plugin system, poetic license on tooling.
 

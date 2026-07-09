@@ -1,0 +1,400 @@
+package parser
+
+import (
+	"fmt"
+	"math/big"
+	"strings"
+	"time"
+
+	"github.com/lucasew/contapila-go/internal/ast"
+	"github.com/lucasew/contapila-go/internal/diag"
+	"github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar"
+	bc "github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar/beancount"
+)
+
+// Parse converts Beancount source into directives using modernc tree-sitter.
+func Parse(filename string, src []byte) ([]ast.Directive, diag.List, error) {
+	p := grammar.NewParser()
+	defer p.Delete()
+	if !p.SetLanguage(bc.Language()) {
+		return nil, nil, fmt.Errorf("failed to set beancount language")
+	}
+	tree := p.ParseString(string(src))
+	defer tree.Delete()
+	root := tree.RootNode()
+	if root.IsNull() {
+		return nil, nil, fmt.Errorf("null parse tree for %s", filename)
+	}
+
+	var diags diag.List
+	var out []ast.Directive
+	for i := uint32(0); i < root.NamedChildCount(); i++ {
+		ch := root.NamedChild(i)
+		if ch.IsError() {
+			diags.Error(filename, fmt.Sprintf("syntax error near %q", clip(slice(src, ch), 40)))
+			continue
+		}
+		if d, ok := convert(filename, src, ch, &diags); ok {
+			out = append(out, d)
+		}
+	}
+	return out, diags, nil
+}
+
+func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Directive, bool) {
+	switch n.Type() {
+	case "option":
+		return ast.Option{Meta: meta(file, src, n), Key: unquote(textField(src, n, "key")), Value: unquote(textField(src, n, "value"))}, true
+	case "include":
+		// include has a string child, not always a field
+		path := ""
+		for i := uint32(0); i < n.NamedChildCount(); i++ {
+			c := n.NamedChild(i)
+			if c.Type() == "string" {
+				path = unquote(slice(src, c))
+				break
+			}
+		}
+		return ast.Include{Meta: meta(file, src, n), Path: path}, true
+	case "commodity":
+		return ast.Commodity{Meta: meta(file, src, n), Currency: textField(src, n, "currency")}, true
+	case "open":
+		return ast.Open{Meta: meta(file, src, n), Account: textField(src, n, "account")}, true
+	case "close":
+		return ast.Close{Meta: meta(file, src, n), Account: textField(src, n, "account")}, true
+	case "transaction":
+		return convertTxn(file, src, n), true
+	case "price":
+		amt, _ := parseAmountNode(src, field(n, "amount"))
+		return ast.Price{Meta: meta(file, src, n), Currency: textField(src, n, "currency"), Amount: amt}, true
+	case "balance":
+		amt, _ := parseAmountNode(src, field(n, "amount"))
+		return ast.Balance{Meta: meta(file, src, n), Account: textField(src, n, "account"), Amount: amt}, true
+	case "pad":
+		return ast.Pad{
+			Meta:        meta(file, src, n),
+			Account:     textField(src, n, "account"),
+			FromAccount: textField(src, n, "from_account"),
+		}, true
+	case "note":
+		return ast.Note{Meta: meta(file, src, n), Account: textField(src, n, "account"), Comment: unquote(textField(src, n, "note"))}, true
+	case "event":
+		return ast.Event{Meta: meta(file, src, n), Type: unquote(textField(src, n, "type")), Desc: unquote(textField(src, n, "desc"))}, true
+	case "comment":
+		return nil, false
+	case "pushtag", "poptag", "pushmeta", "popmeta":
+		diags.Warn(file, fmt.Sprintf("%s not supported; skipped", n.Type()))
+		return nil, false
+	default:
+		diags.Warn(file, fmt.Sprintf("unsupported directive %q skipped", n.Type()))
+		return nil, false
+	}
+}
+
+func convertTxn(file string, src []byte, n *grammar.Node) ast.Transaction {
+	txn := ast.Transaction{
+		Meta:      meta(file, src, n),
+		Flag:      strings.TrimSpace(textField(src, n, "txn")),
+		Narration: unquote(textField(src, n, "narration")),
+		Payee:     unquote(textField(src, n, "payee")),
+	}
+	// tags/links
+	if tl := field(n, "tags_links"); tl != nil {
+		for i := uint32(0); i < tl.NamedChildCount(); i++ {
+			c := tl.NamedChild(i)
+			t := slice(src, c)
+			switch c.Type() {
+			case "tag":
+				txn.Tags = append(txn.Tags, strings.TrimPrefix(t, "#"))
+			case "link":
+				txn.Links = append(txn.Links, strings.TrimPrefix(t, "^"))
+			}
+		}
+	}
+	for i := uint32(0); i < n.NamedChildCount(); i++ {
+		c := n.NamedChild(i)
+		if c.Type() != "posting" {
+			continue
+		}
+		txn.Postings = append(txn.Postings, convertPosting(src, c))
+	}
+	return txn
+}
+
+func convertPosting(src []byte, n *grammar.Node) ast.Posting {
+	p := ast.Posting{Account: textField(src, n, "account")}
+	if an := field(n, "amount"); an != nil {
+		if amt, ok := parseAmountNode(src, an); ok {
+			p.Units = &amt
+		}
+	}
+	if cs := field(n, "cost_spec"); cs != nil {
+		p.Cost = parseCost(src, cs)
+	}
+	// price: child "atat" or "at" + field price_annotation
+	hasAtAt := false
+	hasAt := false
+	for i := uint32(0); i < n.ChildCount(); i++ {
+		c := n.Child(i)
+		switch c.Type() {
+		case "atat":
+			hasAtAt = true
+		case "at":
+			hasAt = true
+		}
+	}
+	if pa := field(n, "price_annotation"); pa != nil {
+		if amt, ok := parseAmountNode(src, firstAmountish(pa)); ok {
+			p.Price = &ast.PriceSpec{Number: amt.Number, Commodity: amt.Commodity, Total: hasAtAt || !hasAt && hasAtAt}
+			if hasAtAt {
+				p.Price.Total = true
+			} else if hasAt {
+				p.Price.Total = false
+			} else {
+				// default total if @@ node missing but only one form
+				p.Price.Total = hasAtAt
+			}
+		}
+	}
+	// Fix Total detection: if we saw atat token
+	if p.Price != nil {
+		p.Price.Total = hasAtAt
+	}
+	return p
+}
+
+func parseCost(src []byte, n *grammar.Node) *ast.CostSpec {
+	// cost_spec → cost_comp_list → cost_comp → compound_amount
+	empty := true
+	var num *big.Rat
+	var cur string
+	walkNamed(n, func(c *grammar.Node) {
+		if c.Type() == "compound_amount" {
+			empty = false
+			if per := field(c, "per"); per != nil {
+				num = parseNumber(src, per)
+			}
+			if cu := field(c, "currency"); cu != nil {
+				cur = strings.TrimSpace(slice(src, cu))
+			}
+			// also total form
+			if num == nil {
+				if t := field(c, "total"); t != nil {
+					num = parseNumber(src, t)
+				}
+			}
+		}
+		if c.Type() == "number" && num == nil {
+			// bare
+		}
+	})
+	// empty braces {}
+	text := strings.TrimSpace(slice(src, n))
+	if text == "{}" || text == "{ }" {
+		return &ast.CostSpec{Empty: true}
+	}
+	if empty && (strings.Contains(text, "{}") || text == "{}") {
+		return &ast.CostSpec{Empty: true}
+	}
+	if num == nil && cur == "" {
+		// treat as empty cost spec if no numbers found
+		if strings.Contains(text, "{") {
+			return &ast.CostSpec{Empty: true}
+		}
+		return nil
+	}
+	return &ast.CostSpec{Number: num, Commodity: cur, Empty: num == nil}
+}
+
+func firstAmountish(n *grammar.Node) *grammar.Node {
+	if n == nil {
+		return nil
+	}
+	switch n.Type() {
+	case "amount", "incomplete_amount", "amount_tolerance":
+		return n
+	}
+	for i := uint32(0); i < n.NamedChildCount(); i++ {
+		if c := firstAmountish(n.NamedChild(i)); c != nil {
+			return c
+		}
+	}
+	return n
+}
+
+func parseAmountNode(src []byte, n *grammar.Node) (ast.Amount, bool) {
+	if n == nil {
+		return ast.Amount{}, false
+	}
+	n = firstAmountish(n)
+	var num *big.Rat
+	var cur string
+	walkNamed(n, func(c *grammar.Node) {
+		switch c.Type() {
+		case "number":
+			if num == nil {
+				num = rat(strings.TrimSpace(slice(src, c)))
+			}
+		case "unary_number_expr":
+			num = parseUnary(src, c)
+		case "currency":
+			cur = strings.TrimSpace(slice(src, c))
+		}
+	})
+	// also direct children order for incomplete_amount
+	if num == nil {
+		for i := uint32(0); i < n.NamedChildCount(); i++ {
+			c := n.NamedChild(i)
+			if c.Type() == "unary_number_expr" {
+				num = parseUnary(src, c)
+			}
+			if c.Type() == "number" && num == nil {
+				num = rat(strings.TrimSpace(slice(src, c)))
+			}
+			if c.Type() == "currency" {
+				cur = strings.TrimSpace(slice(src, c))
+			}
+		}
+	}
+	if num == nil {
+		return ast.Amount{}, false
+	}
+	return ast.Amount{Number: num, Commodity: cur}, true
+}
+
+func parseUnary(src []byte, n *grammar.Node) *big.Rat {
+	neg := false
+	var num *big.Rat
+	for i := uint32(0); i < n.ChildCount(); i++ {
+		c := n.Child(i)
+		switch c.Type() {
+		case "minus", "-":
+			neg = true
+		case "number":
+			num = rat(strings.TrimSpace(slice(src, c)))
+		}
+	}
+	for i := uint32(0); i < n.NamedChildCount(); i++ {
+		c := n.NamedChild(i)
+		if c.Type() == "number" {
+			num = rat(strings.TrimSpace(slice(src, c)))
+		}
+	}
+	// fallback whole text
+	if num == nil {
+		t := strings.TrimSpace(slice(src, n))
+		t = strings.ReplaceAll(t, " ", "")
+		num = rat(t)
+	}
+	if num == nil {
+		return big.NewRat(0, 1)
+	}
+	if neg && num.Sign() > 0 {
+		num.Neg(num)
+	}
+	// if text already had minus, rat() handled it
+	return num
+}
+
+func parseNumber(src []byte, n *grammar.Node) *big.Rat {
+	if n == nil {
+		return nil
+	}
+	if n.Type() == "unary_number_expr" {
+		return parseUnary(src, n)
+	}
+	if n.Type() == "number" {
+		return rat(strings.TrimSpace(slice(src, n)))
+	}
+	// search
+	var r *big.Rat
+	walkNamed(n, func(c *grammar.Node) {
+		if r != nil {
+			return
+		}
+		if c.Type() == "unary_number_expr" {
+			r = parseUnary(src, c)
+		}
+		if c.Type() == "number" {
+			r = rat(strings.TrimSpace(slice(src, c)))
+		}
+	})
+	return r
+}
+
+func meta(file string, src []byte, n *grammar.Node) ast.Meta {
+	d := time.Time{}
+	if dn := field(n, "date"); dn != nil {
+		d, _ = time.ParseInLocation("2006-01-02", strings.TrimSpace(slice(src, dn)), time.UTC)
+	}
+	return ast.Meta{Date: d, File: file}
+}
+
+func field(n *grammar.Node, name string) *grammar.Node {
+	for i := uint32(0); i < n.ChildCount(); i++ {
+		if n.FieldNameForChild(i) == name {
+			c := n.Child(i)
+			if !c.IsNull() {
+				return c
+			}
+		}
+	}
+	return nil
+}
+
+func textField(src []byte, n *grammar.Node, name string) string {
+	c := field(n, name)
+	if c == nil {
+		return ""
+	}
+	return strings.TrimSpace(slice(src, c))
+}
+
+func slice(src []byte, n *grammar.Node) string {
+	if n == nil || n.IsNull() {
+		return ""
+	}
+	s, e := int(n.StartByte()), int(n.EndByte())
+	if s < 0 || e > len(src) || s > e {
+		return ""
+	}
+	return string(src[s:e])
+}
+
+func unquote(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+	return s
+}
+
+func rat(s string) *big.Rat {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	r := new(big.Rat)
+	if _, ok := r.SetString(s); !ok {
+		return nil
+	}
+	return r
+}
+
+func walkNamed(n *grammar.Node, fn func(*grammar.Node)) {
+	if n == nil || n.IsNull() {
+		return
+	}
+	fn(n)
+	for i := uint32(0); i < n.NamedChildCount(); i++ {
+		walkNamed(n.NamedChild(i), fn)
+	}
+}
+
+func clip(s string, n int) string {
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	if len(s) > n {
+		return s[:n] + "…"
+	}
+	return s
+}
