@@ -1,12 +1,17 @@
-package parser
+// Package bootstrap implements a minimal, temporary Beancount parser.
+// THIS IS NOT A PRODUCTION PARSER. It is used only for bootstrapping the CLI
+// and running tests until the official tree-sitter grammar is available.
+// See SPEC.md §5.3 and JULES.md for details.
+package bootstrap
 
 import (
 	"bufio"
-	"contapila/internal/ledger"
 	"io"
 	"math/big"
 	"strings"
 	"time"
+
+	"github.com/lucasew/contapila-go/internal/ledger"
 )
 
 func Parse(r io.Reader) ([]ledger.Directive, error) {
@@ -17,7 +22,7 @@ func Parse(r io.Reader) ([]ledger.Directive, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, ";") {
+		if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
 
@@ -61,9 +66,7 @@ func Parse(r io.Reader) ([]ledger.Directive, error) {
 					Flag: parts[1],
 				}
 				if len(parts) > 2 {
-					// Very simple payee/narration parsing
-					rem := strings.TrimSpace(line[strings.Index(line, parts[1])+1:])
-					currentTxn.Narration = rem
+					currentTxn.Narration = strings.Join(parts[2:], " ")
 				}
 			}
 		} else if currentTxn != nil {

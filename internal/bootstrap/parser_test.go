@@ -1,9 +1,10 @@
-package parser
+package bootstrap
 
 import (
-	"contapila/internal/ledger"
 	"strings"
 	"testing"
+
+	"github.com/lucasew/contapila-go/internal/ledger"
 )
 
 func TestParse(t *testing.T) {

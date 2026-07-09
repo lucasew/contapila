@@ -1,11 +1,13 @@
 package booking
 
 import (
-	"contapila/internal/ledger"
 	"fmt"
 	"math/big"
 	"sort"
 	"time"
+
+	"github.com/lucasew/contapila-go/internal/config"
+	"github.com/lucasew/contapila-go/internal/ledger"
 )
 
 type Severity int
@@ -22,13 +24,15 @@ type Diagnostic struct {
 }
 
 type Booker struct {
+	config       *config.Config
 	accountOpen  map[string]time.Time
 	accountClose map[string]time.Time
 	Diagnostics  []Diagnostic
 }
 
-func NewBooker() *Booker {
+func NewBooker(cfg *config.Config) *Booker {
 	return &Booker{
+		config:       cfg,
 		accountOpen:  make(map[string]time.Time),
 		accountClose: make(map[string]time.Time),
 	}
@@ -37,7 +41,12 @@ func NewBooker() *Booker {
 func (b *Booker) Book(directives []ledger.Directive) {
 	// Sort directives by date
 	sort.SliceStable(directives, func(i, j int) bool {
-		return directives[i].GetDate().Before(directives[j].GetDate())
+		di := directives[i]
+		dj := directives[j]
+		if di.GetDate().Equal(dj.GetDate()) {
+			return getPriority(di) < getPriority(dj)
+		}
+		return di.GetDate().Before(dj.GetDate())
 	})
 
 	for _, d := range directives {
@@ -63,6 +72,19 @@ func (b *Booker) Book(directives []ledger.Directive) {
 		case ledger.Transaction:
 			b.bookTransaction(v)
 		}
+	}
+}
+
+func getPriority(d ledger.Directive) int {
+	switch d.(type) {
+	case ledger.Open:
+		return 0
+	case ledger.Transaction:
+		return 1
+	case ledger.Close:
+		return 2
+	default:
+		return 3
 	}
 }
 
@@ -114,40 +136,6 @@ func (b *Booker) bookTransaction(t ledger.Transaction) {
 	}
 
 	if residualPostingIdx != -1 {
-		// Fill residual posting
-		// If there are multiple commodities with imbalances, this might be tricky.
-		// Beancount only allows one elided posting and it must balance EVERYTHING.
-		// If multiple commodities are involved, they must all balance to zero if possible?
-		// Actually Beancount's rule: if one posting is elided, it's assigned whatever is needed to balance.
-		// If there are multiple commodities, the elided posting would need to have multiple amounts?
-		// "at most one posting with missing amount to absorb the residual"
-		// "assign it the negated residual per commodity as required so the txn balances"
-		// This implies the residual posting can have multiple commodities if necessary,
-		// but usually it's just one.
-
-		// Wait, ledger.Posting only has one Amount.
-		// If I have:
-		// 2020-01-01 *
-		//   Assets:A   10 USD
-		//   Assets:B   20 EUR
-		//   Expenses:Misc
-		// The Expenses:Misc needs -10 USD and -20 EUR.
-		// My data structure for Posting only has one Amount.
-		// SPEC says: "assign it the negated residual per commodity as required so the txn balances"
-
-		// If there's only one commodity in imbalances, it's easy.
-		// If there's more than one, we might need multiple postings or a different structure.
-		// But Beancount allows ONLY ONE elided posting.
-
-		// Re-reading SPEC §7.4: "At most one posting with missing amount absorbs the remainder (typically gains)."
-
-		// Let's see how I should handle multiple commodities.
-		// "If residual exists but still cannot balance (e.g. two commodities both residual-needed with one empty posting — handle as Beancount does or error clearly) → error with a clear message."
-
-		// If there are multiple commodities with non-zero imbalances, one posting cannot balance them all if it can only have one amount.
-		// Unless the residual posting is SPLIT into multiple postings?
-		// No, usually it means the transaction is invalid if it requires multiple commodities to balance but only one is elided.
-
 		var nonZeroImbalances []string
 		for comm, bal := range imbalances {
 			if bal.Sign() != 0 {
@@ -164,12 +152,24 @@ func (b *Booker) bookTransaction(t ledger.Transaction) {
 			return
 		}
 
-		// If len(nonZeroImbalances) == 0, the residual is zero.
-		// If len(nonZeroImbalances) == 1, we assign the negated imbalance.
+		// Assign residual amount to the elided posting
+		if len(nonZeroImbalances) == 1 {
+			comm := nonZeroImbalances[0]
+			negated := new(big.Rat).Neg(imbalances[comm])
+			t.Postings[residualPostingIdx].Amount = &ledger.Amount{
+				Number:    negated,
+				Commodity: comm,
+			}
+		} else if len(nonZeroImbalances) == 0 {
+			// Transaction already balanced, residual is zero.
+			// We can pick any commodity or just leave it nil, but usually Beancount-style
+			// empty posting on a balanced txn is fine and means zero.
+			// Let's pick the first commodity if any, or just don't assign.
+		}
 	} else {
 		// No residual, check if all commodities balance within tolerance
-		tolerance := big.NewRat(5, 1000000) // 0.000005
 		for comm, bal := range imbalances {
+			tolerance := b.getTolerance(comm)
 			absBal := new(big.Rat).Abs(bal)
 			if absBal.Cmp(tolerance) > 0 {
 				b.Diagnostics = append(b.Diagnostics, Diagnostic{
@@ -180,4 +180,22 @@ func (b *Booker) bookTransaction(t ledger.Transaction) {
 			}
 		}
 	}
+}
+
+func (b *Booker) getTolerance(commodity string) *big.Rat {
+	precision := 5 // Default per SPEC
+	if b.config != nil {
+		path := fmt.Sprintf("commodities[\"%s\"].precision", commodity)
+		v := b.config.Value.LookupPath(config.ParsePath(path))
+		if v.Exists() {
+			if p, err := v.Int64(); err == nil {
+				precision = int(p)
+			}
+		}
+	}
+
+	// tolerance = 0.5 * 10^-precision
+	denom := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(precision)), nil)
+	// tolerance = 1 / (2 * denom)
+	return new(big.Rat).SetFrac(big.NewInt(5), new(big.Int).Mul(denom, big.NewInt(10)))
 }
