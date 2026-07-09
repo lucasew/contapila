@@ -25,7 +25,12 @@ Quiet · Precise · Helix-ready · money-tool, not marketing.
 Light: green as primary on white/near-white bases — **not** a green page wash.  
 Dark: deep base, muted gold for contrast.
 
-Implementation: CSS variables overriding daisyUI 5 `[data-theme="light|dark"]` (CDN-safe; no Tailwind `@plugin`).
+Implementation (daisyUI way):
+
+- Source: `web/styles/input.css` with `@plugin "daisyui"` and `@plugin "daisyui/theme"` for **`contapila-light`** / **`contapila-dark`**
+- Build: `cd web && bun install && bun run build:css` (mise provides `bun`) → `internal/web/static/app.css`
+- Serve: embedded `/static/app.css` (not CDN `themes.css` / browser Tailwind)
+- Toggle: `data-theme="contapila-light"` | `contapila-dark` + `theme-controller`
 
 ## Typography
 

@@ -3,93 +3,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>{{.Title}} · contapila</title>
-<link href="https://cdn.jsdelivr.net/npm/daisyui@5/daisyui.css" rel="stylesheet" type="text/css" />
-<link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+{{/* daisyUI themes via @plugin "daisyui/theme" — built CSS, not CDN themes.css */}}
+<link href="/static/app.css" rel="stylesheet" type="text/css" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%231a5632'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-size='14' font-family='system-ui,sans-serif' font-weight='600' fill='%23e8c547'%3Ec%3C/text%3E%3C/svg%3E" />
 <script>
   (function () {
     try {
       var t = localStorage.getItem("contapila-theme");
-      if (t === "dark" || t === "light") {
+      if (t === "contapila-light" || t === "contapila-dark") {
         document.documentElement.setAttribute("data-theme", t);
+      } else if (t === "contapila" || t === "light") {
+        document.documentElement.setAttribute("data-theme", "contapila-light");
+      } else if (t === "dark") {
+        document.documentElement.setAttribute("data-theme", "contapila-dark");
       } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.setAttribute("data-theme", "contapila-dark");
       } else {
-        document.documentElement.setAttribute("data-theme", "light");
+        document.documentElement.setAttribute("data-theme", "contapila-light");
       }
     } catch (e) {
-      document.documentElement.setAttribute("data-theme", "light");
+      document.documentElement.setAttribute("data-theme", "contapila-light");
     }
   })();
 </script>
-<style>
-  /* contapila tokens: dark green primary, rare gold accent (subtle) */
-  [data-theme="light"] {
-    --color-base-100: oklch(100% 0 0);
-    --color-base-200: oklch(97.5% 0.004 150);
-    --color-base-300: oklch(92% 0.01 150);
-    --color-base-content: oklch(22% 0.02 150);
-    --color-primary: oklch(38% 0.09 155);
-    --color-primary-content: oklch(98% 0.01 155);
-    --color-secondary: oklch(72% 0.12 90);
-    --color-secondary-content: oklch(22% 0.04 90);
-    --color-accent: oklch(78% 0.13 92);
-    --color-accent-content: oklch(22% 0.04 90);
-    --color-neutral: oklch(32% 0.02 150);
-    --color-neutral-content: oklch(98% 0.005 150);
-    --color-success: oklch(45% 0.11 155);
-    --color-success-content: oklch(98% 0.01 155);
-    --color-warning: oklch(78% 0.12 85);
-    --color-warning-content: oklch(25% 0.04 85);
-    --color-error: oklch(52% 0.18 25);
-    --color-error-content: oklch(98% 0.01 25);
-    --color-info: oklch(50% 0.08 220);
-    --color-info-content: oklch(98% 0.01 220);
-  }
-  [data-theme="dark"] {
-    --color-base-100: oklch(18% 0.02 155);
-    --color-base-200: oklch(22% 0.025 155);
-    --color-base-300: oklch(28% 0.03 155);
-    --color-base-content: oklch(92% 0.015 150);
-    --color-primary: oklch(68% 0.1 155);
-    --color-primary-content: oklch(16% 0.03 155);
-    --color-secondary: oklch(78% 0.11 90);
-    --color-secondary-content: oklch(20% 0.04 90);
-    --color-accent: oklch(82% 0.12 92);
-    --color-accent-content: oklch(18% 0.04 90);
-    --color-neutral: oklch(70% 0.02 150);
-    --color-neutral-content: oklch(16% 0.02 150);
-    --color-success: oklch(70% 0.1 155);
-    --color-success-content: oklch(16% 0.03 155);
-    --color-warning: oklch(80% 0.11 85);
-    --color-warning-content: oklch(22% 0.04 85);
-    --color-error: oklch(68% 0.15 25);
-    --color-error-content: oklch(16% 0.03 25);
-    --color-info: oklch(72% 0.08 220);
-    --color-info-content: oklch(16% 0.03 220);
-  }
-  .tabular { font-variant-numeric: tabular-nums; }
-  .app-sidebar { width: 12.5rem; }
-  /* denser menu active: green tint, not soft candy */
-  .menu li > a.menu-active {
-    background-color: color-mix(in oklch, var(--color-primary) 14%, transparent);
-    color: var(--color-primary);
-    font-weight: 600;
-  }
-  [data-theme="dark"] .menu li > a.menu-active {
-    background-color: color-mix(in oklch, var(--color-primary) 18%, transparent);
-  }
-  /* gold sprinkle: key totals only */
-  .stat-value.text-primary,
-  .money-highlight {
-    color: var(--color-accent);
-  }
-  [data-theme="light"] .stat-value.text-primary,
-  [data-theme="light"] .money-highlight {
-    color: color-mix(in oklch, var(--color-secondary) 85%, var(--color-base-content));
-  }
-</style>
 {{end}}
 
 {{define "theme-script"}}
@@ -98,9 +34,9 @@
     var root = document.documentElement;
     var box = document.getElementById("theme-toggle");
     if (!box) return;
-    box.checked = root.getAttribute("data-theme") === "dark";
+    box.checked = root.getAttribute("data-theme") === "contapila-dark";
     box.addEventListener("change", function () {
-      var theme = box.checked ? "dark" : "light";
+      var theme = box.checked ? "contapila-dark" : "contapila-light";
       root.setAttribute("data-theme", theme);
       try { localStorage.setItem("contapila-theme", theme); } catch (e) {}
     });
@@ -180,7 +116,7 @@
   <div class="navbar-end gap-1.5 shrink-0">
     {{template "time-filter" .}}
     <label class="swap swap-rotate btn btn-ghost btn-xs btn-square" title="Toggle light / dark">
-      <input id="theme-toggle" type="checkbox" class="theme-controller" value="dark" aria-label="Toggle dark theme" />
+      <input id="theme-toggle" type="checkbox" class="theme-controller" value="contapila-dark" aria-label="Toggle dark theme" />
       <svg class="swap-off h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
       <svg class="swap-on h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M21.752 15.002A9.72 9.72 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
     </label>

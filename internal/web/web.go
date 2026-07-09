@@ -20,6 +20,9 @@ import (
 //go:embed templates/*
 var templateFS embed.FS
 
+//go:embed static/*
+var staticFS embed.FS
+
 type Server struct {
 	Project *project.Project
 	Prices  *prices.DB
@@ -67,6 +70,8 @@ func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	// Built CSS (daisyUI themes via @plugin) — correct text/css MIME.
+	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	// Account before generic page so "account" is not a page name.
 	mux.HandleFunc("GET /l/{ledger}/account/{account...}", s.handleAccount)
