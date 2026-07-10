@@ -166,7 +166,9 @@ func (l *Ledger) accountValueFromBook(b *booking.Engine, account string, asOf ti
 	return total
 }
 
-// PnLBars returns diverging income/expense bars for bins derived from the filter.
+// PnLBars returns diverging bars for bins from the time filter.
+// Beancount signs: income credits are negative, expenses debits positive.
+// Chart uses magnitudes: Income = −Σ(income), Expense = Σ(expenses) in op currency.
 func (l *Ledger) PnLBars(from, to time.Time, kind period.BinKind) []BarPoint {
 	if from.IsZero() || to.IsZero() {
 		if len(l.Book.Txns) == 0 {
@@ -193,8 +195,8 @@ func (l *Ledger) PnLBars(from, to time.Time, kind period.BinKind) []BarPoint {
 	bins := period.IterateBins(r, kind)
 	out := make([]BarPoint, 0, len(bins))
 	for _, b := range bins {
-		inc := big.NewRat(0, 1)
-		exp := big.NewRat(0, 1)
+		incSigned := big.NewRat(0, 1) // Beancount signed (usually −)
+		expSigned := big.NewRat(0, 1) // Beancount signed (usually +)
 		for _, bt := range l.Book.Txns {
 			d := bt.Txn.Date
 			if d.Before(b.Start) || d.After(b.End) {
@@ -206,24 +208,19 @@ func (l *Ledger) PnLBars(from, to time.Time, kind period.BinKind) []BarPoint {
 				}
 				val, _ := l.convertUnits(p.Units.Commodity, p.Units.Number, d)
 				if booking.IsIncome(p.Account) {
-					if val.Sign() < 0 {
-						inc.Add(inc, new(big.Rat).Neg(val))
-					} else {
-						inc.Add(inc, val)
-					}
+					incSigned.Add(incSigned, val)
 				}
 				if booking.IsExpense(p.Account) {
-					if val.Sign() > 0 {
-						exp.Add(exp, val)
-					} else {
-						exp.Add(exp, new(big.Rat).Neg(val))
-					}
+					expSigned.Add(expSigned, val)
 				}
 			}
 		}
+		// Magnitudes for diverging chart (income up, expense down)
+		incMag := new(big.Rat).Neg(incSigned)
+		expMag := new(big.Rat).Set(expSigned)
 		out = append(out, BarPoint{
 			Start: b.Start, End: b.End, Label: binLabel(b, kind),
-			Income: inc, Expense: exp,
+			Income: incMag, Expense: expMag,
 		})
 	}
 	return out

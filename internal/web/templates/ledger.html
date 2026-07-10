@@ -151,6 +151,7 @@
 
     {{if eq .Page "pnl"}}
       {{template "chart-panel" .}}
+      <p class="mb-2 text-[0.65rem] text-base-content/50">Beancount signs: income credits are negative, expenses debits positive. Amounts in {{if .OpCurrency}}{{.OpCurrency}}{{else}}native units{{end}}.</p>
       <div class="grid gap-4 md:grid-cols-2">
         <section>
           <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Income</h2>
@@ -161,9 +162,11 @@
             <table class="table table-xs">
               <tbody>
                 {{range .IncomeRows}}
-                <tr>
-                  <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
-                  <td class="text-right tabular text-xs whitespace-nowrap">{{.Amount}} <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a></td>
+                <tr class="{{if .IsRollup}}font-semibold bg-base-200/40{{end}}">
+                  <td class="font-mono text-xs" {{if .PadLeft}}style="padding-left: {{.PadLeft}}"{{end}}>
+                    <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
+                  </td>
+                  <td class="text-right tabular text-xs whitespace-nowrap">{{.Amount}}{{if .Commodity}} <span class="font-mono text-base-content/60">{{.Commodity}}</span>{{end}}</td>
                 </tr>
                 {{end}}
               </tbody>
@@ -180,9 +183,11 @@
             <table class="table table-xs">
               <tbody>
                 {{range .ExpenseRows}}
-                <tr>
-                  <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
-                  <td class="text-right tabular text-xs whitespace-nowrap">{{.Amount}} <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a></td>
+                <tr class="{{if .IsRollup}}font-semibold bg-base-200/40{{end}}">
+                  <td class="font-mono text-xs" {{if .PadLeft}}style="padding-left: {{.PadLeft}}"{{end}}>
+                    <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
+                  </td>
+                  <td class="text-right tabular text-xs whitespace-nowrap">{{.Amount}}{{if .Commodity}} <span class="font-mono text-base-content/60">{{.Commodity}}</span>{{end}}</td>
                 </tr>
                 {{end}}
               </tbody>

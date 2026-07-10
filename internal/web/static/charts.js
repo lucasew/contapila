@@ -132,10 +132,14 @@
 
   function makeBars(el, payload) {
     var theme = colors();
-    var xs = payload.x || [];
-    var labels = payload.labels || null;
+    // Ordinal bins (0..n-1) — not unix time. Time scale made bars look stacked/smeared.
+    var n = (payload.labels && payload.labels.length) || (payload.income && payload.income.length) || 0;
+    var xs = [];
+    for (var i = 0; i < n; i++) xs.push(i);
+    var labels = payload.labels || [];
     var inc = payload.income || [];
     var exp = (payload.expense || []).map(function (v) {
+      // Per-bin magnitude only; plot expenses below zero (not cumulative).
       return v == null ? null : -Math.abs(v);
     });
     if (!xs.length) {
@@ -143,14 +147,31 @@
       return null;
     }
     var opts = baseOpts(el, theme, payload.height || 200);
-    var bar = uPlot.paths.bars({ size: [0.55, 64], align: 0 });
+    opts.scales = {
+      x: { time: false, range: [-0.5, n - 0.5] },
+      y: {},
+    };
+    opts.axes[0].values = function (_u, splits) {
+      return splits.map(function (s) {
+        var i = Math.round(s);
+        if (i < 0 || i >= labels.length) return "";
+        return labels[i];
+      });
+    };
+    opts.axes[0].size = 56;
     opts.series = [
-      xSeries(labels),
+      {
+        label: "Period",
+        value: function (_u, _raw, _s, idx) {
+          if (idx == null || idx < 0 || idx >= labels.length) return "";
+          return labels[idx];
+        },
+      },
       {
         label: "Income",
         stroke: theme.income,
         fill: theme.income,
-        paths: bar,
+        paths: uPlot.paths.bars({ size: [0.7, 100], align: 0 }),
         points: { show: false },
         value: function (_u, v) {
           return fmtMoney(null, v) + (payload.currency ? " " + payload.currency : "");
@@ -160,33 +181,13 @@
         label: "Expenses",
         stroke: theme.expense,
         fill: theme.expense,
-        paths: bar,
+        paths: uPlot.paths.bars({ size: [0.7, 100], align: 0 }),
         points: { show: false },
         value: function (_u, v) {
           return fmtMoney(null, v == null ? null : Math.abs(v)) + (payload.currency ? " " + payload.currency : "");
         },
       },
     ];
-    if (payload.labels && payload.labels.length === xs.length) {
-      opts.axes[0].values = function (_u, splits) {
-        return splits.map(function (s) {
-          var i = xs.indexOf(s);
-          if (i < 0) {
-            var best = 0,
-              bd = Infinity;
-            for (var j = 0; j < xs.length; j++) {
-              var d = Math.abs(xs[j] - s);
-              if (d < bd) {
-                bd = d;
-                best = j;
-              }
-            }
-            i = best;
-          }
-          return payload.labels[i] || "";
-        });
-      };
-    }
     return new uPlot(opts, [xs, inc, exp], el);
   }
 

@@ -188,6 +188,9 @@ type balanceRow struct {
 	Account   string
 	Commodity string
 	Amount    string
+	Depth     int    // hierarchical indent (P&L tree)
+	IsRollup  bool   // parent total row
+	PadLeft   string // e.g. "1.5rem" for template indent
 }
 
 type nwRow struct {
@@ -282,9 +285,9 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		}
 	case "pnl":
 		if perr == nil {
-			p := l.PnL(pr.Start, pr.End)
-			data.IncomeRows = buildBalances(p.Income)
-			data.ExpenseRows = buildBalances(p.Expenses)
+			inc, exp := l.PnLTree(pr.Start, pr.End)
+			data.IncomeRows = buildPnLRows(inc)
+			data.ExpenseRows = buildPnLRows(exp)
 			from, to := pr.Start, pr.End
 			kind := period.ChartBin(timeStr, pr)
 			bars := l.PnLBars(from, to, kind)
@@ -445,6 +448,7 @@ func chartLineJSON(pts []engine.SeriesPoint, currency, label string) (template.J
 }
 
 // chartBarsJSON builds uPlot diverging bar payload.
+// X is ordinal (0..n-1), not unix time — avoids time-scale bar width/overlap artifacts.
 func chartBarsJSON(bars []engine.BarPoint, currency string) (template.JS, error) {
 	if len(bars) == 0 {
 		return "", nil
@@ -452,21 +456,20 @@ func chartBarsJSON(bars []engine.BarPoint, currency string) (template.JS, error)
 	type payload struct {
 		Kind     string    `json:"kind"`
 		Currency string    `json:"currency"`
-		X        []int64   `json:"x"`
+		X        []float64 `json:"x"`
 		Labels   []string  `json:"labels"`
 		Income   []float64 `json:"income"`
 		Expense  []float64 `json:"expense"`
 	}
 	p := payload{
 		Kind: "bars", Currency: currency,
-		X: make([]int64, len(bars)), Labels: make([]string, len(bars)),
+		X: make([]float64, len(bars)), Labels: make([]string, len(bars)),
 		Income: make([]float64, len(bars)), Expense: make([]float64, len(bars)),
 	}
 	for i, b := range bars {
-		// mid-bin timestamp for axis
-		mid := b.Start.Add(b.End.Sub(b.Start) / 2)
-		p.X[i] = mid.UTC().Unix()
+		p.X[i] = float64(i)
 		p.Labels[i] = b.Label
+		// Per-bin flow magnitudes (not cumulative across bins).
 		p.Income[i] = ratFloat(b.Income)
 		p.Expense[i] = ratFloat(b.Expense)
 	}
@@ -748,6 +751,26 @@ func buildBalances(bals map[string]map[string]*big.Rat) []balanceRow {
 		}
 		return rows[i].Commodity < rows[j].Commodity
 	})
+	return rows
+}
+
+func buildPnLRows(lines []engine.PnLLine) []balanceRow {
+	rows := make([]balanceRow, 0, len(lines))
+	for _, ln := range lines {
+		pad := ""
+		if ln.Depth > 0 {
+			// 0.75rem per level
+			pad = strconv.FormatFloat(float64(ln.Depth)*0.75, 'f', 2, 64) + "rem"
+		}
+		rows = append(rows, balanceRow{
+			Account:   ln.Account,
+			Commodity: ln.Commodity,
+			Amount:    ln.Amount.FloatString(2),
+			Depth:     ln.Depth,
+			IsRollup:  ln.IsRollup,
+			PadLeft:   pad,
+		})
+	}
 	return rows
 }
 

@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -275,27 +275,24 @@ func pnlCmd() *cobra.Command {
 					fmt.Printf("  [%s]", r.Label())
 				}
 				fmt.Println()
-				p := l.PnL(r.Start, r.End)
-				printPnLSection := func(title string, m map[string]map[string]*big.Rat) {
+				inc, exp := l.PnLTree(r.Start, r.End)
+				printPnLTree := func(title string, lines []engine.PnLLine) {
 					fmt.Println(title)
-					var accts []string
-					for a := range m {
-						accts = append(accts, a)
-					}
-					sort.Strings(accts)
-					for _, a := range accts {
-						var comms []string
-						for c := range m[a] {
-							comms = append(comms, c)
+					for _, ln := range lines {
+						pad := strings.Repeat("  ", ln.Depth)
+						mark := "  "
+						if ln.IsRollup {
+							mark = "Σ "
 						}
-						sort.Strings(comms)
-						for _, c := range comms {
-							fmt.Printf("  %-40s %s %s\n", a, m[a][c].FloatString(4), c)
+						comm := ln.Commodity
+						if comm == "" {
+							comm = ""
 						}
+						fmt.Printf("%s%s%-40s %s %s\n", pad, mark, ln.Account, ln.Amount.FloatString(2), comm)
 					}
 				}
-				printPnLSection("Income:", p.Income)
-				printPnLSection("Expenses:", p.Expenses)
+				printPnLTree("Income:", inc)
+				printPnLTree("Expenses:", exp)
 				return nil
 			})
 		},
