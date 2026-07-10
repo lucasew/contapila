@@ -71,42 +71,48 @@
 {{end}}
 
 {{define "breadcrumbs"}}
-<div class="breadcrumbs text-xs sm:text-sm py-0 max-w-full overflow-visible">
-  <ul class="flex-nowrap overflow-visible">
-    <li><a href="/" class="link link-hover">contapila</a></li>
-    {{if .Ledgers}}
-    <li class="overflow-visible relative z-[60]">
-      <details class="dropdown dropdown-bottom">
-        <summary class="cursor-pointer list-none font-medium after:hidden">
-          {{if .LedgerName}}{{.LedgerName}}{{else}}ledger{{end}}
-          <svg xmlns="http://www.w3.org/2000/svg" class="inline h-3 w-3 opacity-50 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-        </summary>
-        <ul class="dropdown-content menu menu-sm bg-base-100 rounded-box z-[70] w-48 p-1.5 shadow-md border border-base-300">
-          {{range .Ledgers}}
-          <li>
-            {{if and (eq $.Page "account") $.AccountName}}
-            <a href="{{accountURL . $.AccountName $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
-            {{else if and (eq $.Page "commodity") $.CommodityName}}
-            <a href="{{commodityURL . $.CommodityName $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
-            {{else if $.Page}}
-            <a href="{{ledgerURL . $.Page $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
-            {{else}}
-            <a href="{{ledgerURL . "check" ""}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+{{/* Prefix crumbs stay unclipped (ledger dropdown); long last segment scrolls horizontally — no ellipsis. */}}
+<div class="flex min-w-0 flex-1 items-center text-xs sm:text-sm">
+  <div class="breadcrumbs py-0 shrink-0 overflow-visible">
+    <ul class="flex-nowrap items-center">
+      <li><a href="/" class="link link-hover">contapila</a></li>
+      {{if .Ledgers}}
+      <li class="relative z-[60]">
+        <details class="dropdown dropdown-bottom">
+          <summary class="cursor-pointer list-none font-medium after:hidden whitespace-nowrap">
+            {{if .LedgerName}}{{.LedgerName}}{{else}}ledger{{end}}
+            <svg xmlns="http://www.w3.org/2000/svg" class="inline h-3 w-3 opacity-50 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <ul class="dropdown-content menu menu-sm bg-base-100 rounded-box z-[70] w-48 p-1.5 shadow-md border border-base-300">
+            {{range .Ledgers}}
+            <li>
+              {{if and (eq $.Page "account") $.AccountName}}
+              <a href="{{accountURL . $.AccountName $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+              {{else if and (eq $.Page "commodity") $.CommodityName}}
+              <a href="{{commodityURL . $.CommodityName $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+              {{else if $.Page}}
+              <a href="{{ledgerURL . $.Page $.Time}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+              {{else}}
+              <a href="{{ledgerURL . "check" ""}}" class="{{if eq $.LedgerName .}}menu-active{{end}}">{{.}}</a>
+              {{end}}
+            </li>
             {{end}}
-          </li>
-          {{end}}
-        </ul>
-      </details>
-    </li>
-    {{end}}
-    {{if and .LedgerName (eq .Page "account") .AccountName}}
-    <li class="font-mono text-xs truncate max-w-[12rem]" title="{{.AccountName}}">{{.AccountName}}</li>
-    {{else if and .LedgerName (eq .Page "commodity") .CommodityName}}
-    <li class="font-mono text-xs" title="{{.CommodityName}}">{{.CommodityName}}</li>
-    {{else if and .LedgerName .Page}}
-    <li>{{template "page-title" .}}</li>
-    {{end}}
-  </ul>
+          </ul>
+        </details>
+      </li>
+      {{end}}
+      {{if and .LedgerName .Page (ne .Page "account") (ne .Page "commodity")}}
+      <li class="whitespace-nowrap">{{template "page-title" .}}</li>
+      {{end}}
+    </ul>
+  </div>
+  {{if and .LedgerName (eq .Page "account") .AccountName}}
+  <span class="breadcrumbs-sep opacity-40 mx-1.5 shrink-0 text-[0.65rem]" aria-hidden="true">›</span>
+  <span class="min-w-0 flex-1 overflow-x-auto font-mono text-xs whitespace-nowrap py-0" title="{{.AccountName}}">{{.AccountName}}</span>
+  {{else if and .LedgerName (eq .Page "commodity") .CommodityName}}
+  <span class="breadcrumbs-sep opacity-40 mx-1.5 shrink-0 text-[0.65rem]" aria-hidden="true">›</span>
+  <span class="min-w-0 flex-1 overflow-x-auto font-mono text-xs whitespace-nowrap py-0" title="{{.CommodityName}}">{{.CommodityName}}</span>
+  {{end}}
 </div>
 {{end}}
 
@@ -114,8 +120,8 @@
 {{/* Full-width top strip — spans entire viewport above sidebar+body */}}
 {{/* h-10 + min-h-0 override daisyUI navbar min-height:4rem so the time field cannot grow the strip */}}
 <header class="w-full shrink-0 navbar h-10 min-h-0 max-h-10 py-0 bg-base-200 border-b border-base-300 px-2 sm:px-3 gap-2 sticky top-0 z-50 overflow-visible">
-  <div class="navbar-start gap-1 min-w-0 flex-1 overflow-visible h-full items-center">
-    <label for="nav-open" class="btn btn-ghost btn-xs btn-square lg:hidden" aria-label="Open menu">
+  <div class="navbar-start gap-1 min-w-0 flex-1 h-full items-center overflow-visible">
+    <label for="nav-open" class="btn btn-ghost btn-xs btn-square shrink-0 lg:hidden" aria-label="Open menu">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
     </label>
     {{template "breadcrumbs" .}}
