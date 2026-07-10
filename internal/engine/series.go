@@ -26,8 +26,8 @@ type BarPoint struct {
 }
 
 // NetWorthSeries returns net worth in op currency after each event that changes
-// asset/liability positions within [from, to]. Empty bounds = open side.
-// Single forward booking pass (not rebook-per-point).
+// asset/liability positions or market prices within [from, to]. Empty bounds = open side.
+// Single forward booking pass (not rebook-per-point); price days revalue holdings.
 func (l *Ledger) NetWorthSeries(from, to time.Time) ([]SeriesPoint, error) {
 	if l.OpCurrency == "" {
 		return nil, nil
@@ -39,7 +39,8 @@ func (l *Ledger) NetWorthSeries(from, to time.Time) ([]SeriesPoint, error) {
 	})
 }
 
-// AccountSeries returns market value in op currency after each event touching account.
+// AccountSeries returns market value in op currency after each event touching the
+// account or a market price day while the account has a non-zero balance.
 func (l *Ledger) AccountSeries(account string, from, to time.Time) ([]SeriesPoint, error) {
 	if l.OpCurrency == "" || account == "" {
 		return nil, nil
@@ -57,12 +58,15 @@ func (l *Ledger) walkBalanceSeries(
 	value func(*booking.Engine, time.Time) *big.Rat,
 ) ([]SeriesPoint, error) {
 	// Group directives by calendar day (stable within day via original order).
-	type dayBatch struct {
-		date time.Time
-		dirs []ast.Directive
-	}
 	byDay := map[time.Time][]ast.Directive{}
+	priceDay := map[time.Time]bool{}
 	var order []time.Time
+	addDay := func(dt time.Time) {
+		if _, ok := byDay[dt]; !ok {
+			order = append(order, dt)
+			byDay[dt] = nil
+		}
+	}
 	for _, d := range l.Dirs {
 		dt := d.GetDate()
 		if dt.IsZero() {
@@ -71,10 +75,21 @@ func (l *Ledger) walkBalanceSeries(
 		} else {
 			dt = dateOnly(dt)
 		}
-		if _, ok := byDay[dt]; !ok {
-			order = append(order, dt)
-		}
+		addDay(dt)
 		byDay[dt] = append(byDay[dt], d)
+	}
+	// Market revaluation days from shared PriceDB (prices may not be in l.Dirs).
+	if l.Prices != nil {
+		for _, s := range l.Prices.AllSeries() {
+			for _, pt := range s.Points {
+				if pt.Date.IsZero() {
+					continue
+				}
+				dt := dateOnly(pt.Date)
+				addDay(dt)
+				priceDay[dt] = true
+			}
+		}
 	}
 	sort.SliceStable(order, func(i, j int) bool {
 		// undated directives (options, …) book first
@@ -88,7 +103,9 @@ func (l *Ledger) walkBalanceSeries(
 	var out []SeriesPoint
 	for _, day := range order {
 		dirs := byDay[day]
-		b.Book(dirs)
+		if len(dirs) > 0 {
+			b.Book(dirs)
+		}
 		if day.IsZero() {
 			continue
 		}
@@ -98,7 +115,8 @@ func (l *Ledger) walkBalanceSeries(
 		if !to.IsZero() && day.After(dateOnly(to)) {
 			continue
 		}
-		// emit if this day could change relevant balances (txn, pad, or balance+pad)
+		// emit if this day could change relevant balances (txn, pad, balance+pad)
+		// or revalue via market prices while holdings exist
 		hit := false
 		for _, d := range dirs {
 			switch v := d.(type) {
@@ -118,10 +136,16 @@ func (l *Ledger) walkBalanceSeries(
 				if touch(v.Account) {
 					hit = true
 				}
+			case ast.Price:
+				// ledger-stream prices (also covered by PriceDB dates)
+				hit = hasTouchBalance(b, touch)
 			}
 			if hit {
 				break
 			}
+		}
+		if !hit && priceDay[day] {
+			hit = hasTouchBalance(b, touch)
 		}
 		if !hit {
 			continue
@@ -129,6 +153,21 @@ func (l *Ledger) walkBalanceSeries(
 		out = append(out, SeriesPoint{Date: day, Value: value(b, day)})
 	}
 	return out, nil
+}
+
+// hasTouchBalance reports whether any booked account matching touch has non-zero units.
+func hasTouchBalance(b *booking.Engine, touch func(string) bool) bool {
+	for acct, m := range b.AllBalances() {
+		if !touch(acct) {
+			continue
+		}
+		for _, units := range m {
+			if units != nil && units.Sign() != 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (l *Ledger) netWorthFromBook(b *booking.Engine, asOf time.Time) *big.Rat {

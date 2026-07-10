@@ -36,6 +36,41 @@ func TestExampleNetWorthSeries(t *testing.T) {
 	}
 }
 
+// Net worth series must revalue on PriceDB days even without balance-changing txns.
+func TestNetWorthSeriesIncludesPriceDays(t *testing.T) {
+	root := filepath.Join("..", "..", "testdata", "example")
+	p, pdb, _, err := OpenProject(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := OpenLedger(p, pdb, "personal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 2023-07-04 has prices (USD, SPDW, BTC, …) in example prices.beancount.
+	priceDay := time.Date(2023, 7, 4, 0, 0, 0, 0, time.UTC)
+	// Window that may include fewer txns than price observations.
+	from := time.Date(2023, 7, 3, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2023, 7, 5, 0, 0, 0, 0, time.UTC)
+	pts, err := l.NetWorthSeries(from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, pt := range pts {
+		if pt.Date.Equal(priceDay) {
+			found = true
+			if pt.Value == nil {
+				t.Fatal("nil value on price day")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected NW point on price day %s; got %d points", priceDay.Format("2006-01-02"), len(pts))
+	}
+}
+
 func TestExamplePnLBarsYear(t *testing.T) {
 	root := filepath.Join("..", "..", "testdata", "example")
 	p, pdb, _, err := OpenProject(root)
