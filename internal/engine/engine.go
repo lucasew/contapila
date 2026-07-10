@@ -118,6 +118,11 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 			}
 		}
 	}
+	// posting closing: TRUE → balance 0 + close next day (see booking.ExpandClosing).
+	var cdiags diag.List
+	stream, cdiags = booking.ExpandClosing(stream)
+	diags.Merge(cdiags)
+
 	b := booking.New()
 	b.Book(stream)
 	diags.Merge(b.Diags)

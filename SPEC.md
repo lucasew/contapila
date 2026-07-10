@@ -371,6 +371,7 @@ Inventory cost basis (average cost, model A) remains for booking/gains; it is **
 | metadata on `open` / `commodity` | yes (stored; CUE `#Account` / `#Commodity` tandem) | Go + CUE |
 | metadata on `price` | yes (stored on PriceDB points) | Go |
 | metadata on txn/posting | yes (journal stream only; **not** CUE) | Go |
+| posting `closing: TRUE` | yes — expands to `balance 0` + `close` next day for that account/commodity | Go |
 | cost `{}`, price `@` / `@@` | yes | Go |
 | empty residual posting | yes | Go |
 | `price` | yes (shared file → PriceDB; CUE `price_pairs` inventory only) | Go + CUE |
@@ -394,6 +395,8 @@ Use **`log/slog`** for warnings. `check` fails only on **errors**.
 |-------|----------|
 | Unopened account used | **warn** + allow |
 | Posting after `close` | **error** |
+| Posting `closing: TRUE` without units | **error** |
+| Posting `closing: TRUE` but `close` already written | **warn** (skip synthetic close; still assert `balance 0`) |
 | Duplicate `open` same account | **error** |
 | Unbalanced txn, no residual leg | **error** |
 | Failed `balance` assertion | **error** |
