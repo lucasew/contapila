@@ -319,7 +319,7 @@ Example:
 - **No** implicit default gains account; **no** auto-inserted legs.
 - Unbalanced transaction without an empty residual posting → **error**.
 - Explicit `{cost}` on a sell that is not the current average (beyond tolerance) → **error**.
-- Selling more units than inventory → **error**.
+- Selling more units than inventory → **warn** (do not invent inventory; check still passes).
 
 ---
 
@@ -388,7 +388,8 @@ Use **`log/slog`** for warnings. `check` fails only on **errors**.
 | Duplicate `open` same account | **error** |
 | Unbalanced txn, no residual leg | **error** |
 | Failed `balance` assertion | **error** |
-| Over-sell / bad average cost reduce | **error** |
+| Over-sell (no inventory / not enough units) | **warn** (skip inventing inventory) |
+| Bad average cost on reduce | **error** |
 | Unknown `option` | **warn** |
 | `include` literal path missing | **error** |
 | `include` glob, zero matches | **warn** |

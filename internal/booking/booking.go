@@ -186,12 +186,13 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 				// sell / reduce
 				pos := e.getPos(p.Account, comm)
 				if pos == nil || pos.Units.Sign() == 0 {
-					e.Diags.Error(t.File, t.Line, fmt.Sprintf("oversell %s: no inventory", comm))
+					// warn (not error): check may still pass; do not invent inventory
+					e.Diags.Warn(t.File, t.Line, fmt.Sprintf("oversell %s: no inventory", comm))
 					return
 				}
 				sellUnits := new(big.Rat).Neg(units) // positive
 				if sellUnits.Cmp(pos.Units) > 0 {
-					e.Diags.Error(t.File, t.Line, fmt.Sprintf("oversell %s: have %s need %s", comm, pos.Units.FloatString(6), sellUnits.FloatString(6)))
+					e.Diags.Warn(t.File, t.Line, fmt.Sprintf("oversell %s: have %s need %s", comm, pos.Units.FloatString(6), sellUnits.FloatString(6)))
 					return
 				}
 				avg := pos.Avg()

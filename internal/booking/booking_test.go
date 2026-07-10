@@ -2,6 +2,7 @@ package booking
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,6 +60,52 @@ func TestUnbalanced(t *testing.T) {
 	})
 	if !e.Diags.HasErrors() {
 		t.Fatal("expected error")
+	}
+}
+
+func TestOversellIsWarning(t *testing.T) {
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Broker:X"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Income:Gains"},
+		// hold 5
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-10"), File: "t"}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Broker:X", Units: amt("5", "X"), Cost: &ast.CostSpec{Number: r("10"), Commodity: "BRL"}},
+				{Account: "Assets:Cash"},
+			},
+		},
+		// sell 10 → oversell
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-02-01"), File: "t", Line: 10}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Broker:X", Units: amt("-10", "X"), Price: &ast.PriceSpec{Number: r("100"), Commodity: "BRL", Total: true}},
+				{Account: "Assets:Cash", Units: amt("100", "BRL")},
+				{Account: "Income:Gains"},
+			},
+		},
+	})
+	if e.Diags.HasErrors() {
+		t.Fatalf("oversell must not be a hard error: %v", e.Diags)
+	}
+	var warned bool
+	for _, d := range e.Diags {
+		if d.IsWarn() && strings.Contains(d.Message, "oversell") {
+			warned = true
+			if d.Line != 10 {
+				t.Fatalf("line=%d", d.Line)
+			}
+		}
+	}
+	if !warned {
+		t.Fatalf("expected oversell warn, diags=%v", e.Diags)
+	}
+	// inventory left intact (oversell not applied)
+	pos := e.getPos("Assets:Broker:X", "X")
+	if pos == nil || pos.Units.Cmp(r("5")) != 0 {
+		t.Fatalf("units after oversell skip: %+v", pos)
 	}
 }
 
