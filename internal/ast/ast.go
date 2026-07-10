@@ -66,7 +66,8 @@ type Commodity struct {
 
 type Open struct {
 	Meta
-	Account string
+	Account    string
+	Currencies []string // optional commodities declared on open (e.g. open Assets:Cash BRL)
 }
 
 type Close struct {

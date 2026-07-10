@@ -79,20 +79,25 @@ func OpenProject(cwd string) (*Project, error) {
 		return nil, err
 	}
 
+	// Discover ledgers first so CUE can type #LedgerName from the filesystem.
+	ledgers, err := discoverLedgers(root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover ledgers: %w", err)
+	}
+	discovered := make([]config.Ledger, 0, len(ledgers))
+	for _, l := range ledgers {
+		discovered = append(discovered, config.Ledger{Name: l.Name, Main: l.MainPath})
+	}
+
 	cuePath := filepath.Join(root, ProjectMarker)
 	cueBytes, err := os.ReadFile(cuePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", ProjectMarker, err)
 	}
 
-	cfg, err := config.Load(cueBytes, cuePath)
+	cfg, err := config.Load(cueBytes, cuePath, discovered)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
-	ledgers, err := discoverLedgers(root)
-	if err != nil {
-		return nil, fmt.Errorf("failed to discover ledgers: %w", err)
 	}
 
 	pricesPath := filepath.Join(root, PricesFilename)

@@ -57,29 +57,62 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 		}
 		return ast.Include{Meta: meta(file, src, n), Path: path}, true
 	case "commodity":
-		return ast.Commodity{Meta: meta(file, src, n), Currency: textField(src, n, "currency")}, true
+		o := ast.Commodity{Meta: meta(file, src, n), Currency: textField(src, n, "currency")}
+		warnIgnoredKeyValues(file, src, n, diags)
+		return o, true
 	case "open":
-		return ast.Open{Meta: meta(file, src, n), Account: textField(src, n, "account")}, true
+		o := ast.Open{Meta: meta(file, src, n), Account: textField(src, n, "account")}
+		for i := uint32(0); i < n.NamedChildCount(); i++ {
+			c := n.NamedChild(i)
+			if c.Type() == "currency" {
+				o.Currencies = append(o.Currencies, strings.TrimSpace(slice(src, c)))
+			}
+		}
+		warnIgnoredKeyValues(file, src, n, diags)
+		return o, true
 	case "close":
+		warnIgnoredKeyValues(file, src, n, diags)
 		return ast.Close{Meta: meta(file, src, n), Account: textField(src, n, "account")}, true
 	case "transaction":
-		return convertTxn(file, src, n), true
+		return convertTxn(file, src, n, diags), true
 	case "price":
 		amt, _ := parseAmountNode(src, field(n, "amount"))
+		warnIgnoredKeyValues(file, src, n, diags)
 		return ast.Price{Meta: meta(file, src, n), Currency: textField(src, n, "currency"), Amount: amt}, true
 	case "balance":
-		amt, _ := parseAmountNode(src, field(n, "amount"))
+		// amount may be field "amount" or amount_tolerance child
+		an := field(n, "amount")
+		if an == nil {
+			an = field(n, "amount_tolerance")
+		}
+		if an == nil {
+			for i := uint32(0); i < n.NamedChildCount(); i++ {
+				c := n.NamedChild(i)
+				if c.Type() == "amount" || c.Type() == "amount_tolerance" {
+					an = c
+					break
+				}
+			}
+		}
+		amt, _ := parseAmountNode(src, an)
+		warnIgnoredKeyValues(file, src, n, diags)
 		return ast.Balance{Meta: meta(file, src, n), Account: textField(src, n, "account"), Amount: amt}, true
 	case "pad":
+		warnIgnoredKeyValues(file, src, n, diags)
 		return ast.Pad{
 			Meta:        meta(file, src, n),
 			Account:     textField(src, n, "account"),
 			FromAccount: textField(src, n, "from_account"),
 		}, true
 	case "note":
+		warnIgnoredKeyValues(file, src, n, diags)
 		return ast.Note{Meta: meta(file, src, n), Account: textField(src, n, "account"), Comment: unquote(textField(src, n, "note"))}, true
 	case "event":
+		warnIgnoredKeyValues(file, src, n, diags)
 		return ast.Event{Meta: meta(file, src, n), Type: unquote(textField(src, n, "type")), Desc: unquote(textField(src, n, "desc"))}, true
+	case "query", "custom", "document":
+		diags.Warn(file, fmt.Sprintf("%s not supported; skipped", n.Type()))
+		return nil, false
 	case "comment":
 		return nil, false
 	case "pushtag", "poptag", "pushmeta", "popmeta":
@@ -91,7 +124,34 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 	}
 }
 
-func convertTxn(file string, src []byte, n *grammar.Node) ast.Transaction {
+// warnIgnoredKeyValues emits a warn for each key_value child (metadata not stored yet).
+func warnIgnoredKeyValues(file string, src []byte, n *grammar.Node, diags *diag.List) {
+	if n == nil || diags == nil {
+		return
+	}
+	for i := uint32(0); i < n.NamedChildCount(); i++ {
+		c := n.NamedChild(i)
+		if c.Type() != "key_value" {
+			continue
+		}
+		key := textField(src, c, "key")
+		if key == "" {
+			for j := uint32(0); j < c.NamedChildCount(); j++ {
+				ch := c.NamedChild(j)
+				if ch.Type() == "key" {
+					key = strings.TrimSpace(slice(src, ch))
+					break
+				}
+			}
+		}
+		if key == "" {
+			key = strings.TrimSpace(slice(src, c))
+		}
+		diags.Warn(file, fmt.Sprintf("metadata %q ignored (not stored yet)", key))
+	}
+}
+
+func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List) ast.Transaction {
 	txn := ast.Transaction{
 		Meta:      meta(file, src, n),
 		Flag:      strings.TrimSpace(textField(src, n, "txn")),
@@ -111,19 +171,32 @@ func convertTxn(file string, src []byte, n *grammar.Node) ast.Transaction {
 			}
 		}
 	}
+	warnIgnoredKeyValues(file, src, n, diags)
 	for i := uint32(0); i < n.NamedChildCount(); i++ {
 		c := n.NamedChild(i)
 		if c.Type() != "posting" {
 			continue
 		}
-		txn.Postings = append(txn.Postings, convertPosting(src, c))
+		txn.Postings = append(txn.Postings, convertPosting(file, src, c, diags))
 	}
 	return txn
 }
 
-func convertPosting(src []byte, n *grammar.Node) ast.Posting {
+func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List) ast.Posting {
 	p := ast.Posting{Account: textField(src, n, "account")}
-	if an := field(n, "amount"); an != nil {
+	warnIgnoredKeyValues(file, src, n, diags)
+	// amount field or incomplete_amount child
+	an := field(n, "amount")
+	if an == nil {
+		for i := uint32(0); i < n.NamedChildCount(); i++ {
+			c := n.NamedChild(i)
+			if c.Type() == "amount" || c.Type() == "incomplete_amount" {
+				an = c
+				break
+			}
+		}
+	}
+	if an != nil {
 		if amt, ok := parseAmountNode(src, an); ok {
 			p.Units = &amt
 		}

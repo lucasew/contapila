@@ -1,7 +1,9 @@
 ; Opening mid-2023
 
 2023-07-01 * "Opening balances"
+  document: "docs/by-account/Assets/BR/Alfa/ContaCorrente/20240301_statement.txt"
   Assets:BR:Alfa:ContaCorrente  12000.00 BRL
+    institution: "BancoAlfa"
   Assets:BR:Alfa:Poupanca  4000.00 BRL
   Assets:BR:Beta:ContaCorrente  2500.00 BRL
   Assets:Cash:Carteira  150.00 BRL

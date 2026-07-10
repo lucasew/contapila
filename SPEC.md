@@ -116,6 +116,11 @@ Ledger argument is the **directory name** under the project root (see §4).
 | Shared prices | `<root>/prices.beancount` |
 | Prices empty or missing | **Warn**; empty price DB; conversion falls back per §8 |
 | Includes | Paths relative to the **including file's directory**; globs allowed |
+| Optional root commodities | `<root>/commodities.beancount` — often `include`d from ledgers |
+
+**Price DB:** for a given (base, quote, date), **last write wins** when loading `prices.beancount` (and if the same day appears twice).
+
+Ledgers may also `include "../prices.beancount"` / `include "../commodities.beancount"` so those directives appear in the ledger stream (real-repo style). The project-level PriceDB still comes from the root prices file path.
 
 ### 4.3 Isolation and sharing
 
@@ -126,6 +131,61 @@ Ledger argument is the **directory name** under the project root (see §4).
 | Market `price` directives | **Shared** (`prices.beancount` → one PriceDB for all ledgers) |
 
 Multiple entrypoints are **named parallel ledgers**, never merged into one inventory.
+
+### 4.4 Account documents (`docs/by-account`)
+
+Optional project tree for source documents linked to accounts. Account components
+become **subdirectories** (`:` → `/`):
+
+```text
+<root>/docs/by-account/<seg>/<seg>/…/<filename>
+```
+
+Example: `Assets:BR:Alfa:ContaCorrente` → `docs/by-account/Assets/BR/Alfa/ContaCorrente/`.
+
+**Filenames** start with a calendar date in **`yyyymmdd`**, then an optional
+separator and rest of the name:
+
+```text
+20240301_statement.txt
+20230810-INV-001.pdf
+```
+
+Transactions may also set metadata `document: "docs/by-account/..."`. **MVP:** layout + example only; UI/CLI do not yet surface links. Metadata keys are parsed as **warn + ignore** until stored in AST.
+
+### 4.5 Ledgers in CUE (discovered) and inter-ledger links
+
+On project open the host **looks up** `<root>/*/main.beancount` and injects a
+generated CUE fragment (workspaced-style host data):
+
+```cue
+ledgers: close({
+  personal: {name: "personal", main: "<abs>/personal/main.beancount"}
+  acme:     {name: "acme",     main: "<abs>/acme/main.beancount"}
+  // …
+})
+```
+
+Types live in the embedded **prelude**:
+
+| Type | Meaning |
+|------|---------|
+| `#Ledger` | `{name: #LedgerID, main: string}` — one discovered ledger |
+| `#LedgerID` | Directory-name shape: `^[A-Za-z][A-Za-z0-9_-]*$` |
+| `#LedgerName` | `or([for n, _ in ledgers {n}])` — **keys of the injected map only** |
+| `#LedgerRef` / `#LedgerLink` | Cross-ledger endpoints using `#LedgerName` |
+
+User `contapila.cue` does **not** list ledgers; inventing keys under `ledgers` fails (struct is `close`d). Links:
+
+```cue
+links: [{
+  name: "acme-profit-distribution"
+  from: {ledger: "acme", account: "Equity:DistribuicaoLucros"}
+  to:   {ledger: "personal", account: "Income:Ativo:BR:DistribuicaoLucros:Acme"}
+}]
+```
+
+**MVP:** CUE validates ledger **names** against discovery; `check` does **not** reconcile balances yet.
 
 ---
 

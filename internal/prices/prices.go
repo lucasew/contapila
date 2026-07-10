@@ -45,6 +45,13 @@ func LoadFile(path string) (*DB, diag.List, error) {
 
 func (db *DB) Add(base, quote string, date time.Time, rate *big.Rat) {
 	k := key(base, quote)
+	// Last write wins for the same (base, quote, date).
+	for i := range db.series[k] {
+		if db.series[k][i].Date.Equal(date) {
+			db.series[k][i].Rate = new(big.Rat).Set(rate)
+			return
+		}
+	}
 	db.series[k] = append(db.series[k], point{Date: date, Rate: new(big.Rat).Set(rate)})
 	sort.Slice(db.series[k], func(i, j int) bool {
 		return db.series[k][i].Date.Before(db.series[k][j].Date)

@@ -1,6 +1,10 @@
 ; personal — deep household dogfood (compact journal).
 option "operating_currency" "BRL"
 
+; Root shared declarations (real-repo style explicit includes).
+include "../commodities.beancount"
+include "../prices.beancount"
+
 include "accounts.beancount"
 include "opening.beancount"
 include "income.beancount"
@@ -9,3 +13,6 @@ include "cards.beancount"
 include "broker.beancount"
 include "fixed-income.beancount"
 include "transfers.beancount"
+include "controls.beancount"
+include "surface.beancount"
+include "distributions.beancount"

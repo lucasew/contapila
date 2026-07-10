@@ -2,41 +2,26 @@
 
 | Path | Role |
 |------|------|
-| **`example/`** | Default dogfood project: **depth over volume**. Multi-ledger, rich chart, domain includes, ~few hundred txns. Use this day-to-day. |
-| **`kitchensink/`** | Scale corpus: same multi-ledger ideas, **≥100k–1M transactions** for parser/booking/UI load. Not for reading by hand. |
-| **`golden/`** | Reserved for expected check/balances snapshots. |
+| **`example/`** | Default dogfood: **depth over volume**. Multi-ledger, real-repo surface (includes, pad/balance/close, meta, docs). |
+| **`kitchensink/`** | Scale corpus (~1M txns). Untouched by example depth work. |
+| **`golden/`** | Reserved for expected snapshots. |
 
 ## `example/` (deep)
 
-Ledgers: `personal` · `acme` · `ong` · `smuggle` (+ ignored `scratch/`).
-
-| Ledger | What it exercises |
-|--------|-------------------|
-| personal | BR-shaped chart, cards-by-month, CDB maturities, avg-cost equities/FII/crypto/USD, FX+IOF, family loan, soft AR, payee+narration |
-| acme | AR invoices + collections, AP suppliers/tax, payroll, profit distributions |
-| ong | Grant receivable → deferred → income, donations, programs |
-| smuggle | Unit inventory (`CIGPK`), multi-cost buys, warehouse/transit/cache, residual gains, confiscation |
-
 ```bash
-cd testdata/example
-contapila status
-contapila check
-contapila balances personal
-contapila web
+contapila -C testdata/example check   # expects OK + many metadata/query warns
+contapila -C testdata/example web
 ```
 
-## `kitchensink/` (volume)
+| Ledger | Exercises |
+|--------|-----------|
+| personal | Root `include` of commodities+prices; cards; CDB maturities; avg-cost equities; pad→balance; close temp account; tags; meta (warn); mirrored Acme distributions |
+| acme | AR/AP; root includes; pad/balance; close clearing; invoice meta |
+| ong | Grants deferred |
+| smuggle | `CIGPK` inventory |
 
-Same ledgers/topology spirit, generated at high volume for stress.
+Also: `docs/by-account/…` (SPEC §4.4), `links` in `contapila.cue` (SPEC §4.5, not enforced), `query`/`custom`/`document` (warn+skip).
 
-```bash
-cd testdata/kitchensink
-contapila check   # expect minutes on ~1M txns
-```
+## `kitchensink/`
 
-Regenerate kitchensink (optional):
-
-```bash
-python3 /path/to/gen_fat_example.py 1000000
-# then move output into testdata/kitchensink
-```
+High volume only — do not hand-edit for surface features.
