@@ -150,6 +150,7 @@
     {{end}}
 
     {{if eq .Page "pnl"}}
+      {{template "chart-panel" .}}
       <div class="grid gap-4 md:grid-cols-2">
         <section>
           <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Income</h2>
@@ -194,6 +195,7 @@
 
     {{if eq .Page "networth"}}
       {{if not .Error}}
+      {{template "chart-panel" .}}
       <div class="mb-3 flex items-baseline gap-3 border border-base-300 bg-base-200 px-3 py-2">
         <div>
           <div class="text-[0.65rem] uppercase tracking-wide text-base-content/50">Net worth</div>

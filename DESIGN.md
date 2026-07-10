@@ -1,6 +1,6 @@
 # Contapila web UI
 
-Status: density-shell pass (Cmd+K and Fava graphs follow later).
+Status: density shell + uPlot charts on net worth / P&L / account (Cmd+K still later).
 
 ## Intent
 
@@ -67,16 +67,20 @@ Implementation (daisyUI way):
 ## Components
 
 navbar/topbar, drawer, menu, table, alert, badge, breadcrumbs, input, theme-controller  
-(Cmd+K modal later; charts later)
+(Cmd+K modal later)
+
+## Charts (uPlot, vendored)
+
+- Assets: `internal/web/static/vendor/uplot/` — update with `./scripts/vendor-uplot.sh [ver]`
+- Glue: `static/charts.js` + template partials `charts.html` (`chart-assets`, `chart-panel`)
+- **Net worth** / **account**: stepped line, one point per balance-changing event, **op currency**, price ≤ event date
+- **Income statement**: diverging bars (income up, expenses down); bin from time filter (year→month, month→day, multi-year→year)
+- Hierarchy/treemap: not yet (can add another lib later without rewriting series APIs)
 
 ## Cmd+K (next phase)
 
 - Fuzzy jump + slash-ish (`time`, `ledger`, `check`, reports, accounts)
 - Not required to type full strings
-
-## Graphs (later phase)
-
-Steal **Fava chart scheme**: net worth over time, income vs expenses by interval, hierarchy breakdown, account balance over time.
 
 ## Motion
 

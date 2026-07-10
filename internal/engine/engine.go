@@ -497,10 +497,9 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 			if units.Sign() == 0 {
 				continue
 			}
+			// Beancount signs: assets usually debit (+), liabilities credit (−).
+			// NW = Σ signed positions — do not negate liabilities again.
 			val, usedCost := l.convert(b, acct, comm, units, asOf)
-			if booking.IsLiability(acct) {
-				val = new(big.Rat).Neg(val)
-			}
 			lines = append(lines, NetWorthLine{Account: acct, Commodity: comm, Units: units, Value: val, UsedCost: usedCost})
 			total.Add(total, val)
 		}

@@ -2,6 +2,7 @@ package web
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"math/big"
@@ -28,7 +29,7 @@ import (
 //go:embed templates/*
 var templateFS embed.FS
 
-//go:embed static/*
+//go:embed all:static
 var staticFS embed.FS
 
 type Server struct {
@@ -53,6 +54,13 @@ func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 	funcMap := template.FuncMap{
 		"eq":          func(a, b string) bool { return a == b },
 		"queryEscape": url.QueryEscape,
+		"jsonStr": func(s string) template.JS {
+			b, err := json.Marshal(s)
+			if err != nil {
+				return template.JS(`""`)
+			}
+			return template.JS(b)
+		},
 		"ledgerURL": func(ledger, page, timeFilter string) string {
 			u := "/l/" + url.PathEscape(ledger) + "/" + url.PathEscape(page)
 			if timeFilter != "" {
@@ -138,6 +146,11 @@ type pageData struct {
 	CommodityActivity []balanceRow
 	CommodityMeta     []metaKV
 	CommodityPrices   []pricePointRow // price history for this base commodity
+	// Charts (uPlot): ChartJSON is safe JSON embedded in the page.
+	ChartID    string
+	ChartTitle string
+	ChartJSON  template.JS
+	NeedCharts bool
 }
 
 // priceSeriesRow is one base/quote pair summary on the prices report.
@@ -272,6 +285,15 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 			p := l.PnL(pr.Start, pr.End)
 			data.IncomeRows = buildBalances(p.Income)
 			data.ExpenseRows = buildBalances(p.Expenses)
+			from, to := pr.Start, pr.End
+			kind := period.ChartBin(timeStr, pr)
+			bars := l.PnLBars(from, to, kind)
+			if js, err := chartBarsJSON(bars, l.OpCurrency); err == nil && js != "" {
+				data.NeedCharts = true
+				data.ChartID = "chart-pnl"
+				data.ChartTitle = "Income vs expenses"
+				data.ChartJSON = js
+			}
 		}
 	case "networth":
 		lines, total, err := l.NetWorth(asOf)
@@ -285,6 +307,16 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 					Units: ln.Units.FloatString(4), Value: ln.Value.FloatString(2),
 					UsedCost: ln.UsedCost,
 				})
+			}
+			// Event series over filter range (or full history if open).
+			pts, serr := l.NetWorthSeries(pr.Start, pr.End)
+			if serr == nil {
+				if js, jerr := chartLineJSON(pts, l.OpCurrency, "Net worth"); jerr == nil && js != "" {
+					data.NeedCharts = true
+					data.ChartID = "chart-networth"
+					data.ChartTitle = "Net worth over time"
+					data.ChartJSON = js
+				}
 			}
 		}
 	case "documents":
@@ -377,7 +409,80 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 		data.AccountMeta = metaRows(info.Metadata)
 		data.AccountCurrencies = info.Currencies
 	}
+	if pts, err := l.AccountSeries(account, pr.Start, pr.End); err == nil {
+		if js, jerr := chartLineJSON(pts, l.OpCurrency, "Balance"); jerr == nil && js != "" {
+			data.NeedCharts = true
+			data.ChartID = "chart-account"
+			data.ChartTitle = "Balance over time"
+			data.ChartJSON = js
+		}
+	}
 	s.render(w, "account.html", data)
+}
+
+// chartLineJSON builds uPlot line payload (event series, op currency).
+func chartLineJSON(pts []engine.SeriesPoint, currency, label string) (template.JS, error) {
+	if len(pts) == 0 {
+		return "", nil
+	}
+	type payload struct {
+		Kind     string    `json:"kind"`
+		Currency string    `json:"currency"`
+		Label    string    `json:"label"`
+		X        []int64   `json:"x"`
+		Y        []float64 `json:"y"`
+	}
+	p := payload{Kind: "line", Currency: currency, Label: label, X: make([]int64, len(pts)), Y: make([]float64, len(pts))}
+	for i, pt := range pts {
+		p.X[i] = pt.Date.UTC().Unix()
+		p.Y[i] = ratFloat(pt.Value)
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return "", err
+	}
+	return template.JS(b), nil
+}
+
+// chartBarsJSON builds uPlot diverging bar payload.
+func chartBarsJSON(bars []engine.BarPoint, currency string) (template.JS, error) {
+	if len(bars) == 0 {
+		return "", nil
+	}
+	type payload struct {
+		Kind     string    `json:"kind"`
+		Currency string    `json:"currency"`
+		X        []int64   `json:"x"`
+		Labels   []string  `json:"labels"`
+		Income   []float64 `json:"income"`
+		Expense  []float64 `json:"expense"`
+	}
+	p := payload{
+		Kind: "bars", Currency: currency,
+		X: make([]int64, len(bars)), Labels: make([]string, len(bars)),
+		Income: make([]float64, len(bars)), Expense: make([]float64, len(bars)),
+	}
+	for i, b := range bars {
+		// mid-bin timestamp for axis
+		mid := b.Start.Add(b.End.Sub(b.Start) / 2)
+		p.X[i] = mid.UTC().Unix()
+		p.Labels[i] = b.Label
+		p.Income[i] = ratFloat(b.Income)
+		p.Expense[i] = ratFloat(b.Expense)
+	}
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return "", err
+	}
+	return template.JS(raw), nil
+}
+
+func ratFloat(r *big.Rat) float64 {
+	if r == nil {
+		return 0
+	}
+	f, _ := r.Float64()
+	return f
 }
 
 func documentRows(docs []ast.Document) []docRow {

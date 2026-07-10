@@ -347,7 +347,9 @@ Example:
 
 ### 8.4 Net worth
 
-- Convert positions to operating currency with §8.3.
+- Include **Assets** and **Liabilities** only (not Equity/Income/Expenses).
+- Convert positions to operating currency with §8.3 using **signed** unit balances
+  (Beancount: liabilities are usually credit → negative units; do **not** flip sign again).
 - Net worth is **market** value when prices exist; cost fallback is warned.
 
 ---

@@ -114,4 +114,14 @@
     color: var(--color-primary);
     font-weight: 600;
   }
+
+  /* uPlot defaults to width: min-content; host must own the full content width */
+  .contapila-chart {
+    width: 100%;
+    display: block;
+  }
+  .contapila-chart .uplot {
+    width: 100%;
+    max-width: 100%;
+  }
 }
