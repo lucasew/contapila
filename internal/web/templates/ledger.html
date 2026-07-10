@@ -184,7 +184,6 @@
             <tr>
               <th>Account</th>
               <th class="text-right">Units</th>
-              <th>Commodity</th>
               <th class="text-right">Value</th>
               <th></th>
             </tr>
@@ -193,8 +192,7 @@
             {{range .NetWorthRows}}
             <tr>
               <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
-              <td class="text-right tabular text-xs">{{.Units}}</td>
-              <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a></td>
+              <td class="text-right tabular text-xs font-medium whitespace-nowrap">{{.Units}} <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a></td>
               <td class="text-right tabular text-xs font-medium">{{.Value}}</td>
               <td class="text-[0.65rem] text-warning">{{if .UsedCost}}cost{{end}}</td>
             </tr>
