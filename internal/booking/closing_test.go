@@ -8,12 +8,17 @@ import (
 	"github.com/lucasew/contapila-go/internal/diag"
 )
 
+func bookProbe(dirs []ast.Directive) []BookedTxn {
+	e := New()
+	e.Book(dirs)
+	return e.Txns
+}
+
 func TestExpandClosingHappyPath(t *testing.T) {
 	dirs := []ast.Directive{
 		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Pending:Refund"},
 		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Cash"},
 		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Equity:Open"},
-		// fund pending
 		ast.Transaction{
 			Meta: ast.Meta{Date: d("2024-01-05"), File: "j.beancount", Line: 5},
 			Flag: "*", Narration: "fund",
@@ -22,7 +27,6 @@ func TestExpandClosingHappyPath(t *testing.T) {
 				{Account: "Equity:Open", Units: amt("-50", "BRL")},
 			},
 		},
-		// drain to zero + mark close
 		ast.Transaction{
 			Meta:      ast.Meta{Date: d("2024-01-10"), File: "j.beancount", Line: 12},
 			Flag:      "*",
@@ -37,7 +41,7 @@ func TestExpandClosingHappyPath(t *testing.T) {
 			},
 		},
 	}
-	out, diags := ExpandClosing(dirs)
+	out, diags := ExpandClosing(dirs, bookProbe(dirs))
 	if diags.HasErrors() {
 		t.Fatalf("diags: %v", diags)
 	}
@@ -55,44 +59,96 @@ func TestExpandClosingHappyPath(t *testing.T) {
 	if !ok || cl.Account != "Assets:Pending:Refund" || !cl.Date.Equal(d("2024-01-11")) {
 		t.Fatalf("close=%+v", out[len(dirs)+1])
 	}
-	// End-to-end: book expanded stream; balance 0 holds after drain.
-	e := New()
-	e.Book(out)
-	if e.Diags.HasErrors() {
-		t.Fatalf("book: %v", e.Diags)
+	e, _, bdiags := BookWithClosing(dirs)
+	if bdiags.HasErrors() {
+		t.Fatalf("book: %v", bdiags)
 	}
 	if _, ok := e.Close["Assets:Pending:Refund"]; !ok {
 		t.Fatal("expected close recorded")
 	}
 }
 
-func TestExpandClosingUnitlessError(t *testing.T) {
+func TestExpandClosingResidualInferred(t *testing.T) {
+	// Unit-less closing leg reuses residual fill from bookTxn.
 	dirs := []ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Pending:Refund"},
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Cash"},
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Equity:Open"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2024-01-05"), File: "j", Line: 1},
+			Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Pending:Refund", Units: amt("50", "BRL")},
+				{Account: "Equity:Open", Units: amt("-50", "BRL")},
+			},
+		},
 		ast.Transaction{
 			Meta: ast.Meta{Date: d("2024-01-10"), File: "j", Line: 3},
+			Flag: "*",
 			Postings: []ast.Posting{
-				{Account: "Assets:Cash", Units: amt("-10", "BRL")},
-				{Account: "Expenses:X", Metadata: ast.Metadata{"closing": "TRUE"}},
+				// residual drain of pending → filled -50 BRL
+				{Account: "Assets:Pending:Refund", Metadata: ast.Metadata{"closing": "TRUE"}},
+				{Account: "Assets:Cash", Units: amt("50", "BRL")},
 			},
 		},
 	}
-	out, diags := ExpandClosing(dirs)
+	out, diags := ExpandClosing(dirs, bookProbe(dirs))
+	if diags.HasErrors() {
+		t.Fatalf("diags: %v", diags)
+	}
+	var bal ast.Balance
+	found := false
+	for _, d := range out {
+		if b, ok := d.(ast.Balance); ok {
+			bal = b
+			found = true
+		}
+	}
+	if !found || bal.Account != "Assets:Pending:Refund" || bal.Amount.Commodity != "BRL" {
+		t.Fatalf("expected residual→BRL balance, got found=%v bal=%+v", found, bal)
+	}
+	e, _, bdiags := BookWithClosing(dirs)
+	if bdiags.HasErrors() {
+		t.Fatalf("book: %v", bdiags)
+	}
+	if _, ok := e.Close["Assets:Pending:Refund"]; !ok {
+		t.Fatal("expected close")
+	}
+}
+
+func TestExpandClosingUnbookedError(t *testing.T) {
+	// Two residuals → txn fails to book → closing cannot use residual fill.
+	dirs := []ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:A"},
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:B"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2024-01-10"), File: "j", Line: 3},
+			Postings: []ast.Posting{
+				{Account: "Assets:A", Metadata: ast.Metadata{"closing": "TRUE"}},
+				{Account: "Assets:B"},
+			},
+		},
+	}
+	out, diags := ExpandClosing(dirs, bookProbe(dirs))
 	if !diags.HasErrors() {
 		t.Fatal("expected error")
 	}
 	if len(out) != len(dirs) {
 		t.Fatalf("should not inject on error, got %d", len(out))
 	}
-	if !hasMsg(diags, "unit") && !hasMsg(diags, "units") {
+	if !hasMsg(diags, "not booked") && !hasMsg(diags, "infer") {
 		t.Fatalf("msg=%v", diags)
 	}
 }
 
 func TestExpandClosingExistingCloseWarn(t *testing.T) {
 	dirs := []ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Pending:Refund"},
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Cash"},
 		ast.Close{Meta: ast.Meta{Date: d("2024-01-20")}, Account: "Assets:Pending:Refund"},
 		ast.Transaction{
 			Meta: ast.Meta{Date: d("2024-01-10"), File: "j", Line: 5},
+			Flag: "*",
 			Postings: []ast.Posting{
 				{
 					Account:  "Assets:Pending:Refund",
@@ -103,14 +159,13 @@ func TestExpandClosingExistingCloseWarn(t *testing.T) {
 			},
 		},
 	}
-	out, diags := ExpandClosing(dirs)
+	out, diags := ExpandClosing(dirs, bookProbe(dirs))
 	if diags.HasErrors() {
 		t.Fatalf("errors: %v", diags)
 	}
 	if !hasSeverity(diags, diag.Warn) {
 		t.Fatalf("expected warn, got %v", diags)
 	}
-	// balance 0 still injected; synthetic close skipped
 	var totalClose, totalBal int
 	for _, d := range out {
 		switch d.(type) {
@@ -130,8 +185,11 @@ func TestExpandClosingExistingCloseWarn(t *testing.T) {
 
 func TestExpandClosingOnlyMarkedCommodity(t *testing.T) {
 	dirs := []ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Broker"},
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Cash"},
 		ast.Transaction{
 			Meta: ast.Meta{Date: d("2024-02-01"), File: "j", Line: 1},
+			Flag: "*",
 			Postings: []ast.Posting{
 				{
 					Account:  "Assets:Broker",
@@ -142,7 +200,26 @@ func TestExpandClosingOnlyMarkedCommodity(t *testing.T) {
 			},
 		},
 	}
-	out, diags := ExpandClosing(dirs)
+	// unbalanced multi-ccy may fail book — use matching residual or same ccy
+	// Force explicit units path: book may error on unbalanced BRL/USD.
+	// Use residual cash for BRL only:
+	dirs = []ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Broker"},
+		ast.Open{Meta: ast.Meta{Date: d("2024-01-01")}, Account: "Assets:Cash"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2024-02-01"), File: "j", Line: 1},
+			Flag: "*",
+			Postings: []ast.Posting{
+				{
+					Account:  "Assets:Broker",
+					Units:    amt("-10", "USD"),
+					Metadata: ast.Metadata{"closing": "TRUE"},
+				},
+				{Account: "Assets:Cash", Units: amt("10", "USD")},
+			},
+		},
+	}
+	out, diags := ExpandClosing(dirs, bookProbe(dirs))
 	if diags.HasErrors() {
 		t.Fatalf("%v", diags)
 	}

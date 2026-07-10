@@ -118,14 +118,9 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 			}
 		}
 	}
-	// posting closing: TRUE → balance 0 + close next day (see booking.ExpandClosing).
-	var cdiags diag.List
-	stream, cdiags = booking.ExpandClosing(stream)
+	// closing: TRUE expands after residual fill (BookWithClosing), then re-books.
+	b, stream, cdiags := booking.BookWithClosing(stream)
 	diags.Merge(cdiags)
-
-	b := booking.New()
-	b.Book(stream)
-	diags.Merge(b.Diags)
 
 	// Expand <ledger>/docs/by-account into synthetic document directives.
 	synth, err := docs.ScanByAccount(p.Root, name)
