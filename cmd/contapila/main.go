@@ -159,7 +159,30 @@ func balancesCmd() *cobra.Command {
 			if t.IsZero() {
 				t = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 			}
-			showLedger := len(args) == 0
+			// Single ledger: hierarchical tree. Multi-ledger: flat sorted table.
+			if len(args) == 1 {
+				return withLedgers(args, func(l *engine.Ledger) error {
+					tree := l.BalancesTree(t)
+					fmt.Printf("== %s balances ==\n", l.Name)
+					for _, ln := range tree {
+						pad := strings.Repeat("  ", ln.Depth)
+						mark := "  "
+						if ln.IsRollup {
+							mark = "Σ "
+						}
+						name := ln.Name
+						if name == "" {
+							name = ln.Account
+						}
+						amt := ""
+						if ln.Amount != nil {
+							amt = ln.Amount.FloatString(4)
+						}
+						fmt.Printf("%s%s%-28s %12s %s\n", pad, mark, name, amt, ln.Commodity)
+					}
+					return nil
+				})
+			}
 			type row struct {
 				ledger, account, amount, commodity string
 			}
@@ -191,7 +214,6 @@ func balancesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// Stable global order: account name, then commodity, then ledger.
 			sort.Slice(rows, func(i, j int) bool {
 				if rows[i].account != rows[j].account {
 					return rows[i].account < rows[j].account
@@ -202,16 +224,9 @@ func balancesCmd() *cobra.Command {
 				return rows[i].ledger < rows[j].ledger
 			})
 			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-			if showLedger {
-				fmt.Fprintln(w, "LEDGER\tACCOUNT\tAMOUNT\tCOMMODITY")
-				for _, r := range rows {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.ledger, r.account, r.amount, r.commodity)
-				}
-			} else {
-				fmt.Fprintln(w, "ACCOUNT\tAMOUNT\tCOMMODITY")
-				for _, r := range rows {
-					fmt.Fprintf(w, "%s\t%s\t%s\n", r.account, r.amount, r.commodity)
-				}
+			fmt.Fprintln(w, "LEDGER\tACCOUNT\tAMOUNT\tCOMMODITY")
+			for _, r := range rows {
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", r.ledger, r.account, r.amount, r.commodity)
 			}
 			return w.Flush()
 		},

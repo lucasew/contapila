@@ -186,10 +186,11 @@ type docRow struct {
 
 type balanceRow struct {
 	Account   string
+	Path      string // collapse key (account or account+\x1f+commodity)
 	Name      string // short label (last segment) for tree display
 	Commodity string
 	Amount    string
-	Depth     int    // hierarchical indent (P&L tree)
+	Depth     int    // hierarchical indent
 	IsRollup  bool   // parent total row
 	PadLeft   string // e.g. "1.5rem" for template indent
 }
@@ -284,7 +285,7 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 	case "check":
 		// ok
 	case "balances":
-		data.BalanceRows = buildBalances(l.BalancesAsOf(asOf))
+		data.BalanceRows = buildBalanceTreeRows(l.BalancesTree(asOf))
 	case "journal":
 		if perr == nil {
 			data.Journal = l.Journal(pr.Start, pr.End)
@@ -741,7 +742,7 @@ func buildBalances(bals map[string]map[string]*big.Rat) []balanceRow {
 	for a, byComm := range bals {
 		for c, n := range byComm {
 			rows = append(rows, balanceRow{
-				Account: a, Commodity: c, Amount: n.FloatString(4),
+				Account: a, Path: a, Commodity: c, Amount: n.FloatString(4),
 			})
 		}
 	}
@@ -751,6 +752,39 @@ func buildBalances(bals map[string]map[string]*big.Rat) []balanceRow {
 		}
 		return rows[i].Commodity < rows[j].Commodity
 	})
+	return rows
+}
+
+func buildBalanceTreeRows(lines []engine.BalanceTreeLine) []balanceRow {
+	rows := make([]balanceRow, 0, len(lines))
+	for _, ln := range lines {
+		pad := ""
+		if ln.Depth > 0 {
+			pad = strconv.FormatFloat(float64(ln.Depth)*0.75, 'f', 2, 64) + "rem"
+		}
+		name := ln.Name
+		if name == "" {
+			name = ln.Account
+		}
+		path := ln.Path
+		if path == "" {
+			path = ln.Account
+		}
+		amt := ""
+		if ln.Amount != nil {
+			amt = ln.Amount.FloatString(4)
+		}
+		rows = append(rows, balanceRow{
+			Account:   ln.Account,
+			Path:      path,
+			Name:      name,
+			Commodity: ln.Commodity,
+			Amount:    amt,
+			Depth:     ln.Depth,
+			IsRollup:  ln.IsRollup,
+			PadLeft:   pad,
+		})
+	}
 	return rows
 }
 
