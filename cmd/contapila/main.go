@@ -344,18 +344,31 @@ func networthCmd() *cobra.Command {
 				t = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 			}
 			return withLedgers(args, func(l *engine.Ledger) error {
-				lines, total, err := l.NetWorth(t)
+				lines, total, err := l.NetWorthTree(t)
 				if err != nil {
 					return err
 				}
 				fmt.Printf("== %s net worth (%s) ==\n", l.Name, l.OpCurrency)
 				for _, ln := range lines {
+					pad := strings.Repeat("  ", ln.Depth)
+					mark := "  "
+					if ln.IsRollup {
+						mark = "Σ "
+					}
+					name := ln.Name
+					if name == "" {
+						name = ln.Account
+					}
 					flag := ""
 					if ln.UsedCost {
 						flag = " (cost)"
 					}
-					fmt.Printf("  %-40s %12s %s => %s %s%s\n",
-						ln.Account, ln.Units.FloatString(4), ln.Commodity, ln.Value.FloatString(2), l.OpCurrency, flag)
+					units := ""
+					if ln.Units != nil {
+						units = ln.Units.FloatString(4) + " " + ln.Commodity
+					}
+					fmt.Printf("%s%s%-28s %16s => %s %s%s\n",
+						pad, mark, name, units, ln.Value.FloatString(2), l.OpCurrency, flag)
 				}
 				fmt.Printf("TOTAL %s %s\n", total.FloatString(2), l.OpCurrency)
 				return nil

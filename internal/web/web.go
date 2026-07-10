@@ -196,10 +196,15 @@ type balanceRow struct {
 
 type nwRow struct {
 	Account   string
+	Path      string // collapse key
+	Name      string // leaf segment
 	Commodity string
 	Units     string
 	Value     string
 	UsedCost  bool
+	Depth     int
+	IsRollup  bool
+	PadLeft   string
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -300,18 +305,12 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case "networth":
-		lines, total, err := l.NetWorth(asOf)
+		tree, total, err := l.NetWorthTree(asOf)
 		if err != nil {
 			data.Error = err.Error()
 		} else {
 			data.NetWorthTot = total.FloatString(2)
-			for _, ln := range lines {
-				data.NetWorthRows = append(data.NetWorthRows, nwRow{
-					Account: ln.Account, Commodity: ln.Commodity,
-					Units: ln.Units.FloatString(4), Value: ln.Value.FloatString(2),
-					UsedCost: ln.UsedCost,
-				})
-			}
+			data.NetWorthRows = buildNetWorthRows(tree)
 			// Event series over filter range (or full history if open).
 			pts, serr := l.NetWorthSeries(pr.Start, pr.End)
 			if serr == nil {
@@ -772,6 +771,41 @@ func buildPnLRows(lines []engine.PnLLine) []balanceRow {
 			Name:      name,
 			Commodity: ln.Commodity,
 			Amount:    ln.Amount.FloatString(2),
+			Depth:     ln.Depth,
+			IsRollup:  ln.IsRollup,
+			PadLeft:   pad,
+		})
+	}
+	return rows
+}
+
+func buildNetWorthRows(lines []engine.NetWorthTreeLine) []nwRow {
+	rows := make([]nwRow, 0, len(lines))
+	for _, ln := range lines {
+		pad := ""
+		if ln.Depth > 0 {
+			pad = strconv.FormatFloat(float64(ln.Depth)*0.75, 'f', 2, 64) + "rem"
+		}
+		name := ln.Name
+		if name == "" {
+			name = ln.Account
+		}
+		path := ln.Path
+		if path == "" {
+			path = ln.Account
+		}
+		units := ""
+		if ln.Units != nil {
+			units = ln.Units.FloatString(4)
+		}
+		rows = append(rows, nwRow{
+			Account:   ln.Account,
+			Path:      path,
+			Name:      name,
+			Commodity: ln.Commodity,
+			Units:     units,
+			Value:     ln.Value.FloatString(2),
+			UsedCost:  ln.UsedCost,
 			Depth:     ln.Depth,
 			IsRollup:  ln.IsRollup,
 			PadLeft:   pad,

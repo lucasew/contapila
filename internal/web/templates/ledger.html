@@ -223,7 +223,7 @@
       <p class="text-xs text-base-content/60">No asset/liability positions.</p>
       {{else}}
       <div class="overflow-x-auto border border-base-300">
-        <table class="table table-xs table-zebra">
+        <table class="table table-xs pnl-tree" data-pnl-tree>
           <thead>
             <tr>
               <th>Account</th>
@@ -234,9 +234,22 @@
           </thead>
           <tbody>
             {{range .NetWorthRows}}
-            <tr>
-              <td class="font-mono text-xs"><a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a></td>
-              <td class="text-right tabular text-xs font-medium whitespace-nowrap">{{.Units}} <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a></td>
+            <tr class="{{if .IsRollup}}font-semibold bg-base-200/40{{end}}" data-account="{{.Path}}">
+              <td class="font-mono text-xs" {{if .PadLeft}}style="padding-left: {{.PadLeft}}"{{end}}>
+                {{if .IsRollup}}
+                <button type="button" class="pnl-toggle btn btn-ghost btn-xs btn-square align-middle h-5 min-h-0 w-5 p-0" data-pnl-toggle aria-expanded="true" title="Collapse">▼</button>
+                {{else}}
+                <span class="inline-block w-5" aria-hidden="true"></span>
+                {{end}}
+                <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}" title="{{.Account}}">{{if .Name}}{{.Name}}{{else}}{{.Account}}{{end}}</a>
+              </td>
+              <td class="text-right tabular text-xs font-medium whitespace-nowrap">
+                {{if .Units}}
+                {{.Units}}{{if .Commodity}} <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a>{{end}}
+                {{else if and .Commodity (not .IsRollup)}}
+                <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a>
+                {{end}}
+              </td>
               <td class="text-right tabular text-xs font-medium">{{.Value}}</td>
               <td class="text-[0.65rem] text-warning">{{if .UsedCost}}cost{{end}}</td>
             </tr>
@@ -244,6 +257,7 @@
           </tbody>
         </table>
       </div>
+      <script src="/static/pnl-tree.js" defer></script>
       {{end}}
       {{end}}
     {{end}}

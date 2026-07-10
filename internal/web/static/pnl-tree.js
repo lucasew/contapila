@@ -1,6 +1,15 @@
-/* Collapsible P&L account tree — expanded by default. */
+/* Collapsible account tree (P&L / net worth) — expanded by default.
+ * data-account is the tree path; descendants match path+":" or path+"\x1f".
+ */
 (function () {
   "use strict";
+
+  var CC_SEP = "\x1f"; // multi-commodity under an account
+
+  function isDescendant(path, parent) {
+    if (!path || !parent || path === parent) return false;
+    return path.indexOf(parent + ":") === 0 || path.indexOf(parent + CC_SEP) === 0;
+  }
 
   function refresh(table) {
     var collapsed = [];
@@ -11,8 +20,7 @@
       var a = row.getAttribute("data-account");
       var hide = false;
       for (var i = 0; i < collapsed.length; i++) {
-        var c = collapsed[i];
-        if (a.length > c.length && a.indexOf(c + ":") === 0) {
+        if (isDescendant(a, collapsed[i])) {
           hide = true;
           break;
         }
