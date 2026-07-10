@@ -20,7 +20,7 @@ contapila -C testdata/example web
 | ong | Grants deferred |
 | smuggle | `CIGPK` inventory |
 
-Also: `docs/by-account/…` (SPEC §4.4), `links` in `contapila.cue` (SPEC §4.5, not enforced), `query`/`custom`/`document` (warn+skip).
+Also: `<ledger>/docs/by-account/…` (SPEC §4.4), CUE `links` (SPEC §4.5, not enforced), `query`/`custom` (warn+skip).
 
 ## `kitchensink/`
 

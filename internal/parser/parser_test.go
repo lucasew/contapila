@@ -46,6 +46,7 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
   Expenses:Food
 2020-01-03 query "q" "select *"
 2020-01-04 custom "fava-option" "True"
+2020-01-05 document Assets:Cash "personal/docs/by-account/Assets/Cash/20200105_x.txt"
 `)
 	dirs, diags, err := Parse("t.beancount", src)
 	if err != nil {
@@ -53,12 +54,15 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 	}
 	var open ast.Open
 	var txn ast.Transaction
+	var doc ast.Document
 	for _, d := range dirs {
 		switch v := d.(type) {
 		case ast.Open:
 			open = v
 		case ast.Transaction:
 			txn = v
+		case ast.Document:
+			doc = v
 		}
 	}
 	if open.Account != "Assets:Cash" || len(open.Currencies) != 1 || open.Currencies[0] != "BRL" {
@@ -70,7 +74,10 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 	if txn.Postings[0].Units == nil || txn.Postings[0].Units.Commodity != "BRL" {
 		t.Fatalf("posting units=%+v", txn.Postings[0].Units)
 	}
-	// metadata + query/custom should warn
+	if doc.Account != "Assets:Cash" || doc.Path != "personal/docs/by-account/Assets/Cash/20200105_x.txt" {
+		t.Fatalf("document=%+v", doc)
+	}
+	// metadata + query/custom should warn; document should parse (not warn skip)
 	var hasMeta, hasQuery, hasCustom bool
 	for _, d := range diags {
 		if strings.Contains(d.Message, "metadata") {
@@ -81,6 +88,9 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 		}
 		if strings.Contains(d.Message, "custom") {
 			hasCustom = true
+		}
+		if strings.Contains(d.Message, "document") {
+			t.Fatalf("document should not warn-skip: %v", d.Message)
 		}
 	}
 	if !hasMeta || !hasQuery || !hasCustom {

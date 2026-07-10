@@ -7,10 +7,15 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"path"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
+	docsutil "github.com/lucasew/contapila-go/internal/docs"
 	"github.com/lucasew/contapila-go/internal/engine"
 	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/prices"
@@ -79,6 +84,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	// Built CSS (daisyUI themes via @plugin) — correct text/css MIME.
 	mux.Handle("GET /static/", http.FileServer(http.FS(staticFS)))
+	// Ledger docs: URL /docfile/<ledger>/docs/by-account/... → <root>/<ledger>/docs/...
+	mux.HandleFunc("GET /docfile/{path...}", s.handleDocFile)
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	// Named entity routes before generic page so "account"/"commodity" are not page names.
 	mux.HandleFunc("GET /l/{ledger}/account/{account...}", s.handleAccount)
@@ -115,10 +122,22 @@ type pageData struct {
 	AccountName     string
 	AccountBalances []balanceRow
 	AccountActivity []balanceRow
+	AccountDocs []docRow
+	// Documents is the ledger documents report (/documents) list.
+	Documents []docRow
 	// Commodity page
 	CommodityName     string
 	CommodityBalances []balanceRow // Account + Amount for this commodity
 	CommodityActivity []balanceRow
+}
+
+type docRow struct {
+	Date      string
+	Account   string // owning account (for sidebar)
+	Path      string // project-relative
+	Href      string // /docs/... URL
+	Name      string // base filename
+	Synthetic bool
 }
 
 type balanceRow struct {
@@ -237,6 +256,8 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
+	case "documents":
+		data.Documents = documentRows(l.Documents)
 	default:
 		http.NotFound(w, r)
 		return
@@ -318,7 +339,55 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	data.AccountActivity = arow
 
 	data.Journal = l.JournalForAccount(account, pr.Start, pr.End)
+	data.AccountDocs = documentRows(l.DocumentsForAccount(account))
 	s.render(w, "account.html", data)
+}
+
+func documentRows(docs []ast.Document) []docRow {
+	var rows []docRow
+	for _, d := range docs {
+		p := filepath.ToSlash(d.Path)
+		p = strings.TrimPrefix(p, "/")
+		href := ""
+		// serve only <ledger>/docs/... via /docfile/
+		if docsutil.IsLedgerDocPath(p) {
+			href = "/docfile/" + p
+		}
+		rows = append(rows, docRow{
+			Date:      d.Date.Format("2006-01-02"),
+			Account:   d.Account,
+			Path:      p,
+			Href:      href,
+			Name:      path.Base(p),
+			Synthetic: d.Synthetic,
+		})
+	}
+	return rows
+}
+
+// handleDocFile serves project-relative paths under <ledger>/docs/ only.
+func (s *Server) handleDocFile(w http.ResponseWriter, r *http.Request) {
+	rel := filepath.ToSlash(r.PathValue("path"))
+	rel = strings.TrimPrefix(path.Clean("/"+rel), "/")
+	if !docsutil.IsLedgerDocPath(rel) {
+		http.NotFound(w, r)
+		return
+	}
+	full := filepath.Join(s.Project.Root, filepath.FromSlash(rel))
+	// Contain under project root
+	root := s.Project.Root
+	absFull, err1 := filepath.Abs(full)
+	absRoot, err2 := filepath.Abs(root)
+	if err1 != nil || err2 != nil {
+		http.NotFound(w, r)
+		return
+	}
+	sep := string(filepath.Separator)
+	if absFull != absRoot && !strings.HasPrefix(absFull, absRoot+sep) {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, full)
 }
 
 func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {

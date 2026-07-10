@@ -132,16 +132,18 @@ Ledgers may also `include "../prices.beancount"` / `include "../commodities.bean
 
 Multiple entrypoints are **named parallel ledgers**, never merged into one inventory.
 
-### 4.4 Account documents (`docs/by-account`)
+### 4.4 Account documents (`<ledger>/docs/by-account`)
 
-Optional project tree for source documents linked to accounts. Account components
-become **subdirectories** (`:` → `/`):
+Documents are **per ledger** (same isolation as inventory). Layout:
 
 ```text
-<root>/docs/by-account/<seg>/<seg>/…/<filename>
+<root>/<ledger>/docs/by-account/<seg>/<seg>/…/<filename>
 ```
 
-Example: `Assets:BR:Alfa:ContaCorrente` → `docs/by-account/Assets/BR/Alfa/ContaCorrente/`.
+Account components become **subdirectories** (`:` → `/`):
+
+Example: ledger `personal`, account `Assets:BR:Alfa:ContaCorrente` →  
+`personal/docs/by-account/Assets/BR/Alfa/ContaCorrente/`.
 
 **Filenames** start with a calendar date in **`yyyymmdd`**, then an optional
 separator and rest of the name:
@@ -151,7 +153,13 @@ separator and rest of the name:
 20230810-INV-001.pdf
 ```
 
-Transactions may also set metadata `document: "docs/by-account/..."`. **MVP:** layout + example only; UI/CLI do not yet surface links. Metadata keys are parsed as **warn + ignore** until stored in AST.
+On ledger open the host walks **`<that-ledger>/docs/by-account/**`** and synthesizes
+`document` directives (date from filename prefix, account from path). Explicit
+`document` lines in that ledger’s journal merge in; same path prefers the explicit
+directive. Account web UI lists documents and serves files under `/docfile/<ledger>/docs/…`.
+
+Metadata `document: "…"` on transactions is still **warn + ignore** until metadata
+is stored in the AST (filesystem expansion does not require it).
 
 ### 4.5 Ledgers in CUE (discovered) and inter-ledger links
 
@@ -357,7 +365,7 @@ Example:
 | `pad` | yes | Go |
 | `note` | yes | Go (store/display) |
 | `event` | yes | Go (store/display) |
-| `document` | no | — |
+| `document` | yes (store/display; also synthesized from `<ledger>/docs/by-account`) | Go |
 | `query` | no | — |
 | `pushtag` / `poptag` / `pushmeta` / `popmeta` | no | — |
 | `plugin` | no | — |

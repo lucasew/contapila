@@ -12,6 +12,7 @@ import (
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/booking"
 	"github.com/lucasew/contapila-go/internal/diag"
+	"github.com/lucasew/contapila-go/internal/docs"
 	"github.com/lucasew/contapila-go/internal/loader"
 	"github.com/lucasew/contapila-go/internal/prices"
 	"github.com/lucasew/contapila-go/pkg/project"
@@ -19,13 +20,15 @@ import (
 
 // Ledger is a fully loaded and booked named ledger.
 type Ledger struct {
-	Name     string
-	Project  *project.Project
-	Dirs     []ast.Directive
-	Book     *booking.Engine
-	Diags    diag.List
+	Name       string
+	Project    *project.Project
+	Dirs       []ast.Directive
+	Book       *booking.Engine
+	Diags      diag.List
 	OpCurrency string
-	Prices   *prices.DB
+	Prices     *prices.DB
+	// Documents merges this ledger's `document` directives with <ledger>/docs/by-account.
+	Documents []ast.Document
 }
 
 // OpenProject wraps project.OpenProject and loads shared prices.
@@ -64,17 +67,28 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 	if err != nil {
 		return nil, err
 	}
-	// filter stream: drop includes already expanded
+	// filter stream: drop includes already expanded; collect explicit documents
 	var stream []ast.Directive
+	var ledgerDocs []ast.Document
 	for _, d := range dirs {
 		if _, ok := d.(ast.Include); ok {
 			continue
 		}
 		stream = append(stream, d)
+		if doc, ok := d.(ast.Document); ok {
+			ledgerDocs = append(ledgerDocs, doc)
+		}
 	}
 	b := booking.New()
 	b.Book(stream)
 	diags.Merge(b.Diags)
+
+	// Expand <ledger>/docs/by-account into synthetic document directives.
+	synth, err := docs.ScanByAccount(p.Root, name)
+	if err != nil {
+		slog.Warn("docs scan failed", "ledger", name, "err", err)
+	}
+	allDocs := docs.Merge(ledgerDocs, synth)
 
 	op := inferOpCurrency(stream, p)
 	return &Ledger{
@@ -85,7 +99,13 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 		Diags:      diags,
 		OpCurrency: op,
 		Prices:     pdb,
+		Documents:  allDocs,
 	}, nil
+}
+
+// DocumentsForAccount returns documents linked to account (exact name).
+func (l *Ledger) DocumentsForAccount(account string) []ast.Document {
+	return docs.ForAccount(l.Documents, account)
 }
 
 func inferOpCurrency(dirs []ast.Directive, p *project.Project) string {

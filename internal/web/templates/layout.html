@@ -63,6 +63,7 @@
 {{else if eq .Page "check"}}Check
 {{else if eq .Page "balances"}}Balances
 {{else if eq .Page "journal"}}Journal
+{{else if eq .Page "documents"}}Documents
 {{else if eq .Page "account"}}{{.AccountName}}
 {{else if eq .Page "commodity"}}{{.CommodityName}}
 {{else if .Page}}{{.Page}}
@@ -149,6 +150,9 @@
   </li>
   <li class="w-full">
     <a href="{{ledgerURL .LedgerName "networth" .Time}}" class="rounded-none w-full {{if eq .Page "networth"}}menu-active{{end}}">Net worth</a>
+  </li>
+  <li class="w-full">
+    <a href="{{ledgerURL .LedgerName "documents" .Time}}" class="rounded-none w-full {{if eq .Page "documents"}}menu-active{{end}}">Documents</a>
   </li>
   {{if eq .Page "account"}}
   <li class="menu-title px-3 py-2 mt-1 text-[0.65rem]"><span>Account</span></li>

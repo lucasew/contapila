@@ -110,7 +110,38 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 	case "event":
 		warnIgnoredKeyValues(file, src, n, diags)
 		return ast.Event{Meta: meta(file, src, n), Type: unquote(textField(src, n, "type")), Desc: unquote(textField(src, n, "desc"))}, true
-	case "query", "custom", "document":
+	case "document":
+		// 2020-01-01 document Assets:Cash "docs/..."
+		path := ""
+		if fn := field(n, "filename"); fn != nil {
+			path = unquote(strings.TrimSpace(slice(src, fn)))
+			if path == "" {
+				// filename node may wrap a string child
+				for i := uint32(0); i < fn.NamedChildCount(); i++ {
+					c := fn.NamedChild(i)
+					if c.Type() == "string" {
+						path = unquote(slice(src, c))
+						break
+					}
+				}
+			}
+		}
+		if path == "" {
+			for i := uint32(0); i < n.NamedChildCount(); i++ {
+				c := n.NamedChild(i)
+				if c.Type() == "string" {
+					path = unquote(slice(src, c))
+					break
+				}
+			}
+		}
+		warnIgnoredKeyValues(file, src, n, diags)
+		return ast.Document{
+			Meta:    meta(file, src, n),
+			Account: textField(src, n, "account"),
+			Path:    path,
+		}, true
+	case "query", "custom":
 		diags.Warn(file, fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
 	case "comment":

@@ -205,5 +205,44 @@
       {{end}}
       {{end}}
     {{end}}
+
+    {{if eq .Page "documents"}}
+      {{if not .Documents}}
+      <p class="text-xs text-base-content/60">No documents for this ledger.</p>
+      {{else}}
+      <div class="overflow-x-auto border border-base-300">
+        <table class="table table-xs table-zebra">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Account</th>
+              <th>File</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Documents}}
+            <tr>
+              <td class="font-mono tabular text-xs text-base-content/70">{{.Date}}</td>
+              <td class="font-mono text-xs">
+                {{if .Account}}
+                <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
+                {{end}}
+              </td>
+              <td class="font-mono text-xs">
+                {{if .Href}}
+                <a class="link link-hover link-primary" href="{{.Href}}" title="{{.Path}}">{{.Name}}</a>
+                {{else}}
+                <span title="{{.Path}}">{{.Name}}</span>
+                {{end}}
+              </td>
+              <td class="text-[0.65rem] text-base-content/50">{{if .Synthetic}}docs/{{else}}directive{{end}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{end}}
+    {{end}}
   {{template "app-close" .}}
 </html>

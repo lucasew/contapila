@@ -2,7 +2,7 @@
 
 2023-08-10 * "Orion" "Invoice INV-001"
   invoice: "INV-001"
-  document: "docs/by-account/Assets/Receivable/Client/Orion/20230810_INV-001.txt"
+  document: "acme/docs/by-account/Assets/Receivable/Client/Orion/20230810_INV-001.txt"
   Assets:Receivable:Client:Orion  8000.00 BRL
     role: "ar"
   Income:Sales:BR

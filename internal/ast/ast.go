@@ -115,6 +115,14 @@ type Event struct {
 	Desc string
 }
 
+// Document is a Beancount document directive, or one synthesized from <ledger>/docs/by-account.
+type Document struct {
+	Meta
+	Account   string
+	Path      string // project-relative (e.g. personal/docs/by-account/Assets/Cash/20240101_x.txt)
+	Synthetic bool   // true when expanded from the docs/ tree at runtime
+}
+
 type Unknown struct {
 	Meta
 	Kind string
