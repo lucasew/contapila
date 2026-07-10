@@ -315,6 +315,16 @@ Example:
   Income:Gains
 ```
 
+### 7.3a Booking order (same calendar day)
+
+Directives are applied in order of:
+
+1. **Date** ascending  
+2. **Type rank** (Beancount-style): `open` → `pad` → `balance` → txn/note/event/… → `document` → `close`  
+3. **Source line** when available  
+
+So an `open` and a transaction on the same day book correctly even if includes put the txn earlier in the raw stream. A transaction **before** the open **date** is still an error.
+
 ### 7.4 Residual leg (no magic)
 
 - At most **one** posting with **missing amount** absorbs the remainder (typically gains).

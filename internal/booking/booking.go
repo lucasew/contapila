@@ -75,11 +75,26 @@ func New() *Engine {
 }
 
 func (e *Engine) Book(dirs []ast.Directive) {
-	// stable sort by date; keep original order for same date via stable
+	// Sort by date, then Beancount-style type rank (open before txn, close last),
+	// then source line. Same-day open that appears after a txn in include order
+	// must still open the account before the txn is booked.
 	indexed := make([]ast.Directive, len(dirs))
 	copy(indexed, dirs)
 	sort.SliceStable(indexed, func(i, j int) bool {
-		return indexed[i].GetDate().Before(indexed[j].GetDate())
+		a, b := indexed[i], indexed[j]
+		da, db := a.GetDate(), b.GetDate()
+		if !da.Equal(db) {
+			return da.Before(db)
+		}
+		oa, ob := directiveOrder(a), directiveOrder(b)
+		if oa != ob {
+			return oa < ob
+		}
+		la, lb := directiveLine(a), directiveLine(b)
+		if la != lb && la > 0 && lb > 0 {
+			return la < lb
+		}
+		return false
 	})
 
 	for _, d := range indexed {
@@ -102,6 +117,35 @@ func (e *Engine) Book(dirs []ast.Directive) {
 			// handled elsewhere
 		}
 	}
+}
+
+// directiveOrder ranks same-day directives (lower runs first).
+// Aligns with Beancount SORT_ORDER (Open before Balance/Txn, Close last),
+// with Pad before Balance so same-day pad→balance works under model A.
+func directiveOrder(d ast.Directive) int {
+	switch d.(type) {
+	case ast.Open:
+		return -2
+	case ast.Pad:
+		return -1
+	case ast.Balance:
+		return 0
+	case ast.Document:
+		return 2
+	case ast.Close:
+		return 3
+	default:
+		// Transaction, Note, Event, Price, Commodity, Option, …
+		return 1
+	}
+}
+
+func directiveLine(d ast.Directive) int {
+	type hasLine interface{ GetLine() int }
+	if x, ok := d.(hasLine); ok {
+		return x.GetLine()
+	}
+	return 0
 }
 
 func (e *Engine) bookOpen(o ast.Open) {

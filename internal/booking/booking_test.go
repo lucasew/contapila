@@ -155,3 +155,77 @@ func TestAverageCostSell(t *testing.T) {
 		t.Fatalf("gains bal %s want -25", g.FloatString(4))
 	}
 }
+
+func TestSameDayOpenAfterTxnInStreamOK(t *testing.T) {
+	// Same date: txn appears before open in stream (include/file order).
+	// Type rank must still open accounts before booking the txn.
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-01"), File: "txns.beancount", Line: 10},
+			Flag: "*", Narration: "before open in stream",
+			Postings: []ast.Posting{
+				{Account: "Assets:Cash", Units: amt("10", "BRL")},
+				{Account: "Equity:Open", Units: amt("-10", "BRL")},
+			},
+		},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01"), File: "accounts.beancount", Line: 1}, Account: "Assets:Cash"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01"), File: "accounts.beancount", Line: 2}, Account: "Equity:Open"},
+	})
+	for _, d := range e.Diags {
+		if strings.Contains(d.Message, "not opened") || strings.Contains(d.Message, "before open") {
+			t.Fatalf("unexpected: %v", d)
+		}
+	}
+	if _, ok := e.Open["Assets:Cash"]; !ok {
+		t.Fatal("open missing")
+	}
+}
+
+func TestSameDayOpenBeforeTxnOK(t *testing.T) {
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Equity:Open"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-01"), File: "t", Line: 1},
+			Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Cash", Units: amt("10", "BRL")},
+				{Account: "Equity:Open", Units: amt("-10", "BRL")},
+			},
+		},
+	})
+	for _, d := range e.Diags {
+		if strings.Contains(d.Message, "not opened") || strings.Contains(d.Message, "before open") {
+			t.Fatalf("unexpected: %v", d)
+		}
+	}
+}
+
+func TestTxnBeforeOpenDateNotOpened(t *testing.T) {
+	// Date sort books the earlier txn before the later open is registered,
+	// so this surfaces as "not opened" (not "before open").
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-02-01")}, Account: "Assets:Cash"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-02-01")}, Account: "Equity:Open"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-15"), File: "t", Line: 1},
+			Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Cash", Units: amt("10", "BRL")},
+				{Account: "Equity:Open", Units: amt("-10", "BRL")},
+			},
+		},
+	})
+	var notOpened bool
+	for _, d := range e.Diags {
+		if strings.Contains(d.Message, "not opened") {
+			notOpened = true
+		}
+	}
+	if !notOpened {
+		t.Fatalf("expected not opened for txn before open date, diags=%v", e.Diags)
+	}
+}
