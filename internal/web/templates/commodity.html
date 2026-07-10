@@ -48,8 +48,7 @@
           <thead class="sticky top-0 bg-base-100">
             <tr>
               <th>Date</th>
-              <th>Quote</th>
-              <th class="text-right">Rate</th>
+              <th class="text-right">Price</th>
               <th>Meta</th>
             </tr>
           </thead>
@@ -57,10 +56,9 @@
             {{range .CommodityPrices}}
             <tr>
               <td class="font-mono tabular text-xs text-base-content/70">{{.Date}}</td>
-              <td class="font-mono text-xs">
-                <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Quote $.Time}}">{{.Quote}}</a>
+              <td class="text-right tabular text-xs font-medium font-mono">
+                {{.Rate}} <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Quote $.Time}}">{{.Quote}}</a>
               </td>
-              <td class="text-right tabular text-xs font-medium">{{.Rate}}</td>
               <td class="text-xs text-base-content/70">
                 {{range $i, $m := .Metadata}}{{if $i}}, {{end}}<span class="font-mono">{{$m.Key}}</span>={{$m.Value}}{{end}}
               </td>
