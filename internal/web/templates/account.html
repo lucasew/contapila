@@ -71,7 +71,6 @@
             <tr>
               <th>Date</th>
               <th>File</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -80,13 +79,11 @@
               <td class="font-mono tabular text-xs text-base-content/70">{{.Date}}</td>
               <td class="font-mono text-xs">
                 {{if .Href}}
-                <a class="link link-hover link-primary" href="{{.Href}}">{{.Name}}</a>
+                <a class="link link-hover link-primary" href="{{.Href}}" title="{{.Path}}">{{.Name}}</a>
                 {{else}}
-                {{.Name}}
+                <span title="{{.Path}}">{{.Name}}</span>
                 {{end}}
-                <span class="opacity-50 text-[0.65rem] ml-1">{{.Path}}</span>
               </td>
-              <td class="text-[0.65rem] text-base-content/50">{{if .Synthetic}}from docs/{{else}}directive{{end}}</td>
             </tr>
             {{end}}
           </tbody>
