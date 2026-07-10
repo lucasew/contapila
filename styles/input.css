@@ -124,4 +124,13 @@
     width: 100%;
     max-width: 100%;
   }
+
+  .pnl-toggle {
+    font-size: 0.6rem;
+    line-height: 1;
+    opacity: 0.65;
+  }
+  .pnl-toggle:hover {
+    opacity: 1;
+  }
 }

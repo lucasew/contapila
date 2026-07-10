@@ -284,11 +284,11 @@ func pnlCmd() *cobra.Command {
 						if ln.IsRollup {
 							mark = "Σ "
 						}
-						comm := ln.Commodity
-						if comm == "" {
-							comm = ""
+						name := ln.Name
+						if name == "" {
+							name = ln.Account
 						}
-						fmt.Printf("%s%s%-40s %s %s\n", pad, mark, ln.Account, ln.Amount.FloatString(2), comm)
+						fmt.Printf("%s%s%-28s %s %s\n", pad, mark, name, ln.Amount.FloatString(2), ln.Commodity)
 					}
 				}
 				printPnLTree("Income:", inc)

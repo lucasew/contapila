@@ -11,8 +11,9 @@ import (
 // Amounts keep Beancount signs (income typically −, expenses typically +)
 // and are converted to operating currency when set.
 type PnLLine struct {
-	Account   string
-	Depth     int // colons in account name (Income=0, Income:X=1, …)
+	Account   string // full account path (for links / identity)
+	Name      string // last segment only (Fava-style tree label)
+	Depth     int    // colons in account name (Income=0, Income:X=1, …)
 	Amount    *big.Rat
 	IsRollup  bool // has child accounts in this statement
 	Commodity string
@@ -86,6 +87,7 @@ func (l *Ledger) pnlTreeSection(m map[string]map[string]*big.Rat) []PnLLine {
 		}
 		out = append(out, PnLLine{
 			Account:   n,
+			Name:      accountLeaf(n),
 			Depth:     strings.Count(n, ":"),
 			Amount:    new(big.Rat).Set(amt),
 			IsRollup:  hasChild[n],
@@ -93,6 +95,14 @@ func (l *Ledger) pnlTreeSection(m map[string]map[string]*big.Rat) []PnLLine {
 		})
 	}
 	return out
+}
+
+// accountLeaf is the last ":" segment (Income:Ativo:BR → BR).
+func accountLeaf(account string) string {
+	if i := strings.LastIndex(account, ":"); i >= 0 && i+1 < len(account) {
+		return account[i+1:]
+	}
+	return account
 }
 
 // pnlConvert maps a native signed amount to op currency (signed).

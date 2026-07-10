@@ -38,3 +38,34 @@ func TestPnLBarsArePerBinFlows(t *testing.T) {
 		t.Fatal("first bar equals year sum — cumulative bug")
 	}
 }
+
+func TestPnLBarsTrimEmptyEdges(t *testing.T) {
+	root := filepath.Join("..", "..", "testdata", "example")
+	p, pdb, _, err := OpenProject(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := OpenLedger(p, pdb, "personal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Full 2026 calendar year, but ledger activity stops mid-year → no empty months after last event.
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
+	bars := l.PnLBars(from, to, period.BinMonth)
+	if len(bars) == 0 {
+		t.Fatal("expected some 2026 activity")
+	}
+	if len(bars) == 12 {
+		t.Fatal("expected trailing empty months trimmed, got full year")
+	}
+	if barEmpty(bars[0]) || barEmpty(bars[len(bars)-1]) {
+		t.Fatalf("edges still empty: first=%v last=%v", bars[0], bars[len(bars)-1])
+	}
+	// last label should not be 2026-12 if July is last with data in example
+	last := bars[len(bars)-1].Label
+	if last == "2026-12" {
+		t.Fatalf("trailing empty not trimmed, last=%s", last)
+	}
+	t.Logf("kept %d bins, %s … %s", len(bars), bars[0].Label, last)
+}

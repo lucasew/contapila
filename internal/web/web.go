@@ -186,6 +186,7 @@ type docRow struct {
 
 type balanceRow struct {
 	Account   string
+	Name      string // short label (last segment) for tree display
 	Commodity string
 	Amount    string
 	Depth     int    // hierarchical indent (P&L tree)
@@ -762,8 +763,13 @@ func buildPnLRows(lines []engine.PnLLine) []balanceRow {
 			// 0.75rem per level
 			pad = strconv.FormatFloat(float64(ln.Depth)*0.75, 'f', 2, 64) + "rem"
 		}
+		name := ln.Name
+		if name == "" {
+			name = ln.Account
+		}
 		rows = append(rows, balanceRow{
 			Account:   ln.Account,
+			Name:      name,
 			Commodity: ln.Commodity,
 			Amount:    ln.Amount.FloatString(2),
 			Depth:     ln.Depth,

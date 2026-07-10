@@ -223,7 +223,31 @@ func (l *Ledger) PnLBars(from, to time.Time, kind period.BinKind) []BarPoint {
 			Income: incMag, Expense: expMag,
 		})
 	}
-	return out
+	// Drop empty leading/trailing bins (e.g. year filter still in July → no Aug–Dec padding).
+	return trimEmptyEdgeBars(out)
+}
+
+func barEmpty(b BarPoint) bool {
+	return (b.Income == nil || b.Income.Sign() == 0) && (b.Expense == nil || b.Expense.Sign() == 0)
+}
+
+// trimEmptyEdgeBars removes zero-flow bins at the start and end of the series.
+// Interior empty bins are kept (gaps between active periods).
+func trimEmptyEdgeBars(bars []BarPoint) []BarPoint {
+	if len(bars) == 0 {
+		return bars
+	}
+	lo, hi := 0, len(bars)-1
+	for lo <= hi && barEmpty(bars[lo]) {
+		lo++
+	}
+	for hi >= lo && barEmpty(bars[hi]) {
+		hi--
+	}
+	if lo > hi {
+		return nil
+	}
+	return bars[lo : hi+1]
 }
 
 func binLabel(b period.Range, kind period.BinKind) string {
