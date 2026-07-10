@@ -256,7 +256,8 @@ Internal stages are separate packages; the public surface stays a deep module (s
 | In CUE (config plane) | Not in CUE |
 |-----------------------|------------|
 | Options (e.g. operating currency) | Transactions / postings |
-| Commodities + precision/tolerance/class | `price` time series |
+| Commodities + precision/tolerance/class | Full `price` time series (volume) |
+| Price **pair inventory** (`price_pairs` inject) | Individual price points / rates |
 | Per-ledger account open/close facts | `balance`, `pad` |
 | Project overlays in `contapila.cue` | `note`, `event`, journal stream |
 | Prelude defaults | Include graph resolution (Go first) |
@@ -357,10 +358,13 @@ Example:
 | `include` (+ globs) | yes | Go load |
 | `commodity` | yes | → CUE |
 | `open` / `close` | yes | → CUE (per ledger) |
-| `*` / `!` transactions, postings, metadata | yes | Go |
+| `*` / `!` transactions, postings | yes | Go |
+| metadata on `open` / `commodity` | yes (stored; CUE `#Account` / `#Commodity` tandem) | Go + CUE |
+| metadata on `price` | yes (stored on PriceDB points) | Go |
+| metadata on txn/posting | warn + ignore (not stored yet) | — |
 | cost `{}`, price `@` / `@@` | yes | Go |
 | empty residual posting | yes | Go |
-| `price` | yes (shared file) | Go PriceDB |
+| `price` | yes (shared file → PriceDB; CUE `price_pairs` inventory only) | Go + CUE |
 | `balance` | yes | Go |
 | `pad` | yes | Go |
 | `note` | yes | Go (store/display) |

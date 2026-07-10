@@ -10,7 +10,7 @@ import (
 
 func TestLoad(t *testing.T) {
 	t.Run("empty config", func(t *testing.T) {
-		cfg, err := Load([]byte("{}"), "test.cue", nil)
+		cfg, err := Load([]byte("{}"), "test.cue", nil, nil)
 		if err != nil {
 			t.Fatalf("failed to load empty config: %v", err)
 		}
@@ -26,7 +26,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("invalid config", func(t *testing.T) {
-		_, err := Load([]byte("invalid cue"), "test.cue", nil)
+		_, err := Load([]byte("invalid cue"), "test.cue", nil, nil)
 		if err == nil {
 			t.Errorf("expected error for invalid CUE, got nil")
 		}
@@ -38,7 +38,7 @@ commodities: {
 	BRL: { precision: 2 }
 }
 `
-		cfg, err := Load([]byte(user), "test.cue", nil)
+		cfg, err := Load([]byte(user), "test.cue", nil, nil)
 		if err != nil {
 			t.Fatalf("failed to load config: %v", err)
 		}
@@ -73,7 +73,7 @@ links: [{
 	to:   {ledger: "personal", account: "Income:Y"}
 }]
 `
-		cfg, err := Load([]byte(good), "test.cue", discovered)
+		cfg, err := Load([]byte(good), "test.cue", discovered, nil)
 		if err != nil {
 			t.Fatalf("good links: %v", err)
 		}
@@ -90,7 +90,7 @@ links: [{
 	to:   {ledger: "personal", account: "B"}
 }]
 `
-		if _, err := Load([]byte(badName), "test.cue", discovered); err == nil {
+		if _, err := Load([]byte(badName), "test.cue", discovered, nil); err == nil {
 			t.Fatal("expected error for unknown ledger name in links")
 		}
 	})
@@ -103,8 +103,48 @@ ledgers: {
 	extra: {name: "extra", main: "/x"}
 }
 `
-		if _, err := Load([]byte(user), "test.cue", discovered); err == nil {
+		if _, err := Load([]byte(user), "test.cue", discovered, nil); err == nil {
 			t.Fatal("expected error when user adds ledger not on disk")
+		}
+	})
+
+	t.Run("price pairs inject closed inventory", func(t *testing.T) {
+		pairs := []PricePair{
+			{Base: "USD", Quote: "BRL"},
+			{Base: "B3_PETR4", Quote: "BRL"},
+		}
+		cfg, err := Load([]byte("{}"), "test.cue", nil, pairs)
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		base := cfg.Value.LookupPath(cue.ParsePath(`price_pairs."USD|BRL".base`))
+		s, err := base.String()
+		if err != nil || s != "USD" {
+			t.Fatalf("USD|BRL.base=%q err=%v", s, err)
+		}
+		// closed: user cannot invent pairs not in inject
+		user := `
+price_pairs: {
+	"FAKE|BRL": {base: "FAKE", quote: "BRL"}
+}
+`
+		if _, err := Load([]byte(user), "test.cue", nil, pairs); err == nil {
+			t.Fatal("expected error inventing price pair")
+		}
+		// user overlay on existing pair is ok
+		overlay := `
+price_pairs: {
+	"USD|BRL": {source: "BCB"}
+}
+`
+		cfg2, err := Load([]byte(overlay), "test.cue", nil, pairs)
+		if err != nil {
+			t.Fatalf("overlay: %v", err)
+		}
+		src := cfg2.Value.LookupPath(cue.ParsePath(`price_pairs."USD|BRL".source`))
+		ss, err := src.String()
+		if err != nil || ss != "BCB" {
+			t.Fatalf("source=%q err=%v", ss, err)
 		}
 	})
 
@@ -119,7 +159,7 @@ ledgers: {
 			{Name: "ong", Main: "/example/ong/main.beancount"},
 			{Name: "smuggle", Main: "/example/smuggle/main.beancount"},
 		}
-		if _, err := Load(b, "contapila.cue", discovered); err != nil {
+		if _, err := Load(b, "contapila.cue", discovered, nil); err != nil {
 			t.Fatalf("example config: %v", err)
 		}
 	})
@@ -136,5 +176,23 @@ func TestEncodeLedgersCUE_content(t *testing.T) {
 	ia, ib := strings.Index(src, "	a:"), strings.Index(src, "	b:")
 	if ia < 0 || ib < 0 || ia > ib {
 		t.Fatalf("expected sorted keys a then b: %s", src)
+	}
+}
+
+func TestEncodePricePairsCUE_content(t *testing.T) {
+	src := encodePricePairsCUE([]PricePair{
+		{Base: "USD", Quote: "BRL"},
+		{Base: "B3_PETR4", Quote: "BRL"},
+	})
+	if !strings.Contains(src, "price_pairs: close({") {
+		t.Fatalf("expected close: %s", src)
+	}
+	if !strings.Contains(src, `"B3_PETR4|BRL"`) || !strings.Contains(src, `"USD|BRL"`) {
+		t.Fatalf("expected pair keys: %s", src)
+	}
+	// sorted: B3 before USD
+	ib, iu := strings.Index(src, `"B3_PETR4|BRL"`), strings.Index(src, `"USD|BRL"`)
+	if ib < 0 || iu < 0 || ib > iu {
+		t.Fatalf("expected B3 before USD: %s", src)
 	}
 }

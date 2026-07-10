@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/lucasew/contapila-go/internal/config"
+	"github.com/lucasew/contapila-go/internal/prices"
 )
 
 type Ledger struct {
@@ -89,20 +90,10 @@ func OpenProject(cwd string) (*Project, error) {
 		discovered = append(discovered, config.Ledger{Name: l.Name, Main: l.MainPath})
 	}
 
-	cuePath := filepath.Join(root, ProjectMarker)
-	cueBytes, err := os.ReadFile(cuePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read %s: %w", ProjectMarker, err)
-	}
-
-	cfg, err := config.Load(cueBytes, cuePath, discovered)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
 	pricesPath := filepath.Join(root, PricesFilename)
 	pricesMissing := false
 	pricesEmpty := false
+	var pricePairs []config.PricePair
 	if info, err := os.Stat(pricesPath); os.IsNotExist(err) {
 		slog.Warn("prices.beancount is missing", "path", pricesPath)
 		pricesMissing = true
@@ -110,9 +101,29 @@ func OpenProject(cwd string) (*Project, error) {
 		if info.Size() == 0 {
 			slog.Warn("prices.beancount is empty", "path", pricesPath)
 			pricesEmpty = true
+		} else {
+			// Pair inventory only for CUE (not full series). Full DB loads in engine.OpenProject.
+			if pdb, _, err := prices.LoadFile(pricesPath); err != nil {
+				slog.Warn("failed loading prices for CUE pair inject", "err", err)
+			} else {
+				for _, p := range pdb.Pairs() {
+					pricePairs = append(pricePairs, config.PricePair{Base: p.Base, Quote: p.Quote})
+				}
+			}
 		}
 	} else {
 		return nil, fmt.Errorf("failed to stat prices file: %w", err)
+	}
+
+	cuePath := filepath.Join(root, ProjectMarker)
+	cueBytes, err := os.ReadFile(cuePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", ProjectMarker, err)
+	}
+
+	cfg, err := config.Load(cueBytes, cuePath, discovered, pricePairs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	return &Project{

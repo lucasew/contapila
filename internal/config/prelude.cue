@@ -1,5 +1,26 @@
+// Commodity policy (CUE) — journal `commodity` directives may carry matching
+// string attributes (name, asset-class, …). Host may inject discovered commodities later.
 #Commodity: {
 	precision: int | *5
+	// Common Beancount-style attributes (optional; open for more via ...).
+	name?:         string
+	"asset-class"?: string
+	"further-info"?: string
+	...
+}
+
+// Account policy / open facts (CUE). Journal `open` metadata unifies with this shape
+// when the host injects ledgers.<name>.accounts (planned); authoring in contapila.cue is allowed.
+#Account: {
+	name: string
+	// Declared currencies on `open Account CUR …`
+	currencies?: [...string]
+	// Common open metadata keys
+	institution?: string
+	role?:        string
+	"asset-class"?: string
+	"asset_class"?: string
+	...
 }
 
 // Filesystem-ish ledger directory name (parent of main.beancount).
@@ -9,13 +30,14 @@
 #Ledger: {
 	name: #LedgerID
 	main: string // absolute path to main.beancount
+	// Optional: account opens for this ledger (host inject and/or user overlays).
+	accounts?: [Name=string]: #Account & {name: Name}
 }
 
 // Map of discovered ledgers. The host injects a *closed* concrete struct:
 //
 //	ledgers: close({
 //	  personal: {name: "personal", main: ".../personal/main.beancount"}
-//	  acme:     {name: "acme",     main: ".../acme/main.beancount"}
 //	})
 //
 // Open typing here; closedness comes from the generated fragment.
@@ -39,13 +61,27 @@ ledgers: [Name=string]: #Ledger & {
 	note?: string
 }
 
+// One base/quote pair observed in prices.beancount (pair inventory only).
+// Full time series stay in Go PriceDB — not injected into CUE (volume).
+// Host injects closed map keyed by "base|quote"; user may overlay policy fields.
+#PricePair: {
+	base:  string
+	quote: string
+	// Optional pair-level notes / source labels (user or later inject).
+	source?: string
+	note?:   string
+	...
+}
+
 #Config: {
 	commodities: [string]: #Commodity
 	operating_currency?: [...string]
 	ledgers: [string]: #Ledger
 	links?:  [...#LedgerLink]
+	price_pairs?: [string]: #PricePair
 }
 
 // Default instance fields (unified with host inject + user contapila.cue).
 commodities: [string]: #Commodity
 links?:      [...#LedgerLink]
+price_pairs: [string]: #PricePair

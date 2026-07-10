@@ -18,6 +18,23 @@ import (
 	"github.com/lucasew/contapila-go/pkg/project"
 )
 
+// AccountInfo is an opened account plus metadata from the open directive.
+type AccountInfo struct {
+	Account    string
+	OpenDate   time.Time
+	Currencies []string
+	Metadata   ast.Metadata
+	File       string
+}
+
+// CommodityInfo is a commodity declaration plus metadata from the commodity directive.
+type CommodityInfo struct {
+	Currency string
+	Date     time.Time
+	Metadata ast.Metadata
+	File     string
+}
+
 // Ledger is a fully loaded and booked named ledger.
 type Ledger struct {
 	Name       string
@@ -29,6 +46,10 @@ type Ledger struct {
 	Prices     *prices.DB
 	// Documents merges this ledger's `document` directives with <ledger>/docs/by-account.
 	Documents []ast.Document
+	// Accounts keyed by account name (from open directives, with metadata).
+	Accounts map[string]AccountInfo
+	// Commodities keyed by currency (from commodity directives in this ledger stream).
+	Commodities map[string]CommodityInfo
 }
 
 // OpenProject wraps project.OpenProject and loads shared prices.
@@ -67,16 +88,34 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 	if err != nil {
 		return nil, err
 	}
-	// filter stream: drop includes already expanded; collect explicit documents
+	// filter stream: drop includes; collect documents, opens, commodities
 	var stream []ast.Directive
 	var ledgerDocs []ast.Document
+	accounts := map[string]AccountInfo{}
+	commodities := map[string]CommodityInfo{}
 	for _, d := range dirs {
 		if _, ok := d.(ast.Include); ok {
 			continue
 		}
 		stream = append(stream, d)
-		if doc, ok := d.(ast.Document); ok {
-			ledgerDocs = append(ledgerDocs, doc)
+		switch v := d.(type) {
+		case ast.Document:
+			ledgerDocs = append(ledgerDocs, v)
+		case ast.Open:
+			accounts[v.Account] = AccountInfo{
+				Account:    v.Account,
+				OpenDate:   v.Date,
+				Currencies: append([]string(nil), v.Currencies...),
+				Metadata:   cloneMeta(v.Metadata),
+				File:       v.File,
+			}
+		case ast.Commodity:
+			commodities[v.Currency] = CommodityInfo{
+				Currency: v.Currency,
+				Date:     v.Date,
+				Metadata: cloneMeta(v.Metadata),
+				File:     v.File,
+			}
 		}
 	}
 	b := booking.New()
@@ -92,15 +131,28 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 
 	op := inferOpCurrency(stream, p)
 	return &Ledger{
-		Name:       name,
-		Project:    p,
-		Dirs:       stream,
-		Book:       b,
-		Diags:      diags,
-		OpCurrency: op,
-		Prices:     pdb,
-		Documents:  allDocs,
+		Name:        name,
+		Project:     p,
+		Dirs:        stream,
+		Book:        b,
+		Diags:       diags,
+		OpCurrency:  op,
+		Prices:      pdb,
+		Documents:   allDocs,
+		Accounts:    accounts,
+		Commodities: commodities,
 	}, nil
+}
+
+func cloneMeta(m ast.Metadata) ast.Metadata {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(ast.Metadata, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 // DocumentsForAccount returns documents linked to account (exact name).

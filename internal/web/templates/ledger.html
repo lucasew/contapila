@@ -242,5 +242,47 @@
       </div>
       {{end}}
     {{end}}
+
+    {{if eq .Page "prices"}}
+      <p class="mb-2 text-xs text-base-content/60">Shared project prices (<span class="font-mono">prices.beancount</span>) — last write wins per day.</p>
+      {{if not .PriceSeries}}
+      <p class="text-xs text-base-content/60">No prices loaded.</p>
+      {{else}}
+      <div class="overflow-x-auto border border-base-300">
+        <table class="table table-xs table-zebra">
+          <thead>
+            <tr>
+              <th>Base</th>
+              <th>Quote</th>
+              <th class="text-right">Points</th>
+              <th>First</th>
+              <th>Last</th>
+              <th class="text-right">Last rate</th>
+              <th>Last meta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .PriceSeries}}
+            <tr>
+              <td class="font-mono text-xs">
+                <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Base $.Time}}">{{.Base}}</a>
+              </td>
+              <td class="font-mono text-xs">
+                <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Quote $.Time}}">{{.Quote}}</a>
+              </td>
+              <td class="text-right tabular text-xs">{{.Count}}</td>
+              <td class="font-mono tabular text-xs text-base-content/70">{{.FirstDate}}</td>
+              <td class="font-mono tabular text-xs text-base-content/70">{{.LastDate}}</td>
+              <td class="text-right tabular text-xs font-medium">{{.LastRate}}</td>
+              <td class="text-xs text-base-content/70">
+                {{range $i, $m := .LastMeta}}{{if $i}}, {{end}}<span class="font-mono">{{$m.Key}}</span>={{$m.Value}}{{end}}
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{end}}
+    {{end}}
   {{template "app-close" .}}
 </html>

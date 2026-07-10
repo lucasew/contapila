@@ -10,8 +10,11 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"cuelang.org/go/cue"
 
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
@@ -119,16 +122,44 @@ type pageData struct {
 	PeriodLabel string
 	Error       string
 	// Account page
-	AccountName     string
-	AccountBalances []balanceRow
-	AccountActivity []balanceRow
-	AccountDocs []docRow
+	AccountName       string
+	AccountBalances   []balanceRow
+	AccountActivity   []balanceRow
+	AccountDocs       []docRow
+	AccountMeta       []metaKV
+	AccountCurrencies []string
 	// Documents is the ledger documents report (/documents) list.
 	Documents []docRow
+	// Prices is the shared price-pairs report (/prices).
+	PriceSeries []priceSeriesRow
 	// Commodity page
 	CommodityName     string
 	CommodityBalances []balanceRow // Account + Amount for this commodity
 	CommodityActivity []balanceRow
+	CommodityMeta     []metaKV
+	CommodityPrices   []pricePointRow // price history for this base commodity
+}
+
+// priceSeriesRow is one base/quote pair summary on the prices report.
+type priceSeriesRow struct {
+	Base, Quote       string
+	Count             int
+	FirstDate         string
+	LastDate          string
+	LastRate          string
+	LastMeta          []metaKV
+}
+
+// pricePointRow is one observation on a commodity's price history.
+type pricePointRow struct {
+	Date     string
+	Quote    string
+	Rate     string
+	Metadata []metaKV
+}
+
+type metaKV struct {
+	Key, Value string
 }
 
 type docRow struct {
@@ -258,6 +289,8 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		}
 	case "documents":
 		data.Documents = documentRows(l.Documents)
+	case "prices":
+		data.PriceSeries = priceSeriesRows(s.Prices)
 	default:
 		http.NotFound(w, r)
 		return
@@ -340,6 +373,10 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 
 	data.Journal = l.JournalForAccount(account, pr.Start, pr.End)
 	data.AccountDocs = documentRows(l.DocumentsForAccount(account))
+	if info, ok := l.Accounts[account]; ok {
+		data.AccountMeta = metaRows(info.Metadata)
+		data.AccountCurrencies = info.Currencies
+	}
 	s.render(w, "account.html", data)
 }
 
@@ -460,7 +497,119 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data.Journal = l.JournalForCommodity(commodity, pr.Start, pr.End)
+	if info, ok := l.Commodities[commodity]; ok {
+		data.CommodityMeta = metaRows(info.Metadata)
+	}
+	// Overlay CUE commodity fields (name, asset-class, …) when present.
+	if s.Project.Config != nil {
+		data.CommodityMeta = mergeCUECommodityMeta(s.Project.Config.Value, commodity, data.CommodityMeta)
+	}
+	data.CommodityPrices = commodityPriceRows(s.Prices, commodity)
 	s.render(w, "commodity.html", data)
+}
+
+func priceSeriesRows(db *prices.DB) []priceSeriesRow {
+	if db == nil {
+		return nil
+	}
+	series := db.AllSeries()
+	out := make([]priceSeriesRow, 0, len(series))
+	for _, s := range series {
+		if len(s.Points) == 0 {
+			continue
+		}
+		first, last := s.Points[0], s.Points[len(s.Points)-1]
+		row := priceSeriesRow{
+			Base:      s.Base,
+			Quote:     s.Quote,
+			Count:     len(s.Points),
+			FirstDate: first.Date.Format("2006-01-02"),
+			LastDate:  last.Date.Format("2006-01-02"),
+			LastRate:  last.Rate.FloatString(6),
+			LastMeta:  metaRows(last.Metadata),
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func commodityPriceRows(db *prices.DB, base string) []pricePointRow {
+	if db == nil {
+		return nil
+	}
+	var out []pricePointRow
+	for _, s := range db.SeriesForBase(base) {
+		// newest first for history reading
+		for i := len(s.Points) - 1; i >= 0; i-- {
+			p := s.Points[i]
+			out = append(out, pricePointRow{
+				Date:     p.Date.Format("2006-01-02"),
+				Quote:    s.Quote,
+				Rate:     p.Rate.FloatString(6),
+				Metadata: metaRows(p.Metadata),
+			})
+		}
+	}
+	return out
+}
+
+func metaRows(m ast.Metadata) []metaKV {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]metaKV, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, metaKV{Key: k, Value: m[k]})
+	}
+	return out
+}
+
+// mergeCUECommodityMeta adds missing keys from contapila.cue commodities.<name>.
+func mergeCUECommodityMeta(cfg cue.Value, commodity string, rows []metaKV) []metaKV {
+	if !cfg.Exists() {
+		return rows
+	}
+	// commodities."B3_PETR4" path for odd names
+	v := cfg.LookupPath(cue.ParsePath("commodities." + strconv.Quote(commodity)))
+	if !v.Exists() {
+		v = cfg.LookupPath(cue.ParsePath("commodities." + commodity))
+	}
+	if !v.Exists() {
+		return rows
+	}
+	have := map[string]bool{}
+	for _, r := range rows {
+		have[r.Key] = true
+	}
+	it, err := v.Fields()
+	if err != nil {
+		return rows
+	}
+	var extra []metaKV
+	for it.Next() {
+		sel := it.Selector()
+		k := sel.String()
+		if k == "precision" || have[k] {
+			continue
+		}
+		s, err := it.Value().String()
+		if err != nil {
+			// allow int precision already skipped; try other concrete forms
+			continue
+		}
+		extra = append(extra, metaKV{Key: k, Value: s})
+		have[k] = true
+	}
+	if len(extra) == 0 {
+		return rows
+	}
+	sort.Slice(extra, func(i, j int) bool { return extra[i].Key < extra[j].Key })
+	return append(rows, extra...)
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data pageData) {

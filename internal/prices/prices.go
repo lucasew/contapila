@@ -13,49 +13,86 @@ import (
 // DB maps base commodity -> quote commodity -> sorted price points.
 type DB struct {
 	// key base|quote
-	series map[string][]point
+	series map[string][]Point
 }
 
-type point struct {
-	Date  time.Time
-	Rate  *big.Rat // quote per 1 base
+// Point is one price observation (quote per 1 base on Date).
+type Point struct {
+	Date     time.Time
+	Rate     *big.Rat // quote per 1 base
+	Metadata ast.Metadata
+	File     string // source file when known
 }
 
 func NewDB() *DB {
-	return &DB{series: map[string][]point{}}
+	return &DB{series: map[string][]Point{}}
 }
 
-func key(base, quote string) string { return base + "|" + quote }
+func PairKey(base, quote string) string { return base + "|" + quote }
+
+func key(base, quote string) string { return PairKey(base, quote) }
 
 // LoadFile loads prices.beancount (includes expanded).
 func LoadFile(path string) (*DB, diag.List, error) {
 	db := NewDB()
 	dirs, diags, err := loader.LoadFile(path)
 	if err != nil {
-		// missing file handled by caller
 		return db, diags, err
 	}
 	for _, d := range dirs {
 		if p, ok := d.(ast.Price); ok {
-			db.Add(p.Currency, p.Amount.Commodity, p.Date, p.Amount.Number)
+			db.AddPrice(p)
 		}
 	}
 	return db, diags, nil
 }
 
+// AddPrice records a price directive (last write wins for same base/quote/date).
+func (db *DB) AddPrice(p ast.Price) {
+	if p.Amount.Number == nil || p.Amount.Commodity == "" || p.Currency == "" {
+		return
+	}
+	db.add(p.Currency, p.Amount.Commodity, p.Date, p.Amount.Number, cloneMeta(p.Metadata), p.File)
+}
+
+// Add records a rate (no metadata).
 func (db *DB) Add(base, quote string, date time.Time, rate *big.Rat) {
+	db.add(base, quote, date, rate, nil, "")
+}
+
+func (db *DB) add(base, quote string, date time.Time, rate *big.Rat, md ast.Metadata, file string) {
 	k := key(base, quote)
 	// Last write wins for the same (base, quote, date).
 	for i := range db.series[k] {
 		if db.series[k][i].Date.Equal(date) {
 			db.series[k][i].Rate = new(big.Rat).Set(rate)
+			db.series[k][i].Metadata = md
+			if file != "" {
+				db.series[k][i].File = file
+			}
 			return
 		}
 	}
-	db.series[k] = append(db.series[k], point{Date: date, Rate: new(big.Rat).Set(rate)})
+	db.series[k] = append(db.series[k], Point{
+		Date:     date,
+		Rate:     new(big.Rat).Set(rate),
+		Metadata: md,
+		File:     file,
+	})
 	sort.Slice(db.series[k], func(i, j int) bool {
 		return db.series[k][i].Date.Before(db.series[k][j].Date)
 	})
+}
+
+func cloneMeta(m ast.Metadata) ast.Metadata {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(ast.Metadata, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 // Rate returns quote per base on or before asOf. ok=false if none.
@@ -64,7 +101,7 @@ func (db *DB) Rate(base, quote string, asOf time.Time) (*big.Rat, time.Time, boo
 		return big.NewRat(1, 1), asOf, true
 	}
 	pts := db.series[key(base, quote)]
-	var best *point
+	var best *Point
 	for i := range pts {
 		if !pts[i].Date.After(asOf) {
 			best = &pts[i]
@@ -74,4 +111,65 @@ func (db *DB) Rate(base, quote string, asOf time.Time) (*big.Rat, time.Time, boo
 		return nil, time.Time{}, false
 	}
 	return new(big.Rat).Set(best.Rate), best.Date, true
+}
+
+// Series is one base/quote pair with its points (oldest first).
+type Series struct {
+	Base, Quote string
+	Points      []Point
+}
+
+// AllSeries returns all pairs sorted by base then quote.
+func (db *DB) AllSeries() []Series {
+	var keys []string
+	for k := range db.series {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]Series, 0, len(keys))
+	for _, k := range keys {
+		base, quote, ok := splitKey(k)
+		if !ok {
+			continue
+		}
+		pts := db.series[k]
+		cp := make([]Point, len(pts))
+		copy(cp, pts)
+		out = append(out, Series{Base: base, Quote: quote, Points: cp})
+	}
+	return out
+}
+
+// SeriesForBase returns all series where base matches, sorted by quote.
+func (db *DB) SeriesForBase(base string) []Series {
+	var out []Series
+	for _, s := range db.AllSeries() {
+		if s.Base == base {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Pairs returns distinct base|quote keys for CUE inject (stable order).
+func (db *DB) Pairs() []struct{ Base, Quote string } {
+	var out []struct{ Base, Quote string }
+	for _, s := range db.AllSeries() {
+		out = append(out, struct{ Base, Quote string }{s.Base, s.Quote})
+	}
+	return out
+}
+
+func splitKey(k string) (base, quote string, ok bool) {
+	i := -1
+	for j := 0; j < len(k); j++ {
+		if k[j] == '|' {
+			i = j
+			break
+		}
+	}
+	if i <= 0 || i >= len(k)-1 {
+		return "", "", false
+	}
+	return k[:i], k[i+1:], true
 }

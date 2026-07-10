@@ -59,15 +59,21 @@ type Include struct {
 	Path string
 }
 
+// Metadata is Beancount key: value attributes on a directive (strings normalized).
+// Keys are stored as written (e.g. "asset-class", "institution").
+type Metadata map[string]string
+
 type Commodity struct {
 	Meta
 	Currency string
+	Metadata Metadata // from key_value under the commodity directive
 }
 
 type Open struct {
 	Meta
 	Account    string
 	Currencies []string // optional commodities declared on open (e.g. open Assets:Cash BRL)
+	Metadata   Metadata // from key_value under the open directive
 }
 
 type Close struct {
@@ -87,8 +93,9 @@ type Transaction struct {
 
 type Price struct {
 	Meta
-	Currency string
-	Amount   Amount
+	Currency string   // base commodity being priced
+	Amount   Amount   // quote amount (Number + quote Commodity)
+	Metadata Metadata // key_value under the price directive
 }
 
 type Balance struct {

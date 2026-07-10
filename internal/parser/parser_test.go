@@ -68,6 +68,9 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 	if open.Account != "Assets:Cash" || len(open.Currencies) != 1 || open.Currencies[0] != "BRL" {
 		t.Fatalf("open=%+v", open)
 	}
+	if open.Metadata["institution"] != "Banco" {
+		t.Fatalf("open metadata=%v", open.Metadata)
+	}
 	if len(txn.Tags) != 1 || txn.Tags[0] != "todo" {
 		t.Fatalf("tags=%v", txn.Tags)
 	}
@@ -77,11 +80,15 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 	if doc.Account != "Assets:Cash" || doc.Path != "personal/docs/by-account/Assets/Cash/20200105_x.txt" {
 		t.Fatalf("document=%+v", doc)
 	}
-	// metadata + query/custom should warn; document should parse (not warn skip)
-	var hasMeta, hasQuery, hasCustom bool
+	// open metadata is stored (no warn for institution); txn meta still warn
+	// query/custom still warn; document parses
+	var hasTxnMeta, hasQuery, hasCustom bool
 	for _, d := range diags {
-		if strings.Contains(d.Message, "metadata") {
-			hasMeta = true
+		if strings.Contains(d.Message, `metadata "role"`) || strings.Contains(d.Message, `metadata "role`) {
+			hasTxnMeta = true
+		}
+		if strings.Contains(d.Message, "institution") {
+			t.Fatalf("open metadata should be stored, not warned: %v", d.Message)
 		}
 		if strings.Contains(d.Message, "query") {
 			hasQuery = true
@@ -93,8 +100,69 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 			t.Fatalf("document should not warn-skip: %v", d.Message)
 		}
 	}
-	if !hasMeta || !hasQuery || !hasCustom {
-		t.Fatalf("expected meta/query/custom warns, diags=%v", diags)
+	if !hasTxnMeta || !hasQuery || !hasCustom {
+		t.Fatalf("expected txn meta/query/custom warns, diags=%v", diags)
+	}
+}
+
+func TestParseCommodityMetadata(t *testing.T) {
+	src := []byte(`
+1860-01-01 commodity BRL
+  name: "Brazilian Real"
+  asset-class: "fiat"
+`)
+	dirs, diags, err := Parse("t.beancount", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("diags: %v", diags)
+	}
+	for _, d := range diags {
+		if strings.Contains(d.Message, "metadata") {
+			t.Fatalf("commodity meta should be stored: %v", d.Message)
+		}
+	}
+	var c ast.Commodity
+	for _, d := range dirs {
+		if v, ok := d.(ast.Commodity); ok {
+			c = v
+		}
+	}
+	if c.Currency != "BRL" || c.Metadata["name"] != "Brazilian Real" || c.Metadata["asset-class"] != "fiat" {
+		t.Fatalf("commodity=%+v meta=%v", c, c.Metadata)
+	}
+}
+
+func TestParsePriceMetadata(t *testing.T) {
+	src := []byte(`
+2024-01-15 price B3_PETR4 38.50 BRL
+  source: "B3"
+  note: "close"
+`)
+	dirs, diags, err := Parse("t.beancount", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("diags: %v", diags)
+	}
+	for _, d := range diags {
+		if strings.Contains(d.Message, "metadata") {
+			t.Fatalf("price meta should be stored: %v", d.Message)
+		}
+	}
+	var p ast.Price
+	for _, d := range dirs {
+		if v, ok := d.(ast.Price); ok {
+			p = v
+		}
+	}
+	if p.Currency != "B3_PETR4" || p.Amount.Commodity != "BRL" {
+		t.Fatalf("price=%+v", p)
+	}
+	if p.Metadata["source"] != "B3" || p.Metadata["note"] != "close" {
+		t.Fatalf("price meta=%v", p.Metadata)
 	}
 }
 

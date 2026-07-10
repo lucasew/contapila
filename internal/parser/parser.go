@@ -57,18 +57,24 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 		}
 		return ast.Include{Meta: meta(file, src, n), Path: path}, true
 	case "commodity":
-		o := ast.Commodity{Meta: meta(file, src, n), Currency: textField(src, n, "currency")}
-		warnIgnoredKeyValues(file, src, n, diags)
+		o := ast.Commodity{
+			Meta:     meta(file, src, n),
+			Currency: textField(src, n, "currency"),
+			Metadata: parseKeyValues(src, n),
+		}
 		return o, true
 	case "open":
-		o := ast.Open{Meta: meta(file, src, n), Account: textField(src, n, "account")}
+		o := ast.Open{
+			Meta:     meta(file, src, n),
+			Account:  textField(src, n, "account"),
+			Metadata: parseKeyValues(src, n),
+		}
 		for i := uint32(0); i < n.NamedChildCount(); i++ {
 			c := n.NamedChild(i)
 			if c.Type() == "currency" {
 				o.Currencies = append(o.Currencies, strings.TrimSpace(slice(src, c)))
 			}
 		}
-		warnIgnoredKeyValues(file, src, n, diags)
 		return o, true
 	case "close":
 		warnIgnoredKeyValues(file, src, n, diags)
@@ -77,8 +83,12 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 		return convertTxn(file, src, n, diags), true
 	case "price":
 		amt, _ := parseAmountNode(src, field(n, "amount"))
-		warnIgnoredKeyValues(file, src, n, diags)
-		return ast.Price{Meta: meta(file, src, n), Currency: textField(src, n, "currency"), Amount: amt}, true
+		return ast.Price{
+			Meta:     meta(file, src, n),
+			Currency: textField(src, n, "currency"),
+			Amount:   amt,
+			Metadata: parseKeyValues(src, n),
+		}, true
 	case "balance":
 		// amount may be field "amount" or amount_tolerance child
 		an := field(n, "amount")
@@ -155,6 +165,87 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 	}
 }
 
+// parseKeyValues collects key_value children into a metadata map (string values).
+func parseKeyValues(src []byte, n *grammar.Node) ast.Metadata {
+	if n == nil {
+		return nil
+	}
+	var md ast.Metadata
+	for i := uint32(0); i < n.NamedChildCount(); i++ {
+		c := n.NamedChild(i)
+		if c.Type() != "key_value" {
+			continue
+		}
+		key, val := keyValuePair(src, c)
+		if key == "" {
+			continue
+		}
+		if md == nil {
+			md = ast.Metadata{}
+		}
+		md[key] = val
+	}
+	return md
+}
+
+func keyValuePair(src []byte, n *grammar.Node) (key, val string) {
+	key = textField(src, n, "key")
+	if key == "" {
+		for j := uint32(0); j < n.NamedChildCount(); j++ {
+			ch := n.NamedChild(j)
+			if ch.Type() == "key" {
+				key = strings.TrimSpace(slice(src, ch))
+				break
+			}
+		}
+	}
+	// value is often a field, or a string / number child under "value"
+	if vf := field(n, "value"); vf != nil {
+		val = metadataValue(src, vf)
+	}
+	if val == "" {
+		for j := uint32(0); j < n.NamedChildCount(); j++ {
+			ch := n.NamedChild(j)
+			if ch.Type() == "value" || ch.Type() == "string" || ch.Type() == "number" {
+				val = metadataValue(src, ch)
+				if val != "" {
+					break
+				}
+			}
+		}
+	}
+	return key, val
+}
+
+func metadataValue(src []byte, n *grammar.Node) string {
+	if n == nil {
+		return ""
+	}
+	switch n.Type() {
+	case "string":
+		return unquote(slice(src, n))
+	case "number", "bool", "currency", "account", "tag", "link", "date":
+		return strings.TrimSpace(slice(src, n))
+	case "value":
+		// unwrap single named child if present
+		for i := uint32(0); i < n.NamedChildCount(); i++ {
+			if s := metadataValue(src, n.NamedChild(i)); s != "" {
+				return s
+			}
+		}
+		return unquote(strings.TrimSpace(slice(src, n)))
+	default:
+		// try nested string
+		for i := uint32(0); i < n.NamedChildCount(); i++ {
+			if s := metadataValue(src, n.NamedChild(i)); s != "" {
+				return s
+			}
+		}
+		t := strings.TrimSpace(slice(src, n))
+		return unquote(t)
+	}
+}
+
 // warnIgnoredKeyValues emits a warn for each key_value child (metadata not stored yet).
 func warnIgnoredKeyValues(file string, src []byte, n *grammar.Node, diags *diag.List) {
 	if n == nil || diags == nil {
@@ -165,16 +256,7 @@ func warnIgnoredKeyValues(file string, src []byte, n *grammar.Node, diags *diag.
 		if c.Type() != "key_value" {
 			continue
 		}
-		key := textField(src, c, "key")
-		if key == "" {
-			for j := uint32(0); j < c.NamedChildCount(); j++ {
-				ch := c.NamedChild(j)
-				if ch.Type() == "key" {
-					key = strings.TrimSpace(slice(src, ch))
-					break
-				}
-			}
-		}
+		key, _ := keyValuePair(src, c)
 		if key == "" {
 			key = strings.TrimSpace(slice(src, c))
 		}

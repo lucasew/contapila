@@ -19,6 +19,30 @@
     <div role="alert" class="alert alert-error alert-soft py-2 text-xs mb-3"><span>{{.Error}}</span></div>
     {{end}}
 
+    {{if or .AccountMeta .AccountCurrencies}}
+    <section class="mb-4">
+      <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Open / metadata</h2>
+      <div class="overflow-x-auto border border-base-300">
+        <table class="table table-xs">
+          <tbody>
+            {{if .AccountCurrencies}}
+            <tr>
+              <td class="text-[0.65rem] uppercase tracking-wide text-base-content/50 w-32">currencies</td>
+              <td class="font-mono text-xs">{{range $i, $c := .AccountCurrencies}}{{if $i}} {{end}}<a class="link link-hover link-primary" href="{{commodityURL $.LedgerName $c $.Time}}">{{$c}}</a>{{end}}</td>
+            </tr>
+            {{end}}
+            {{range .AccountMeta}}
+            <tr>
+              <td class="text-[0.65rem] uppercase tracking-wide text-base-content/50 w-32">{{.Key}}</td>
+              <td class="font-mono text-xs">{{.Value}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {{end}}
+
     <div class="grid gap-4 md:grid-cols-2 mb-4">
       <section>
         <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Balance</h2>

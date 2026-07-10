@@ -4,7 +4,11 @@
 ; Duplicate same-day price: last write wins in PriceDB (see prices.Add).
 2023-07-15 price B3_PETR4 31.00 BRL
 2023-07-15 price B3_PETR4 31.50 BRL
+  source: "B3"
+  note: "last-wins demo"
+
 2023-07-01 price USD 5.0045 BRL
+  source: "BCB"
 2023-07-01 price B3_PETR4 31.18 BRL
 2023-07-01 price B3_WEGE3 34.96 BRL
 2023-07-01 price B3_MXRF11 10.04 BRL

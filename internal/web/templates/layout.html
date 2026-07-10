@@ -154,6 +154,9 @@
   <li class="w-full">
     <a href="{{ledgerURL .LedgerName "documents" .Time}}" class="rounded-none w-full {{if eq .Page "documents"}}menu-active{{end}}">Documents</a>
   </li>
+  <li class="w-full">
+    <a href="{{ledgerURL .LedgerName "prices" .Time}}" class="rounded-none w-full {{if eq .Page "prices"}}menu-active{{end}}">Prices</a>
+  </li>
   {{if eq .Page "account"}}
   <li class="menu-title px-3 py-2 mt-1 text-[0.65rem]"><span>Account</span></li>
   <li class="w-full">

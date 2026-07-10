@@ -19,6 +19,59 @@
     <div role="alert" class="alert alert-error alert-soft py-2 text-xs mb-3"><span>{{.Error}}</span></div>
     {{end}}
 
+    {{if .CommodityMeta}}
+    <section class="mb-4">
+      <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Metadata</h2>
+      <div class="overflow-x-auto border border-base-300">
+        <table class="table table-xs">
+          <tbody>
+            {{range .CommodityMeta}}
+            <tr>
+              <td class="text-[0.65rem] uppercase tracking-wide text-base-content/50 w-32">{{.Key}}</td>
+              <td class="font-mono text-xs">{{.Value}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {{end}}
+
+    {{if .CommodityPrices}}
+    <section class="mb-4">
+      <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">
+        Prices
+        <a class="ml-2 font-normal normal-case tracking-normal link link-hover link-primary text-xs" href="{{ledgerURL .LedgerName "prices" .Time}}">all pairs</a>
+      </h2>
+      <div class="overflow-x-auto border border-base-300 max-h-64 overflow-y-auto">
+        <table class="table table-xs table-zebra">
+          <thead class="sticky top-0 bg-base-100">
+            <tr>
+              <th>Date</th>
+              <th>Quote</th>
+              <th class="text-right">Rate</th>
+              <th>Meta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .CommodityPrices}}
+            <tr>
+              <td class="font-mono tabular text-xs text-base-content/70">{{.Date}}</td>
+              <td class="font-mono text-xs">
+                <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Quote $.Time}}">{{.Quote}}</a>
+              </td>
+              <td class="text-right tabular text-xs font-medium">{{.Rate}}</td>
+              <td class="text-xs text-base-content/70">
+                {{range $i, $m := .Metadata}}{{if $i}}, {{end}}<span class="font-mono">{{$m.Key}}</span>={{$m.Value}}{{end}}
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {{end}}
+
     <div class="grid gap-4 md:grid-cols-2 mb-4">
       <section>
         <h2 class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-base-content/50">Balance by account</h2>
