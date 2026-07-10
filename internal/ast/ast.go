@@ -30,10 +30,11 @@ type PriceSpec struct {
 }
 
 type Posting struct {
-	Account string
-	Units   *Amount // nil => residual
-	Cost    *CostSpec
-	Price   *PriceSpec
+	Account  string
+	Units    *Amount // nil => residual
+	Cost     *CostSpec
+	Price    *PriceSpec
+	Metadata Metadata // key_value under the posting (not CUE — journal stream only)
 }
 
 type Directive interface {
@@ -91,6 +92,7 @@ type Transaction struct {
 	Postings  []Posting
 	Tags      []string
 	Links     []string
+	Metadata  Metadata // key_value under the txn header (not CUE — journal stream only)
 }
 
 type Price struct {

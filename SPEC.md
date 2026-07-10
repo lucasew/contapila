@@ -158,8 +158,9 @@ On ledger open the host walks **`<that-ledger>/docs/by-account/**`** and synthes
 `document` lines in that ledger’s journal merge in; same path prefers the explicit
 directive. Account web UI lists documents and serves files under `/docfile/<ledger>/docs/…`.
 
-Metadata `document: "…"` on transactions is still **warn + ignore** until metadata
-is stored in the AST (filesystem expansion does not require it).
+Metadata `document: "…"` on transactions/postings is **stored** on the journal AST
+and expanded into the ledger’s document list at open (same merge rules as filesystem
+synth; path prefers explicit `document` directive). Not injected into CUE.
 
 ### 4.5 Ledgers in CUE (discovered) and inter-ledger links
 
@@ -261,6 +262,7 @@ Internal stages are separate packages; the public surface stays a deep module (s
 | Per-ledger account open/close facts | `balance`, `pad` |
 | Project overlays in `contapila.cue` | `note`, `event`, journal stream |
 | Prelude defaults | Include graph resolution (Go first) |
+| (nothing for txn meta) | Txn/posting `key_value` metadata (Go journal only) |
 
 ### 6.3 Dual definition
 
@@ -361,7 +363,7 @@ Example:
 | `*` / `!` transactions, postings | yes | Go |
 | metadata on `open` / `commodity` | yes (stored; CUE `#Account` / `#Commodity` tandem) | Go + CUE |
 | metadata on `price` | yes (stored on PriceDB points) | Go |
-| metadata on txn/posting | warn + ignore (not stored yet) | — |
+| metadata on txn/posting | yes (journal stream only; **not** CUE) | Go |
 | cost `{}`, price `@` / `@@` | yes | Go |
 | empty residual posting | yes | Go |
 | `price` | yes (shared file → PriceDB; CUE `price_pairs` inventory only) | Go + CUE |

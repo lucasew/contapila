@@ -276,33 +276,55 @@ func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List, line
 		Narration: unquote(textField(src, n, "narration")),
 		Payee:     unquote(textField(src, n, "payee")),
 	}
-	// tags/links
-	if tl := field(n, "tags_links"); tl != nil {
-		for i := uint32(0); i < tl.NamedChildCount(); i++ {
-			c := tl.NamedChild(i)
-			t := slice(src, c)
-			switch c.Type() {
-			case "tag":
-				txn.Tags = append(txn.Tags, strings.TrimPrefix(t, "#"))
-			case "link":
-				txn.Links = append(txn.Links, strings.TrimPrefix(t, "^"))
-			}
-		}
-	}
-	warnIgnoredKeyValues(file, src, n, diags, lines)
+	// Walk named children in source order. Beancount grammar places posting key_value
+	// as siblings of posting under the transaction (not nested under posting).
+	// key_value before any posting → txn metadata; after a posting → that posting.
+	var txnMD ast.Metadata
 	for i := uint32(0); i < n.NamedChildCount(); i++ {
 		c := n.NamedChild(i)
-		if c.Type() != "posting" {
-			continue
+		switch c.Type() {
+		case "tags_links":
+			for j := uint32(0); j < c.NamedChildCount(); j++ {
+				ch := c.NamedChild(j)
+				t := slice(src, ch)
+				switch ch.Type() {
+				case "tag":
+					txn.Tags = append(txn.Tags, strings.TrimPrefix(t, "#"))
+				case "link":
+					txn.Links = append(txn.Links, strings.TrimPrefix(t, "^"))
+				}
+			}
+		case "key_value":
+			key, val := keyValuePair(src, c)
+			if key == "" {
+				continue
+			}
+			if len(txn.Postings) == 0 {
+				if txnMD == nil {
+					txnMD = ast.Metadata{}
+				}
+				txnMD[key] = val
+			} else {
+				last := &txn.Postings[len(txn.Postings)-1]
+				if last.Metadata == nil {
+					last.Metadata = ast.Metadata{}
+				}
+				last.Metadata[key] = val
+			}
+		case "posting":
+			txn.Postings = append(txn.Postings, convertPosting(src, c))
 		}
-		txn.Postings = append(txn.Postings, convertPosting(file, src, c, diags, lines))
 	}
+	txn.Metadata = txnMD
 	return txn
 }
 
-func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) ast.Posting {
-	p := ast.Posting{Account: textField(src, n, "account")}
-	warnIgnoredKeyValues(file, src, n, diags, lines)
+func convertPosting(src []byte, n *grammar.Node) ast.Posting {
+	// Nested key_value under posting (if grammar ever nests them) plus sibling handling in convertTxn.
+	p := ast.Posting{
+		Account:  textField(src, n, "account"),
+		Metadata: parseKeyValues(src, n),
+	}
 	// amount field or incomplete_amount child
 	an := field(n, "amount")
 	if an == nil {

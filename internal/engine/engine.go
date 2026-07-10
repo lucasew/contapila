@@ -127,7 +127,9 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 	if err != nil {
 		slog.Warn("docs scan failed", "ledger", name, "err", err)
 	}
-	allDocs := docs.Merge(ledgerDocs, synth)
+	// Also expand document: "…" keys from txn/posting metadata (runtime only; not CUE).
+	fromMeta := docsFromMetadata(stream)
+	allDocs := docs.Merge(ledgerDocs, append(synth, fromMeta...))
 
 	op := inferOpCurrency(stream, p)
 	return &Ledger{
@@ -151,6 +153,41 @@ func cloneMeta(m ast.Metadata) ast.Metadata {
 	out := make(ast.Metadata, len(m))
 	for k, v := range m {
 		out[k] = v
+	}
+	return out
+}
+
+// docsFromMetadata turns document: "path" keys on txns/postings into document directives.
+// Account for txn-level document: is the first posting account (if any).
+func docsFromMetadata(dirs []ast.Directive) []ast.Document {
+	var out []ast.Document
+	for _, d := range dirs {
+		t, ok := d.(ast.Transaction)
+		if !ok {
+			continue
+		}
+		firstAcct := ""
+		if len(t.Postings) > 0 {
+			firstAcct = t.Postings[0].Account
+		}
+		if path := t.Metadata["document"]; path != "" {
+			out = append(out, ast.Document{
+				Meta:      ast.Meta{Date: t.Date, File: t.File, Line: t.Line},
+				Account:   firstAcct,
+				Path:      path,
+				Synthetic: true,
+			})
+		}
+		for _, p := range t.Postings {
+			if path := p.Metadata["document"]; path != "" {
+				out = append(out, ast.Document{
+					Meta:      ast.Meta{Date: t.Date, File: t.File, Line: t.Line},
+					Account:   p.Account,
+					Path:      path,
+					Synthetic: true,
+				})
+			}
+		}
 	}
 	return out
 }
@@ -204,6 +241,8 @@ type JournalEntry struct {
 	Postings  []booking.FilledPosting
 	Account   string
 	Comment   string
+	// Metadata is txn-level key_value (journal stream only — not unified into CUE).
+	Metadata ast.Metadata
 }
 
 func (l *Ledger) Journal(from, to time.Time) []JournalEntry {
@@ -255,6 +294,7 @@ func (l *Ledger) journalFiltered(from, to time.Time, account string) []JournalEn
 			Date: bt.Txn.Date, Kind: "txn",
 			Payee: bt.Txn.Payee, Narration: bt.Txn.Narration,
 			Postings: bt.Postings,
+			Metadata: bt.Txn.Metadata,
 		})
 	}
 	for _, n := range l.Book.Notes {
@@ -372,6 +412,7 @@ func (l *Ledger) JournalForCommodity(commodity string, from, to time.Time) []Jou
 			Date: bt.Txn.Date, Kind: "txn",
 			Payee: bt.Txn.Payee, Narration: bt.Txn.Narration,
 			Postings: bt.Postings,
+			Metadata: bt.Txn.Metadata,
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Date.Before(out[j].Date) })

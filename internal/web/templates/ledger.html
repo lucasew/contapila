@@ -105,13 +105,39 @@
             {{if .Comment}}<span class="text-base-content/60">{{.Comment}}</span>{{end}}
             {{if .Account}}<span class="font-mono text-[0.7rem]">{{.Account}}</span>{{end}}
           </div>
+          {{if .Metadata}}
+          <table class="w-auto mt-0.5 border-collapse font-mono text-[0.65rem] leading-tight">
+            <tbody>
+              {{range $k, $v := .Metadata}}
+              <tr>
+                <td class="py-0 pr-1.5 pl-0 text-right font-semibold align-baseline whitespace-nowrap">{{$k}}</td>
+                <td class="py-0 pl-0 text-left text-base-content/70 align-baseline">{{$v}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+          {{end}}
           {{if .Postings}}
           <ul class="mt-0.5 space-y-0 font-mono text-xs">
             {{range .Postings}}
-            <li class="flex flex-wrap justify-between gap-2 leading-5">
-              <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
-              {{if .Units}}
-              <span class="tabular text-base-content/90">{{.Units.Number.FloatString 4}} <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Units.Commodity $.Time}}">{{.Units.Commodity}}</a></span>
+            <li class="leading-5">
+              <div class="flex flex-wrap justify-between gap-2">
+                <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
+                {{if .Units}}
+                <span class="tabular text-base-content/90">{{.Units.Number.FloatString 4}} <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Units.Commodity $.Time}}">{{.Units.Commodity}}</a></span>
+                {{end}}
+              </div>
+              {{if .Metadata}}
+              <table class="w-auto ml-2 border-collapse font-mono text-[0.65rem] leading-tight">
+                <tbody>
+                  {{range $k, $v := .Metadata}}
+                  <tr>
+                    <td class="py-0 pr-1.5 pl-0 text-right font-semibold align-baseline whitespace-nowrap">{{$k}}</td>
+                    <td class="py-0 pl-0 text-left text-base-content/60 align-baseline">{{$v}}</td>
+                  </tr>
+                  {{end}}
+                </tbody>
+              </table>
               {{end}}
             </li>
             {{end}}

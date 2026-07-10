@@ -60,6 +60,7 @@ type FilledPosting struct {
 	Units   *ast.Amount // always filled after booking
 	// CostBasis is total cost removed/added in cost commodity for inventory moves
 	CostBasis *ast.Amount
+	Metadata  ast.Metadata // from posting key_value (journal stream; not CUE)
 }
 
 func New() *Engine {
@@ -151,14 +152,15 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 				return
 			}
 			resIdx = i
-			filled[i] = FilledPosting{Account: p.Account}
+			filled[i] = FilledPosting{Account: p.Account, Metadata: p.Metadata}
 			continue
 		}
 		units := new(big.Rat).Set(p.Units.Number)
 		comm := p.Units.Commodity
 		fp := FilledPosting{
-			Account: p.Account,
-			Units:   &ast.Amount{Number: units, Commodity: comm},
+			Account:  p.Account,
+			Units:    &ast.Amount{Number: units, Commodity: comm},
+			Metadata: p.Metadata,
 		}
 
 		// Inventory with cost (model A) when cost present OR reducing position with average

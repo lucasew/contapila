@@ -80,15 +80,14 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 	if doc.Account != "Assets:Cash" || doc.Path != "personal/docs/by-account/Assets/Cash/20200105_x.txt" {
 		t.Fatalf("document=%+v", doc)
 	}
-	// open metadata is stored (no warn for institution); txn meta still warn
-	// query/custom still warn; document parses
-	var hasTxnMeta, hasQuery, hasCustom bool
+	// open + txn metadata stored; query/custom still warn; document parses
+	if txn.Metadata["role"] != "meal" {
+		t.Fatalf("txn metadata=%v", txn.Metadata)
+	}
+	var hasQuery, hasCustom bool
 	for _, d := range diags {
-		if strings.Contains(d.Message, `metadata "role"`) || strings.Contains(d.Message, `metadata "role`) {
-			hasTxnMeta = true
-		}
-		if strings.Contains(d.Message, "institution") {
-			t.Fatalf("open metadata should be stored, not warned: %v", d.Message)
+		if strings.Contains(d.Message, "metadata") {
+			t.Fatalf("metadata should be stored, not warned: %v", d.Message)
 		}
 		if strings.Contains(d.Message, "query") {
 			hasQuery = true
@@ -100,8 +99,42 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 			t.Fatalf("document should not warn-skip: %v", d.Message)
 		}
 	}
-	if !hasTxnMeta || !hasQuery || !hasCustom {
-		t.Fatalf("expected txn meta/query/custom warns, diags=%v", diags)
+	if !hasQuery || !hasCustom {
+		t.Fatalf("expected query/custom warns, diags=%v", diags)
+	}
+}
+
+func TestParseTxnAndPostingMetadata(t *testing.T) {
+	src := []byte(`
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+2020-01-05 * "Shop" "Groceries"
+  invoice: "INV-1"
+  document: "personal/docs/by-account/Expenses/Food/20200105_x.txt"
+  Assets:Cash  -30.00 BRL
+    channel: "card"
+  Expenses:Food
+`)
+	dirs, diags, err := Parse("t.beancount", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range diags {
+		if strings.Contains(d.Message, "metadata") {
+			t.Fatalf("unexpected meta warn: %v", d.Message)
+		}
+	}
+	var txn ast.Transaction
+	for _, d := range dirs {
+		if v, ok := d.(ast.Transaction); ok {
+			txn = v
+		}
+	}
+	if txn.Metadata["invoice"] != "INV-1" || txn.Metadata["document"] == "" {
+		t.Fatalf("txn meta=%v", txn.Metadata)
+	}
+	if len(txn.Postings) < 1 || txn.Postings[0].Metadata["channel"] != "card" {
+		t.Fatalf("postings=%+v", txn.Postings)
 	}
 }
 
