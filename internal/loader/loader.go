@@ -32,7 +32,7 @@ func loadOne(path string, out *[]ast.Directive, diags *diag.List, seen, stack ma
 		real = abs
 	}
 	if stack[real] {
-		diags.Error(path, "include cycle detected")
+		diags.Error(path, 0, "include cycle detected")
 		return fmt.Errorf("include cycle at %s", path)
 	}
 	if seen[real] {
@@ -78,7 +78,7 @@ func expandInclude(baseDir, pattern string, out *[]ast.Directive, diags *diag.Li
 	if !hasGlob(pattern) {
 		if _, err := os.Stat(target); err != nil {
 			if os.IsNotExist(err) {
-				diags.Error(baseDir, fmt.Sprintf("include missing: %s", pattern))
+				diags.Error(baseDir, 0, fmt.Sprintf("include missing: %s", pattern))
 				return fmt.Errorf("include missing: %s", pattern)
 			}
 			return err
@@ -92,7 +92,7 @@ func expandInclude(baseDir, pattern string, out *[]ast.Directive, diags *diag.Li
 	}
 	if len(matches) == 0 {
 		// also try walking with path.Match style via Glob only
-		diags.Warn(baseDir, fmt.Sprintf("include glob matched zero files: %s", pattern))
+		diags.Warn(baseDir, 0, fmt.Sprintf("include glob matched zero files: %s", pattern))
 		return nil
 	}
 	sort.Strings(matches)

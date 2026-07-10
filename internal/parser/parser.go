@@ -31,7 +31,7 @@ func Parse(filename string, src []byte) ([]ast.Directive, diag.List, error) {
 	for i := uint32(0); i < root.NamedChildCount(); i++ {
 		ch := root.NamedChild(i)
 		if ch.IsError() {
-			diags.Error(filename, fmt.Sprintf("syntax error near %q", clip(slice(src, ch), 40)))
+			diags.Error(filename, lineAt(src, ch.StartByte()), fmt.Sprintf("syntax error near %q", clip(slice(src, ch), 40)))
 			continue
 		}
 		if d, ok := convert(filename, src, ch, &diags); ok {
@@ -152,15 +152,15 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 			Path:    path,
 		}, true
 	case "query", "custom":
-		diags.Warn(file, fmt.Sprintf("%s not supported; skipped", n.Type()))
+		diags.Warn(file, lineAt(src, n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
 	case "comment":
 		return nil, false
 	case "pushtag", "poptag", "pushmeta", "popmeta":
-		diags.Warn(file, fmt.Sprintf("%s not supported; skipped", n.Type()))
+		diags.Warn(file, lineAt(src, n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
 	default:
-		diags.Warn(file, fmt.Sprintf("unsupported directive %q skipped", n.Type()))
+		diags.Warn(file, lineAt(src, n.StartByte()), fmt.Sprintf("unsupported directive %q skipped", n.Type()))
 		return nil, false
 	}
 }
@@ -260,7 +260,7 @@ func warnIgnoredKeyValues(file string, src []byte, n *grammar.Node, diags *diag.
 		if key == "" {
 			key = strings.TrimSpace(slice(src, c))
 		}
-		diags.Warn(file, fmt.Sprintf("metadata %q ignored (not stored yet)", key))
+		diags.Warn(file, lineAt(src, c.StartByte()), fmt.Sprintf("metadata %q ignored (not stored yet)", key))
 	}
 }
 
@@ -513,7 +513,25 @@ func meta(file string, src []byte, n *grammar.Node) ast.Meta {
 	if dn := field(n, "date"); dn != nil {
 		d, _ = time.ParseInLocation("2006-01-02", strings.TrimSpace(slice(src, dn)), time.UTC)
 	}
-	return ast.Meta{Date: d, File: file}
+	return ast.Meta{Date: d, File: file, Line: lineAt(src, n.StartByte())}
+}
+
+// lineAt returns the 1-based line number for a byte offset into src.
+func lineAt(src []byte, off uint32) int {
+	if len(src) == 0 {
+		return 1
+	}
+	i := int(off)
+	if i > len(src) {
+		i = len(src)
+	}
+	line := 1
+	for j := 0; j < i; j++ {
+		if src[j] == '\n' {
+			line++
+		}
+	}
+	return line
 }
 
 func field(n *grammar.Node, name string) *grammar.Node {

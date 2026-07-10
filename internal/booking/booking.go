@@ -105,7 +105,7 @@ func (e *Engine) Book(dirs []ast.Directive) {
 
 func (e *Engine) bookOpen(o ast.Open) {
 	if prev, ok := e.Open[o.Account]; ok {
-		e.Diags.Error(o.File, fmt.Sprintf("duplicate open for %s (first %s)", o.Account, prev.Format("2006-01-02")))
+		e.Diags.Error(o.File, o.Line, fmt.Sprintf("duplicate open for %s (first %s)", o.Account, prev.Format("2006-01-02")))
 		return
 	}
 	e.Open[o.Account] = o.Date
@@ -115,14 +115,14 @@ func (e *Engine) bookClose(c ast.Close) {
 	e.Close[c.Account] = c.Date
 }
 
-func (e *Engine) checkAccount(date time.Time, account, file string) {
+func (e *Engine) checkAccount(date time.Time, account, file string, line int) {
 	if od, ok := e.Open[account]; !ok {
-		e.Diags.Warn(file, fmt.Sprintf("account not opened: %s", account))
+		e.Diags.Warn(file, line, fmt.Sprintf("account not opened: %s", account))
 	} else if date.Before(od) {
-		e.Diags.Error(file, fmt.Sprintf("transaction before open of %s", account))
+		e.Diags.Error(file, line, fmt.Sprintf("transaction before open of %s", account))
 	}
 	if cd, ok := e.Close[account]; ok && !date.Before(cd) {
-		e.Diags.Error(file, fmt.Sprintf("posting after close of %s", account))
+		e.Diags.Error(file, line, fmt.Sprintf("posting after close of %s", account))
 	}
 }
 
@@ -144,10 +144,10 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 	filled := make([]FilledPosting, len(t.Postings))
 	// First pass: inventory effects and weights for non-residual
 	for i, p := range t.Postings {
-		e.checkAccount(t.Date, p.Account, t.File)
+		e.checkAccount(t.Date, p.Account, t.File, t.Line)
 		if p.Units == nil {
 			if resIdx >= 0 {
-				e.Diags.Error(t.File, "multiple residual postings in transaction")
+				e.Diags.Error(t.File, t.Line, "multiple residual postings in transaction")
 				return
 			}
 			resIdx = i
@@ -171,14 +171,14 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 			if units.Sign() > 0 {
 				// buy: need explicit cost
 				if p.Cost == nil || p.Cost.Empty || p.Cost.Number == nil {
-					e.Diags.Error(t.File, fmt.Sprintf("buy of %s %s requires explicit cost", units.FloatString(4), comm))
+					e.Diags.Error(t.File, t.Line, fmt.Sprintf("buy of %s %s requires explicit cost", units.FloatString(4), comm))
 					return
 				}
 				unitCost := p.Cost.Number
 				costComm := p.Cost.Commodity
 				total := new(big.Rat).Mul(new(big.Rat).Set(units), new(big.Rat).Set(unitCost))
 				if err := e.buy(p.Account, comm, units, total, costComm); err != nil {
-					e.Diags.Error(t.File, err.Error())
+					e.Diags.Error(t.File, t.Line, err.Error())
 					return
 				}
 				fp.CostBasis = &ast.Amount{Number: total, Commodity: costComm}
@@ -186,12 +186,12 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 				// sell / reduce
 				pos := e.getPos(p.Account, comm)
 				if pos == nil || pos.Units.Sign() == 0 {
-					e.Diags.Error(t.File, fmt.Sprintf("oversell %s: no inventory", comm))
+					e.Diags.Error(t.File, t.Line, fmt.Sprintf("oversell %s: no inventory", comm))
 					return
 				}
 				sellUnits := new(big.Rat).Neg(units) // positive
 				if sellUnits.Cmp(pos.Units) > 0 {
-					e.Diags.Error(t.File, fmt.Sprintf("oversell %s: have %s need %s", comm, pos.Units.FloatString(6), sellUnits.FloatString(6)))
+					e.Diags.Error(t.File, t.Line, fmt.Sprintf("oversell %s: have %s need %s", comm, pos.Units.FloatString(6), sellUnits.FloatString(6)))
 					return
 				}
 				avg := pos.Avg()
@@ -199,14 +199,14 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 					// must match average
 					diff := new(big.Rat).Sub(new(big.Rat).Set(p.Cost.Number), avg)
 					if diff.Abs(diff).Cmp(e.Tolerance) > 0 {
-						e.Diags.Error(t.File, fmt.Sprintf("sell cost %s != average %s", p.Cost.Number.FloatString(6), avg.FloatString(6)))
+						e.Diags.Error(t.File, t.Line, fmt.Sprintf("sell cost %s != average %s", p.Cost.Number.FloatString(6), avg.FloatString(6)))
 						return
 					}
 				}
 				totalCost := new(big.Rat).Mul(sellUnits, avg)
 				costComm := pos.CostComm
 				if err := e.sell(p.Account, comm, sellUnits, totalCost); err != nil {
-					e.Diags.Error(t.File, err.Error())
+					e.Diags.Error(t.File, t.Line, err.Error())
 					return
 				}
 				fp.CostBasis = &ast.Amount{Number: new(big.Rat).Neg(totalCost), Commodity: costComm}
@@ -233,7 +233,7 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 		}
 		sort.Strings(nonzero)
 		if len(nonzero) > 1 {
-			e.Diags.Error(t.File, fmt.Sprintf("residual cannot balance multiple commodities %v", nonzero))
+			e.Diags.Error(t.File, t.Line, fmt.Sprintf("residual cannot balance multiple commodities %v", nonzero))
 			return
 		}
 		if len(nonzero) == 1 {
@@ -250,7 +250,7 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 		// must balance
 		for c, a := range weights {
 			if new(big.Rat).Abs(a).Cmp(e.Tolerance) > 0 {
-				e.Diags.Error(t.File, fmt.Sprintf("unbalanced transaction for %s: %s", c, a.FloatString(8)))
+				e.Diags.Error(t.File, t.Line, fmt.Sprintf("unbalanced transaction for %s: %s", c, a.FloatString(8)))
 			}
 		}
 	}
@@ -364,13 +364,13 @@ func (e *Engine) bookBalance(b ast.Balance) {
 	// try pad
 	if from, ok := e.Pad[b.Account]; ok {
 		// insert balancing: from -> account for diff
-		e.checkAccount(b.Date, from, b.File)
+		e.checkAccount(b.Date, from, b.File, b.Line)
 		e.addBal(b.Account, b.Amount.Commodity, diff)
 		e.addBal(from, b.Amount.Commodity, new(big.Rat).Neg(diff))
 		// also synth txn for journal
 		e.Txns = append(e.Txns, BookedTxn{
 			Txn: ast.Transaction{
-				Meta:      ast.Meta{Date: b.Date, File: b.File},
+				Meta:      ast.Meta{Date: b.Date, File: b.File, Line: b.Line},
 				Flag:      "P",
 				Narration: "pad",
 			},
@@ -386,7 +386,7 @@ func (e *Engine) bookBalance(b ast.Balance) {
 			return
 		}
 	}
-	e.Diags.Error(b.File, fmt.Sprintf("balance failed %s: expected %s %s, got %s",
+	e.Diags.Error(b.File, b.Line, fmt.Sprintf("balance failed %s: expected %s %s, got %s",
 		b.Account, expected.FloatString(6), b.Amount.Commodity, actual.FloatString(6)))
 }
 

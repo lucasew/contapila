@@ -26,11 +26,19 @@ type Diagnostic struct {
 func (d Diagnostic) IsError() bool { return d.Severity == Error }
 func (d Diagnostic) IsWarn() bool  { return d.Severity == Warn }
 
-func (d Diagnostic) String() string {
-	loc := d.File
-	if d.Line > 0 {
-		loc = fmt.Sprintf("%s:%d", d.File, d.Line)
+// Location is path:line when line is known, else path (or empty).
+func (d Diagnostic) Location() string {
+	if d.File == "" {
+		return ""
 	}
+	if d.Line > 0 {
+		return fmt.Sprintf("%s:%d", d.File, d.Line)
+	}
+	return d.File
+}
+
+func (d Diagnostic) String() string {
+	loc := d.Location()
 	if loc == "" {
 		return fmt.Sprintf("%s: %s", d.Severity, d.Message)
 	}
@@ -48,12 +56,14 @@ func (l List) HasErrors() bool {
 	return false
 }
 
-func (l *List) Warn(file, msg string) {
-	*l = append(*l, Diagnostic{Severity: Warn, Message: msg, File: file})
+// Warn appends a warning. line is 1-based; use 0 if unknown.
+func (l *List) Warn(file string, line int, msg string) {
+	*l = append(*l, Diagnostic{Severity: Warn, Message: msg, File: file, Line: line})
 }
 
-func (l *List) Error(file, msg string) {
-	*l = append(*l, Diagnostic{Severity: Error, Message: msg, File: file})
+// Error appends an error. line is 1-based; use 0 if unknown.
+func (l *List) Error(file string, line int, msg string) {
+	*l = append(*l, Diagnostic{Severity: Error, Message: msg, File: file, Line: line})
 }
 
 func (l *List) Merge(other List) {

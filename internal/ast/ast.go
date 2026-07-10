@@ -44,10 +44,12 @@ type Directive interface {
 type Meta struct {
 	Date time.Time
 	File string
+	Line int // 1-based source line; 0 if unknown
 }
 
 func (m Meta) GetDate() time.Time { return m.Date }
 func (m Meta) GetFile() string    { return m.File }
+func (m Meta) GetLine() int       { return m.Line }
 
 type Option struct {
 	Meta
