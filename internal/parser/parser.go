@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,25 +27,29 @@ func Parse(filename string, src []byte) ([]ast.Directive, diag.List, error) {
 		return nil, nil, fmt.Errorf("null parse tree for %s", filename)
 	}
 
+	// One O(n) newline scan; each line lookup is O(log lines) binary search.
+	// Avoids rescanning the file for every directive/metadata key.
+	lines := newLineTable(src)
+
 	var diags diag.List
 	var out []ast.Directive
 	for i := uint32(0); i < root.NamedChildCount(); i++ {
 		ch := root.NamedChild(i)
 		if ch.IsError() {
-			diags.Error(filename, lineAt(src, ch.StartByte()), fmt.Sprintf("syntax error near %q", clip(slice(src, ch), 40)))
+			diags.Error(filename, lines.At(ch.StartByte()), fmt.Sprintf("syntax error near %q", clip(slice(src, ch), 40)))
 			continue
 		}
-		if d, ok := convert(filename, src, ch, &diags); ok {
+		if d, ok := convert(filename, src, ch, &diags, lines); ok {
 			out = append(out, d)
 		}
 	}
 	return out, diags, nil
 }
 
-func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Directive, bool) {
+func convert(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) (ast.Directive, bool) {
 	switch n.Type() {
 	case "option":
-		return ast.Option{Meta: meta(file, src, n), Key: unquote(textField(src, n, "key")), Value: unquote(textField(src, n, "value"))}, true
+		return ast.Option{Meta: meta(file, src, n, lines), Key: unquote(textField(src, n, "key")), Value: unquote(textField(src, n, "value"))}, true
 	case "include":
 		// include has a string child, not always a field
 		path := ""
@@ -55,17 +60,17 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 				break
 			}
 		}
-		return ast.Include{Meta: meta(file, src, n), Path: path}, true
+		return ast.Include{Meta: meta(file, src, n, lines), Path: path}, true
 	case "commodity":
 		o := ast.Commodity{
-			Meta:     meta(file, src, n),
+			Meta:     meta(file, src, n, lines),
 			Currency: textField(src, n, "currency"),
 			Metadata: parseKeyValues(src, n),
 		}
 		return o, true
 	case "open":
 		o := ast.Open{
-			Meta:     meta(file, src, n),
+			Meta:     meta(file, src, n, lines),
 			Account:  textField(src, n, "account"),
 			Metadata: parseKeyValues(src, n),
 		}
@@ -77,14 +82,14 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 		}
 		return o, true
 	case "close":
-		warnIgnoredKeyValues(file, src, n, diags)
-		return ast.Close{Meta: meta(file, src, n), Account: textField(src, n, "account")}, true
+		warnIgnoredKeyValues(file, src, n, diags, lines)
+		return ast.Close{Meta: meta(file, src, n, lines), Account: textField(src, n, "account")}, true
 	case "transaction":
-		return convertTxn(file, src, n, diags), true
+		return convertTxn(file, src, n, diags, lines), true
 	case "price":
 		amt, _ := parseAmountNode(src, field(n, "amount"))
 		return ast.Price{
-			Meta:     meta(file, src, n),
+			Meta:     meta(file, src, n, lines),
 			Currency: textField(src, n, "currency"),
 			Amount:   amt,
 			Metadata: parseKeyValues(src, n),
@@ -105,21 +110,21 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 			}
 		}
 		amt, _ := parseAmountNode(src, an)
-		warnIgnoredKeyValues(file, src, n, diags)
-		return ast.Balance{Meta: meta(file, src, n), Account: textField(src, n, "account"), Amount: amt}, true
+		warnIgnoredKeyValues(file, src, n, diags, lines)
+		return ast.Balance{Meta: meta(file, src, n, lines), Account: textField(src, n, "account"), Amount: amt}, true
 	case "pad":
-		warnIgnoredKeyValues(file, src, n, diags)
+		warnIgnoredKeyValues(file, src, n, diags, lines)
 		return ast.Pad{
-			Meta:        meta(file, src, n),
+			Meta:        meta(file, src, n, lines),
 			Account:     textField(src, n, "account"),
 			FromAccount: textField(src, n, "from_account"),
 		}, true
 	case "note":
-		warnIgnoredKeyValues(file, src, n, diags)
-		return ast.Note{Meta: meta(file, src, n), Account: textField(src, n, "account"), Comment: unquote(textField(src, n, "note"))}, true
+		warnIgnoredKeyValues(file, src, n, diags, lines)
+		return ast.Note{Meta: meta(file, src, n, lines), Account: textField(src, n, "account"), Comment: unquote(textField(src, n, "note"))}, true
 	case "event":
-		warnIgnoredKeyValues(file, src, n, diags)
-		return ast.Event{Meta: meta(file, src, n), Type: unquote(textField(src, n, "type")), Desc: unquote(textField(src, n, "desc"))}, true
+		warnIgnoredKeyValues(file, src, n, diags, lines)
+		return ast.Event{Meta: meta(file, src, n, lines), Type: unquote(textField(src, n, "type")), Desc: unquote(textField(src, n, "desc"))}, true
 	case "document":
 		// 2020-01-01 document Assets:Cash "docs/..."
 		path := ""
@@ -145,22 +150,22 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List) (ast.Di
 				}
 			}
 		}
-		warnIgnoredKeyValues(file, src, n, diags)
+		warnIgnoredKeyValues(file, src, n, diags, lines)
 		return ast.Document{
-			Meta:    meta(file, src, n),
+			Meta:    meta(file, src, n, lines),
 			Account: textField(src, n, "account"),
 			Path:    path,
 		}, true
 	case "query", "custom":
-		diags.Warn(file, lineAt(src, n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
+		diags.Warn(file, lines.At(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
 	case "comment":
 		return nil, false
 	case "pushtag", "poptag", "pushmeta", "popmeta":
-		diags.Warn(file, lineAt(src, n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
+		diags.Warn(file, lines.At(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
 	default:
-		diags.Warn(file, lineAt(src, n.StartByte()), fmt.Sprintf("unsupported directive %q skipped", n.Type()))
+		diags.Warn(file, lines.At(n.StartByte()), fmt.Sprintf("unsupported directive %q skipped", n.Type()))
 		return nil, false
 	}
 }
@@ -247,7 +252,7 @@ func metadataValue(src []byte, n *grammar.Node) string {
 }
 
 // warnIgnoredKeyValues emits a warn for each key_value child (metadata not stored yet).
-func warnIgnoredKeyValues(file string, src []byte, n *grammar.Node, diags *diag.List) {
+func warnIgnoredKeyValues(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) {
 	if n == nil || diags == nil {
 		return
 	}
@@ -260,13 +265,13 @@ func warnIgnoredKeyValues(file string, src []byte, n *grammar.Node, diags *diag.
 		if key == "" {
 			key = strings.TrimSpace(slice(src, c))
 		}
-		diags.Warn(file, lineAt(src, c.StartByte()), fmt.Sprintf("metadata %q ignored (not stored yet)", key))
+		diags.Warn(file, lines.At(c.StartByte()), fmt.Sprintf("metadata %q ignored (not stored yet)", key))
 	}
 }
 
-func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List) ast.Transaction {
+func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) ast.Transaction {
 	txn := ast.Transaction{
-		Meta:      meta(file, src, n),
+		Meta:      meta(file, src, n, lines),
 		Flag:      strings.TrimSpace(textField(src, n, "txn")),
 		Narration: unquote(textField(src, n, "narration")),
 		Payee:     unquote(textField(src, n, "payee")),
@@ -284,20 +289,20 @@ func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List) ast.
 			}
 		}
 	}
-	warnIgnoredKeyValues(file, src, n, diags)
+	warnIgnoredKeyValues(file, src, n, diags, lines)
 	for i := uint32(0); i < n.NamedChildCount(); i++ {
 		c := n.NamedChild(i)
 		if c.Type() != "posting" {
 			continue
 		}
-		txn.Postings = append(txn.Postings, convertPosting(file, src, c, diags))
+		txn.Postings = append(txn.Postings, convertPosting(file, src, c, diags, lines))
 	}
 	return txn
 }
 
-func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List) ast.Posting {
+func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) ast.Posting {
 	p := ast.Posting{Account: textField(src, n, "account")}
-	warnIgnoredKeyValues(file, src, n, diags)
+	warnIgnoredKeyValues(file, src, n, diags, lines)
 	// amount field or incomplete_amount child
 	an := field(n, "amount")
 	if an == nil {
@@ -508,30 +513,46 @@ func parseNumber(src []byte, n *grammar.Node) *big.Rat {
 	return r
 }
 
-func meta(file string, src []byte, n *grammar.Node) ast.Meta {
+func meta(file string, src []byte, n *grammar.Node, lines lineTable) ast.Meta {
 	d := time.Time{}
 	if dn := field(n, "date"); dn != nil {
 		d, _ = time.ParseInLocation("2006-01-02", strings.TrimSpace(slice(src, dn)), time.UTC)
 	}
-	return ast.Meta{Date: d, File: file, Line: lineAt(src, n.StartByte())}
+	return ast.Meta{Date: d, File: file, Line: lines.At(n.StartByte())}
 }
 
-// lineAt returns the 1-based line number for a byte offset into src.
-func lineAt(src []byte, off uint32) int {
-	if len(src) == 0 {
-		return 1
-	}
-	i := int(off)
-	if i > len(src) {
-		i = len(src)
-	}
-	line := 1
-	for j := 0; j < i; j++ {
-		if src[j] == '\n' {
-			line++
+// lineTable maps byte offsets → 1-based line numbers.
+// starts[i] is the byte offset where line i+1 begins.
+type lineTable struct {
+	starts []int
+}
+
+func newLineTable(src []byte) lineTable {
+	// Pre-size ~1 entry per 40 bytes (typical ledger line length); grows if denser.
+	starts := make([]int, 1, len(src)/40+2)
+	starts[0] = 0
+	for i, b := range src {
+		if b == '\n' && i+1 < len(src) {
+			starts = append(starts, i+1)
 		}
 	}
-	return line
+	return lineTable{starts: starts}
+}
+
+// At returns the 1-based line containing byte offset off.
+func (lt lineTable) At(off uint32) int {
+	if len(lt.starts) == 0 {
+		return 1
+	}
+	o := int(off)
+	// largest i with starts[i] <= o
+	i := sort.Search(len(lt.starts), func(i int) bool {
+		return lt.starts[i] > o
+	}) - 1
+	if i < 0 {
+		return 1
+	}
+	return i + 1
 }
 
 func field(n *grammar.Node, name string) *grammar.Node {
