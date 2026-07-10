@@ -370,7 +370,10 @@ Inventory cost basis (average cost, model A) remains for booking/gains; it is **
 | `*` / `!` transactions, postings | yes | Go |
 | metadata on `open` / `commodity` | yes (stored; CUE `#Account` / `#Commodity` tandem) | Go + CUE |
 | metadata on `price` | yes (stored on PriceDB points) | Go |
+| metadata on `balance` | yes (journal stream only; **not** CUE) | Go |
+| metadata on `event` | yes (journal stream only; **not** CUE) | Go |
 | metadata on txn/posting | yes (journal stream only; **not** CUE) | Go |
+| org-mode `section` / headlines (`* …`) | structure only — silent; nested directives collected | Go |
 | posting `closing: TRUE` | yes — expands to `balance 0` + `close` next day for that account/commodity | Go |
 | cost `{}`, price `@` / `@@` | yes | Go |
 | empty residual posting | yes | Go |

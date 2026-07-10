@@ -104,8 +104,9 @@ type Price struct {
 
 type Balance struct {
 	Meta
-	Account string
-	Amount  Amount
+	Account  string
+	Amount   Amount
+	Metadata Metadata // key_value under the balance directive (journal stream only)
 }
 
 type Pad struct {
@@ -122,8 +123,9 @@ type Note struct {
 
 type Event struct {
 	Meta
-	Type string
-	Desc string
+	Type     string
+	Desc     string
+	Metadata Metadata // key_value under the event directive (journal stream only)
 }
 
 // Document is a Beancount document directive, or one synthesized from <ledger>/docs/by-account.

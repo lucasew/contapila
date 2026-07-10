@@ -199,6 +199,121 @@ func TestParsePriceMetadata(t *testing.T) {
 	}
 }
 
+func TestParseEventMetadata(t *testing.T) {
+	src := []byte(`
+2020-01-01 event "location" "SF"
+  city: "San Francisco"
+  source: "manual"
+`)
+	dirs, diags, err := Parse("t.beancount", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("diags: %v", diags)
+	}
+	for _, d := range diags {
+		if strings.Contains(d.Message, "metadata") || strings.Contains(d.Message, "key") {
+			t.Fatalf("event meta should be stored: %v", d.Message)
+		}
+	}
+	var ev ast.Event
+	found := false
+	for _, d := range dirs {
+		if v, ok := d.(ast.Event); ok {
+			ev = v
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no event")
+	}
+	if ev.Type != "location" || ev.Desc != "SF" {
+		t.Fatalf("event=%+v", ev)
+	}
+	if ev.Metadata["city"] != "San Francisco" || ev.Metadata["source"] != "manual" {
+		t.Fatalf("event meta=%v", ev.Metadata)
+	}
+}
+
+func TestParseBalanceMetadata(t *testing.T) {
+	src := []byte(`
+2020-01-01 balance Assets:Cash 100.00 BRL
+  statement: "bank"
+  note: "eom"
+`)
+	dirs, diags, err := Parse("t.beancount", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("diags: %v", diags)
+	}
+	for _, d := range diags {
+		if strings.Contains(d.Message, "metadata") || strings.Contains(d.Message, "key") {
+			t.Fatalf("balance meta should be stored: %v", d.Message)
+		}
+	}
+	var b ast.Balance
+	found := false
+	for _, d := range dirs {
+		if v, ok := d.(ast.Balance); ok {
+			b = v
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no balance")
+	}
+	if b.Account != "Assets:Cash" || b.Amount.Commodity != "BRL" {
+		t.Fatalf("balance=%+v", b)
+	}
+	if b.Metadata["statement"] != "bank" || b.Metadata["note"] != "eom" {
+		t.Fatalf("balance meta=%v", b.Metadata)
+	}
+}
+
+func TestParseSectionCollectsNested(t *testing.T) {
+	src := []byte(`
+* Assets section
+2020-01-01 open Assets:Cash BRL
+** Nested
+2020-01-02 open Expenses:Food
+; real comment
+2020-01-03 balance Assets:Cash 0 BRL
+  checked: "TRUE"
+`)
+	dirs, diags, err := Parse("t.beancount", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("diags: %v", diags)
+	}
+	for _, d := range diags {
+		if strings.Contains(d.Message, "section") {
+			t.Fatalf("section should be silent structure: %v", d.Message)
+		}
+	}
+	var opens, bals int
+	var bal ast.Balance
+	for _, d := range dirs {
+		switch v := d.(type) {
+		case ast.Open:
+			opens++
+		case ast.Balance:
+			bals++
+			bal = v
+		}
+	}
+	if opens != 2 || bals != 1 {
+		t.Fatalf("opens=%d bals=%d dirs=%d", opens, bals, len(dirs))
+	}
+	if bal.Metadata["checked"] != "TRUE" {
+		t.Fatalf("balance meta under section=%v", bal.Metadata)
+	}
+}
+
 func TestParsePayeeAndNarration(t *testing.T) {
 	src := []byte(`
 2020-01-01 open Assets:Cash

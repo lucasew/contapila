@@ -34,16 +34,34 @@ func Parse(filename string, src []byte) ([]ast.Directive, diag.List, error) {
 	var diags diag.List
 	var out []ast.Directive
 	for i := uint32(0); i < root.NamedChildCount(); i++ {
-		ch := root.NamedChild(i)
-		if ch.IsError() {
-			diags.Error(filename, lines.At(ch.StartByte()), fmt.Sprintf("syntax error near %q", clip(slice(src, ch), 40)))
-			continue
-		}
-		if d, ok := convert(filename, src, ch, &diags, lines); ok {
-			out = append(out, d)
-		}
+		collectDirectives(filename, src, root.NamedChild(i), &diags, lines, &out)
 	}
 	return out, diags, nil
+}
+
+// collectDirectives walks the tree, ignoring org-mode section structure and comments.
+// Section nodes are containers only (headlines like "* Assets"); nested directives are collected.
+func collectDirectives(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable, out *[]ast.Directive) {
+	if n == nil || n.IsNull() {
+		return
+	}
+	if n.IsError() {
+		diags.Error(file, lines.At(n.StartByte()), fmt.Sprintf("syntax error near %q", clip(slice(src, n), 40)))
+		return
+	}
+	switch n.Type() {
+	case "section":
+		// Org/markdown headings: structure only — do not warn, walk children.
+		for i := uint32(0); i < n.NamedChildCount(); i++ {
+			collectDirectives(file, src, n.NamedChild(i), diags, lines, out)
+		}
+		return
+	case "comment", "headline", "item":
+		return
+	}
+	if d, ok := convert(file, src, n, diags, lines); ok {
+		*out = append(*out, d)
+	}
 }
 
 func convert(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) (ast.Directive, bool) {
@@ -110,8 +128,12 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List, lines l
 			}
 		}
 		amt, _ := parseAmountNode(src, an)
-		warnIgnoredKeyValues(file, src, n, diags, lines)
-		return ast.Balance{Meta: meta(file, src, n, lines), Account: textField(src, n, "account"), Amount: amt}, true
+		return ast.Balance{
+			Meta:     meta(file, src, n, lines),
+			Account:  textField(src, n, "account"),
+			Amount:   amt,
+			Metadata: parseKeyValues(src, n),
+		}, true
 	case "pad":
 		warnIgnoredKeyValues(file, src, n, diags, lines)
 		return ast.Pad{
@@ -123,8 +145,12 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List, lines l
 		warnIgnoredKeyValues(file, src, n, diags, lines)
 		return ast.Note{Meta: meta(file, src, n, lines), Account: textField(src, n, "account"), Comment: unquote(textField(src, n, "note"))}, true
 	case "event":
-		warnIgnoredKeyValues(file, src, n, diags, lines)
-		return ast.Event{Meta: meta(file, src, n, lines), Type: unquote(textField(src, n, "type")), Desc: unquote(textField(src, n, "desc"))}, true
+		return ast.Event{
+			Meta:     meta(file, src, n, lines),
+			Type:     unquote(textField(src, n, "type")),
+			Desc:     unquote(textField(src, n, "desc")),
+			Metadata: parseKeyValues(src, n),
+		}, true
 	case "document":
 		// 2020-01-01 document Assets:Cash "docs/..."
 		path := ""
