@@ -376,7 +376,7 @@ func networthCmd() *cobra.Command {
 					}
 					flag := ""
 					if ln.UsedCost {
-						flag = " (cost)"
+						flag = " (no px)"
 					}
 					units := ""
 					if ln.Units != nil {

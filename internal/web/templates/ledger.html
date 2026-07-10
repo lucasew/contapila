@@ -264,8 +264,10 @@
                 <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a>
                 {{end}}
               </td>
-              <td class="text-right tabular text-xs font-medium">{{.Value}}</td>
-              <td class="text-[0.65rem] text-warning">{{if .UsedCost}}cost{{end}}</td>
+              <td class="text-right tabular text-xs font-medium whitespace-nowrap">
+                {{.Value}}{{if $.OpCurrency}} <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName $.OpCurrency $.Time}}">{{$.OpCurrency}}</a>{{end}}
+              </td>
+              <td class="text-[0.65rem] text-warning">{{if .UsedCost}}no px{{end}}</td>
             </tr>
             {{end}}
           </tbody>

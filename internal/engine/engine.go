@@ -498,9 +498,9 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 				continue
 			}
 			// Beancount signs: assets usually debit (+), liabilities credit (−).
-			// NW = Σ signed positions — do not negate liabilities again.
-			val, usedCost := l.convert(b, acct, comm, units, asOf)
-			lines = append(lines, NetWorthLine{Account: acct, Commodity: comm, Units: units, Value: val, UsedCost: usedCost})
+			// NW = Σ signed market values (no cost-basis fallback).
+			val, unpriced := l.convert(b, acct, comm, units, asOf)
+			lines = append(lines, NetWorthLine{Account: acct, Commodity: comm, Units: units, Value: val, UsedCost: unpriced})
 			total.Add(total, val)
 		}
 	}
@@ -513,29 +513,21 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 	return lines, total, nil
 }
 
+// convert values units of comm into operating currency at market price only
+// (direct, inverse, or one intermediate hop via PriceDB). No cost-basis fallback.
+// The bool is true when market price was missing (value is 0).
 func (l *Ledger) convert(b *booking.Engine, acct, comm string, units *big.Rat, asOf time.Time) (*big.Rat, bool) {
+	_ = b
+	_ = acct
 	if comm == l.OpCurrency {
 		return new(big.Rat).Set(units), false
 	}
-	if rate, _, ok := l.Prices.Rate(comm, l.OpCurrency, asOf); ok {
-		return new(big.Rat).Mul(new(big.Rat).Set(units), rate), false
-	}
-	// cost basis fallback
-	if pos := b.Positions()[acct][comm]; pos != nil && pos.CostComm == l.OpCurrency && pos.Units.Sign() != 0 {
-		// pro-rate total cost
-		slog.Warn("price missing; using cost basis", "commodity", comm, "account", acct)
-		avg := pos.Avg()
-		return new(big.Rat).Mul(new(big.Rat).Set(units), avg), true
-	}
-	if pos := b.Positions()[acct][comm]; pos != nil && pos.TotalCost != nil && pos.Units.Sign() != 0 {
-		slog.Warn("price missing; using cost basis (cost commodity)", "commodity", comm, "cost", pos.CostComm)
-		// if cost not in op currency, still use total cost amount as weak fallback when cost comm == units path
-		if pos.CostComm == l.OpCurrency {
-			share := new(big.Rat).Quo(new(big.Rat).Set(units), new(big.Rat).Set(pos.Units))
-			return new(big.Rat).Mul(share, pos.TotalCost), true
+	if l.Prices != nil {
+		if rate, _, ok := l.Prices.Rate(comm, l.OpCurrency, asOf); ok {
+			return new(big.Rat).Mul(new(big.Rat).Set(units), rate), false
 		}
 	}
-	slog.Warn("unpriced commodity; valued at 0", "commodity", comm)
+	slog.Warn("unpriced commodity; valued at 0 (market only)", "commodity", comm, "op", l.OpCurrency, "asOf", asOf.Format("2006-01-02"))
 	return big.NewRat(0, 1), true
 }
 

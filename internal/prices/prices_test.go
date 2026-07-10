@@ -116,3 +116,28 @@ func rat(s string) *big.Rat {
 	}
 	return r
 }
+
+func TestRateIntermediateHop(t *testing.T) {
+	db := NewDB()
+	d := time.Date(2023, 7, 4, 0, 0, 0, 0, time.UTC)
+	db.Add("SPDW", "USD", d, rat("34.942"))
+	db.Add("USD", "BRL", d, rat("5.0563"))
+	r, _, ok := db.Rate("SPDW", "BRL", d)
+	if !ok {
+		t.Fatal("expected hop SPDW→USD→BRL")
+	}
+	want := new(big.Rat).Mul(rat("34.942"), rat("5.0563"))
+	if r.Cmp(want) != 0 {
+		t.Fatalf("got %s want %s", r.FloatString(6), want.FloatString(6))
+	}
+}
+
+func TestRateInverse(t *testing.T) {
+	db := NewDB()
+	d := time.Date(2023, 7, 1, 0, 0, 0, 0, time.UTC)
+	db.Add("USD", "BRL", d, rat("5"))
+	r, _, ok := db.Rate("BRL", "USD", d)
+	if !ok || r.Cmp(rat("0.2")) != 0 {
+		t.Fatalf("inverse got %v ok=%v", r, ok)
+	}
+}

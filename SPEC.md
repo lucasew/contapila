@@ -340,17 +340,22 @@ Example:
 
 ### 8.3 Price lookup for as-of date D
 
-1. Look for a `price` on D for the pair needed.
-2. If missing, try D−1, D−2, … (walk backward).
-3. If no price on or before D exists at all: **warn** and fall back to the **cost basis that introduced** the position (average cost under model A).
-4. Do not silently use future prices for past as-of dates.
+Market conversion (net worth, charts, P&L when op currency is set) uses **PriceDB only**:
+
+1. Direct pair `base→quote` on or before D (walk back: last price ≤ D).
+2. Else inverse of `quote→base`.
+3. Else one intermediate hop (e.g. `SPDW→USD→BRL`), each leg direct or inverse, both ≤ D.
+4. If still missing: **warn**; market value is **0** (no cost-basis fallback).
+5. Do not silently use future prices for past as-of dates.
+
+Inventory cost basis (average cost, model A) remains for booking/gains; it is **not** used to value net worth.
 
 ### 8.4 Net worth
 
 - Include **Assets** and **Liabilities** only (not Equity/Income/Expenses).
 - Convert positions to operating currency with §8.3 using **signed** unit balances
   (Beancount: liabilities are usually credit → negative units; do **not** flip sign again).
-- Net worth is **market** value when prices exist; cost fallback is warned.
+- Valuation is **market only**; unpriced positions show as 0 with a UI/CLI “no px” marker.
 
 ---
 
@@ -400,7 +405,7 @@ Use **`log/slog`** for warnings. `check` fails only on **errors**.
 | Include cycle | **error** |
 | Double-include same realpath | skip (dedupe); optional single warn |
 | Missing `operating_currency` (inferred) | **warn** |
-| Price missing → walked back or cost fallback | **warn** |
+| Price missing for market conversion (value 0) | **warn** |
 | `prices.beancount` empty/missing | **warn** |
 | Unsupported / unknown directive | **warn** + skip |
 | CUE config unify failure | **error** |

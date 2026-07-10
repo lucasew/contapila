@@ -95,11 +95,42 @@ func cloneMeta(m ast.Metadata) ast.Metadata {
 	return out
 }
 
-// Rate returns quote per base on or before asOf. ok=false if none.
+// Rate returns quote per 1 base on or before asOf (market price only).
+// Lookup order:
+//  1. direct pair base→quote
+//  2. inverse of quote→base
+//  3. one intermediate hop (e.g. SPDW→USD→BRL)
 func (db *DB) Rate(base, quote string, asOf time.Time) (*big.Rat, time.Time, bool) {
 	if base == quote {
 		return big.NewRat(1, 1), asOf, true
 	}
+	if r, t, ok := db.directOrInverse(base, quote, asOf); ok {
+		return r, t, true
+	}
+	// One intermediate commodity present on either side of any pair.
+	for _, mid := range db.commodities() {
+		if mid == base || mid == quote {
+			continue
+		}
+		r1, t1, ok1 := db.directOrInverse(base, mid, asOf)
+		if !ok1 {
+			continue
+		}
+		r2, t2, ok2 := db.directOrInverse(mid, quote, asOf)
+		if !ok2 {
+			continue
+		}
+		t := t1
+		if t2.Before(t1) {
+			t = t2
+		}
+		return new(big.Rat).Mul(r1, r2), t, true
+	}
+	return nil, time.Time{}, false
+}
+
+// direct returns quote per 1 base from an explicit price series only.
+func (db *DB) direct(base, quote string, asOf time.Time) (*big.Rat, time.Time, bool) {
 	pts := db.series[key(base, quote)]
 	var best *Point
 	for i := range pts {
@@ -111,6 +142,38 @@ func (db *DB) Rate(base, quote string, asOf time.Time) (*big.Rat, time.Time, boo
 		return nil, time.Time{}, false
 	}
 	return new(big.Rat).Set(best.Rate), best.Date, true
+}
+
+func (db *DB) directOrInverse(base, quote string, asOf time.Time) (*big.Rat, time.Time, bool) {
+	if r, t, ok := db.direct(base, quote, asOf); ok {
+		return r, t, true
+	}
+	if r, t, ok := db.direct(quote, base, asOf); ok {
+		if r.Sign() == 0 {
+			return nil, time.Time{}, false
+		}
+		return new(big.Rat).Inv(r), t, true
+	}
+	return nil, time.Time{}, false
+}
+
+// commodities returns every currency that appears as base or quote in the DB.
+func (db *DB) commodities() []string {
+	seen := map[string]bool{}
+	for k := range db.series {
+		b, q, ok := splitKey(k)
+		if !ok {
+			continue
+		}
+		seen[b] = true
+		seen[q] = true
+	}
+	out := make([]string, 0, len(seen))
+	for c := range seen {
+		out = append(out, c)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Series is one base/quote pair with its points (oldest first).
