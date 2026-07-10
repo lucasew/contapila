@@ -448,6 +448,69 @@ func chartLineJSON(pts []engine.SeriesPoint, currency, label string) (template.J
 	return template.JS(b), nil
 }
 
+// chartPriceJSON builds a stepped line of market prices for base commodity.
+// Prefers preferQuote (usually op currency); otherwise first series by quote name.
+// Points outside [from,to] are dropped when bounds are set; empty filter → no chart.
+func chartPriceJSON(db *prices.DB, base, preferQuote string, from, to time.Time) (template.JS, string, error) {
+	if db == nil || base == "" {
+		return "", "", nil
+	}
+	series := db.SeriesForBase(base)
+	if len(series) == 0 {
+		return "", "", nil
+	}
+	chosen := series[0]
+	if preferQuote != "" {
+		for _, s := range series {
+			if s.Quote == preferQuote {
+				chosen = s
+				break
+			}
+		}
+	}
+	type payload struct {
+		Kind     string    `json:"kind"`
+		Currency string    `json:"currency"`
+		Label    string    `json:"label"`
+		X        []int64   `json:"x"`
+		Y        []float64 `json:"y"`
+	}
+	p := payload{
+		Kind:     "line",
+		Currency: chosen.Quote,
+		Label:    base + "/" + chosen.Quote,
+	}
+	fromD, toD := from, to
+	if !fromD.IsZero() {
+		fromD = time.Date(fromD.Year(), fromD.Month(), fromD.Day(), 0, 0, 0, 0, time.UTC)
+	}
+	if !toD.IsZero() {
+		toD = time.Date(toD.Year(), toD.Month(), toD.Day(), 0, 0, 0, 0, time.UTC)
+	}
+	for _, pt := range chosen.Points {
+		if pt.Rate == nil {
+			continue
+		}
+		d := time.Date(pt.Date.Year(), pt.Date.Month(), pt.Date.Day(), 0, 0, 0, 0, time.UTC)
+		if !fromD.IsZero() && d.Before(fromD) {
+			continue
+		}
+		if !toD.IsZero() && d.After(toD) {
+			continue
+		}
+		p.X = append(p.X, d.Unix())
+		p.Y = append(p.Y, ratFloat(pt.Rate))
+	}
+	if len(p.X) == 0 {
+		return "", "", nil
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return "", "", err
+	}
+	return template.JS(b), chosen.Quote, nil
+}
+
 // chartBarsJSON builds uPlot diverging bar payload.
 // X is ordinal (0..n-1), not unix time — avoids time-scale bar width/overlap artifacts.
 func chartBarsJSON(bars []engine.BarPoint, currency string) (template.JS, error) {
@@ -614,6 +677,16 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 		data.CommodityMeta = mergeCUECommodityMeta(s.Project.Config.Value, commodity, data.CommodityMeta)
 	}
 	data.CommodityPrices = commodityPriceRows(s.Prices, commodity)
+	if js, quote, jerr := chartPriceJSON(s.Prices, commodity, l.OpCurrency, pr.Start, pr.End); jerr == nil && js != "" {
+		data.NeedCharts = true
+		data.ChartID = "chart-commodity-price"
+		if quote != "" {
+			data.ChartTitle = "Price (" + quote + ")"
+		} else {
+			data.ChartTitle = "Price"
+		}
+		data.ChartJSON = js
+	}
 	s.render(w, "commodity.html", data)
 }
 
