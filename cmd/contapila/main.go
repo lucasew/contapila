@@ -18,13 +18,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// workDir is the optional start directory for project discovery (global -C).
+// Empty means use the process working directory.
+var workDir string
+
 func main() {
 	root := &cobra.Command{
 		Use:           "contapila",
 		Short:         "Contapila — Beancount-class ledger in Go",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Parse -C before subcommands; discovery starts from this directory.
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if workDir == "" {
+				return nil
+			}
+			abs, err := filepath.Abs(workDir)
+			if err != nil {
+				return fmt.Errorf("-C %s: %w", workDir, err)
+			}
+			info, err := os.Stat(abs)
+			if err != nil {
+				return fmt.Errorf("-C %s: %w", workDir, err)
+			}
+			if !info.IsDir() {
+				return fmt.Errorf("-C %s: not a directory", workDir)
+			}
+			workDir = abs
+			return nil
+		},
 	}
+	root.PersistentFlags().StringVarP(&workDir, "directory", "C", "", "run as if contapila started in this directory (project discovery)")
 	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), accountCmd(), parseCmd(), webCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -32,7 +56,11 @@ func main() {
 	}
 }
 
+// mustCwd returns the project search start directory: -C if set, else process CWD.
 func mustCwd() string {
+	if workDir != "" {
+		return workDir
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
