@@ -1,7 +1,11 @@
 // Commodity policy (CUE) — journal `commodity` directives may carry matching
 // string attributes (name, asset-class, …). Host may inject discovered commodities later.
 #Commodity: {
+	// Decimal places for display / default tolerance (half ULP = 0.5 * 10^-precision).
 	precision: int | *5
+	// Optional absolute tolerance override (string or number, e.g. 0.001 or "0.001").
+	// When unset, booking uses half ULP of precision.
+	tolerance?: number | string
 	// Common Beancount-style attributes (optional; open for more via ...).
 	name?:         string
 	"asset-class"?: string

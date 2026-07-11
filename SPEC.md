@@ -282,7 +282,8 @@ Internal stages are separate packages; the public surface stays a deep module (s
 
 - Default **precision: 5** decimal places.
 - Asset classes (illustrative; exact prelude schema at implement time) override precision (e.g. fiat → 2, crypto → 8).
-- Default **tolerance**: half unit in the last place of precision, unless overridden per commodity/class.
+- Default **tolerance**: half ULP of commodity `precision` (CUE `#Commodity` ⊔ journal commodity meta).
+  Optional `tolerance` field overrides. Beancount `inferred_tolerance_*` options are **not** read.
 - Undeclared commodities in journals: usable with prelude defaults (precision 5) unless stricter policy is added later.
 
 ---
@@ -386,6 +387,8 @@ Inventory cost basis (average cost, model A) remains for booking/gains; it is **
 | org-mode `section` / headlines (`* …`) | structure only — silent; nested directives collected | Go |
 | posting `closing: TRUE` | yes — after residual fill, expands to `balance 0` + `close` next day for that account/commodity | Go |
 | cost `{}`, price `@` / `@@` | yes | Go |
+| cost `{amount, date}` | yes — books cost; also injects `price` on that date | Go |
+| amount expressions (`+ - * /`, parens, unary `-`) | yes (grammar-complete) | Go |
 | empty residual posting | yes | Go |
 | `price` | yes (shared file → PriceDB; CUE `price_pairs` inventory only) | Go + CUE |
 | `balance` | yes | Go |
@@ -415,6 +418,8 @@ Use **`log/slog`** for warnings. `check` fails only on **errors**.
 | Failed `balance` assertion | **error** |
 | Over-sell (no inventory / not enough units) | **warn** (skip inventing inventory) |
 | Bad average cost on reduce | **error** |
+| Amount with number but no commodity | **error** (not residual) |
+| Residual needs >1 commodity | **error** |
 | Unknown `option` | **warn** |
 | `include` literal path missing | **error** |
 | `include` glob, zero matches | **warn** |

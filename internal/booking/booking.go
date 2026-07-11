@@ -46,8 +46,10 @@ type Engine struct {
 
 	Diags diag.List
 
-	// tolerance default
+	// Tolerance is the default absolute tolerance (half ULP of precision 5).
 	Tolerance *big.Rat
+	// CommTol optional per-commodity absolute tolerance (from CUE/meta policy).
+	CommTol map[string]*big.Rat
 }
 
 type BookedTxn struct {
@@ -72,6 +74,19 @@ func New() *Engine {
 		Pad:       map[string]string{},
 		Tolerance: big.NewRat(5, 1000000), // 5e-6 default (precision 5 half-ulp-ish)
 	}
+}
+
+// tol returns absolute tolerance for commodity (per-comm if set, else default).
+func (e *Engine) tol(comm string) *big.Rat {
+	if e.CommTol != nil {
+		if t, ok := e.CommTol[comm]; ok && t != nil {
+			return t
+		}
+	}
+	if e.Tolerance != nil {
+		return e.Tolerance
+	}
+	return big.NewRat(5, 1000000)
 }
 
 func (e *Engine) Book(dirs []ast.Directive) {
@@ -199,6 +214,15 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 			filled[i] = FilledPosting{Account: p.Account, Metadata: p.Metadata}
 			continue
 		}
+		if p.Units.Number == nil {
+			e.Diags.Error(t.File, t.Line, fmt.Sprintf("amount missing number on %s", p.Account))
+			return
+		}
+		// Bare number without commodity is not a residual (empty leg is residual).
+		if strings.TrimSpace(p.Units.Commodity) == "" {
+			e.Diags.Error(t.File, t.Line, fmt.Sprintf("amount missing commodity on %s", p.Account))
+			return
+		}
 		units := new(big.Rat).Set(p.Units.Number)
 		comm := p.Units.Commodity
 		fp := FilledPosting{
@@ -245,7 +269,7 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 				if p.Cost != nil && !p.Cost.Empty && p.Cost.Number != nil {
 					// must match average
 					diff := new(big.Rat).Sub(new(big.Rat).Set(p.Cost.Number), avg)
-					if diff.Abs(diff).Cmp(e.Tolerance) > 0 {
+					if diff.Abs(diff).Cmp(e.tol(comm)) > 0 {
 						e.Diags.Error(t.File, t.Line, fmt.Sprintf("sell cost %s != average %s", p.Cost.Number.FloatString(6), avg.FloatString(6)))
 						return
 					}
@@ -274,7 +298,7 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 		// residual absorbs -sum(weights) per commodity; if >1 commodity with residual needed, error
 		var nonzero []string
 		for c, a := range weights {
-			if a.Sign() != 0 && a.Cmp(e.Tolerance) != 0 && new(big.Rat).Abs(a).Cmp(e.Tolerance) > 0 {
+			if a.Sign() != 0 && new(big.Rat).Abs(a).Cmp(e.tol(c)) > 0 {
 				nonzero = append(nonzero, c)
 			}
 		}
@@ -296,7 +320,7 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 	} else {
 		// must balance
 		for c, a := range weights {
-			if new(big.Rat).Abs(a).Cmp(e.Tolerance) > 0 {
+			if new(big.Rat).Abs(a).Cmp(e.tol(c)) > 0 {
 				e.Diags.Error(t.File, t.Line, fmt.Sprintf("unbalanced transaction for %s: %s", c, a.FloatString(8)))
 			}
 		}
@@ -405,7 +429,8 @@ func (e *Engine) bookBalance(b ast.Balance) {
 	actual := e.balOf(b.Account, b.Amount.Commodity)
 	expected := b.Amount.Number
 	diff := new(big.Rat).Sub(new(big.Rat).Set(expected), actual)
-	if new(big.Rat).Abs(diff).Cmp(e.Tolerance) <= 0 {
+	tol := e.tol(b.Amount.Commodity)
+	if new(big.Rat).Abs(diff).Cmp(tol) <= 0 {
 		return
 	}
 	// try pad
@@ -429,7 +454,7 @@ func (e *Engine) bookBalance(b ast.Balance) {
 		delete(e.Pad, b.Account)
 		actual = e.balOf(b.Account, b.Amount.Commodity)
 		diff = new(big.Rat).Sub(new(big.Rat).Set(expected), actual)
-		if new(big.Rat).Abs(diff).Cmp(e.Tolerance) <= 0 {
+		if new(big.Rat).Abs(diff).Cmp(tol) <= 0 {
 			return
 		}
 	}

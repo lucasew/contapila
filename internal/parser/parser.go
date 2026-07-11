@@ -338,14 +338,14 @@ func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List, line
 				last.Metadata[key] = val
 			}
 		case "posting":
-			txn.Postings = append(txn.Postings, convertPosting(src, c))
+			txn.Postings = append(txn.Postings, convertPosting(file, src, c, diags, lines))
 		}
 	}
 	txn.Metadata = txnMD
 	return txn
 }
 
-func convertPosting(src []byte, n *grammar.Node) ast.Posting {
+func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) ast.Posting {
 	// Nested key_value under posting (if grammar ever nests them) plus sibling handling in convertTxn.
 	p := ast.Posting{
 		Account:  textField(src, n, "account"),
@@ -362,10 +362,27 @@ func convertPosting(src []byte, n *grammar.Node) ast.Posting {
 			}
 		}
 	}
+	// Bare number without commodity often lands as ERROR under posting (not residual).
+	if an == nil {
+		for i := uint32(0); i < n.NamedChildCount(); i++ {
+			c := n.NamedChild(i)
+			if c.Type() == "ERROR" || c.IsError() {
+				if num := evalNumberExpr(src, c); num != nil {
+					p.Units = &ast.Amount{Number: num, Commodity: ""}
+					break
+				}
+			}
+		}
+	}
 	if an != nil {
 		if amt, ok := parseAmountNode(src, an); ok {
 			p.Units = &amt
 		}
+	}
+	// Number present but no commodity → error (not a residual empty leg).
+	if p.Units != nil && p.Units.Number != nil && strings.TrimSpace(p.Units.Commodity) == "" {
+		line := lines.At(n.StartByte())
+		diags.Error(file, line, fmt.Sprintf("amount missing commodity on %s", p.Account))
 	}
 	if cs := field(n, "cost_spec"); cs != nil {
 		p.Cost = parseCost(src, cs)
@@ -403,12 +420,14 @@ func convertPosting(src []byte, n *grammar.Node) ast.Posting {
 }
 
 func parseCost(src []byte, n *grammar.Node) *ast.CostSpec {
-	// cost_spec → cost_comp_list → cost_comp → compound_amount
+	// cost_spec → cost_comp_list → cost_comp → compound_amount | date | …
 	empty := true
 	var num *big.Rat
 	var cur string
+	var costDate time.Time
 	walkNamed(n, func(c *grammar.Node) {
-		if c.Type() == "compound_amount" {
+		switch c.Type() {
+		case "compound_amount":
 			empty = false
 			if per := field(c, "per"); per != nil {
 				num = parseNumber(src, per)
@@ -422,9 +441,25 @@ func parseCost(src []byte, n *grammar.Node) *ast.CostSpec {
 					num = parseNumber(src, t)
 				}
 			}
-		}
-		if c.Type() == "number" && num == nil {
-			// bare
+			// compound_amount may expose number/currency as direct children
+			if num == nil {
+				for i := uint32(0); i < c.NamedChildCount(); i++ {
+					ch := c.NamedChild(i)
+					if ch.Type() == "number" || ch.Type() == "unary_number_expr" || ch.Type() == "binary_number_expr" {
+						if num == nil {
+							num = parseNumber(src, ch)
+						}
+					}
+					if ch.Type() == "currency" && cur == "" {
+						cur = strings.TrimSpace(slice(src, ch))
+					}
+				}
+			}
+		case "date":
+			if d, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(slice(src, c)), time.UTC); err == nil {
+				costDate = d
+				empty = false
+			}
 		}
 	})
 	// empty braces {}
@@ -435,14 +470,14 @@ func parseCost(src []byte, n *grammar.Node) *ast.CostSpec {
 	if empty && (strings.Contains(text, "{}") || text == "{}") {
 		return &ast.CostSpec{Empty: true}
 	}
-	if num == nil && cur == "" {
+	if num == nil && cur == "" && costDate.IsZero() {
 		// treat as empty cost spec if no numbers found
 		if strings.Contains(text, "{") {
 			return &ast.CostSpec{Empty: true}
 		}
 		return nil
 	}
-	return &ast.CostSpec{Number: num, Commodity: cur, Empty: num == nil}
+	return &ast.CostSpec{Number: num, Commodity: cur, Empty: num == nil, Date: costDate}
 }
 
 func firstAmountish(n *grammar.Node) *grammar.Node {
@@ -468,32 +503,24 @@ func parseAmountNode(src []byte, n *grammar.Node) (ast.Amount, bool) {
 	n = firstAmountish(n)
 	var num *big.Rat
 	var cur string
-	walkNamed(n, func(c *grammar.Node) {
+	// Prefer top-level expr child (binary/unary), not the first nested number leaf.
+	for i := uint32(0); i < n.NamedChildCount(); i++ {
+		c := n.NamedChild(i)
 		switch c.Type() {
+		case "binary_number_expr", "unary_number_expr":
+			if num == nil {
+				num = evalNumberExpr(src, c)
+			}
 		case "number":
 			if num == nil {
-				num = rat(strings.TrimSpace(slice(src, c)))
+				num = evalNumberExpr(src, c)
 			}
-		case "unary_number_expr":
-			num = parseUnary(src, c)
 		case "currency":
 			cur = strings.TrimSpace(slice(src, c))
 		}
-	})
-	// also direct children order for incomplete_amount
+	}
 	if num == nil {
-		for i := uint32(0); i < n.NamedChildCount(); i++ {
-			c := n.NamedChild(i)
-			if c.Type() == "unary_number_expr" {
-				num = parseUnary(src, c)
-			}
-			if c.Type() == "number" && num == nil {
-				num = rat(strings.TrimSpace(slice(src, c)))
-			}
-			if c.Type() == "currency" {
-				cur = strings.TrimSpace(slice(src, c))
-			}
-		}
+		num = evalNumberExpr(src, n)
 	}
 	if num == nil {
 		return ast.Amount{}, false
@@ -501,64 +528,8 @@ func parseAmountNode(src []byte, n *grammar.Node) (ast.Amount, bool) {
 	return ast.Amount{Number: num, Commodity: cur}, true
 }
 
-func parseUnary(src []byte, n *grammar.Node) *big.Rat {
-	neg := false
-	var num *big.Rat
-	for i := uint32(0); i < n.ChildCount(); i++ {
-		c := n.Child(i)
-		switch c.Type() {
-		case "minus", "-":
-			neg = true
-		case "number":
-			num = rat(strings.TrimSpace(slice(src, c)))
-		}
-	}
-	for i := uint32(0); i < n.NamedChildCount(); i++ {
-		c := n.NamedChild(i)
-		if c.Type() == "number" {
-			num = rat(strings.TrimSpace(slice(src, c)))
-		}
-	}
-	// fallback whole text
-	if num == nil {
-		t := strings.TrimSpace(slice(src, n))
-		t = strings.ReplaceAll(t, " ", "")
-		num = rat(t)
-	}
-	if num == nil {
-		return big.NewRat(0, 1)
-	}
-	if neg && num.Sign() > 0 {
-		num.Neg(num)
-	}
-	// if text already had minus, rat() handled it
-	return num
-}
-
 func parseNumber(src []byte, n *grammar.Node) *big.Rat {
-	if n == nil {
-		return nil
-	}
-	if n.Type() == "unary_number_expr" {
-		return parseUnary(src, n)
-	}
-	if n.Type() == "number" {
-		return rat(strings.TrimSpace(slice(src, n)))
-	}
-	// search
-	var r *big.Rat
-	walkNamed(n, func(c *grammar.Node) {
-		if r != nil {
-			return
-		}
-		if c.Type() == "unary_number_expr" {
-			r = parseUnary(src, c)
-		}
-		if c.Type() == "number" {
-			r = rat(strings.TrimSpace(slice(src, c)))
-		}
-	})
-	return r
+	return evalNumberExpr(src, n)
 }
 
 func meta(file string, src []byte, n *grammar.Node, lines lineTable) ast.Meta {

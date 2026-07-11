@@ -21,6 +21,7 @@ type CostSpec struct {
 	Number    *big.Rat // nil with Empty=true means {}
 	Commodity string
 	Empty     bool
+	Date      time.Time // optional cost date → synthetic price (zero if omitted)
 }
 
 type PriceSpec struct {

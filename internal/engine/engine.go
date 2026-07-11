@@ -11,6 +11,7 @@ import (
 
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/booking"
+	"github.com/lucasew/contapila-go/internal/config"
 	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/docs"
 	"github.com/lucasew/contapila-go/internal/loader"
@@ -118,8 +119,16 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 			}
 		}
 	}
+	// {cost, date} on postings → synthetic price directives (+ PriceDB points).
+	stream = booking.ExpandDatedCosts(stream, pdb)
+
+	// CUE ⊔ journal commodity meta → per-commodity booking tolerances.
+	commTol := commodityTolerances(p, commodities)
+
 	// closing: TRUE expands after residual fill (BookWithClosing), then re-books.
-	b, stream, cdiags := booking.BookWithClosing(stream)
+	b, stream, cdiags := booking.BookWithClosing(stream, func(e *booking.Engine) {
+		e.CommTol = commTol
+	})
 	diags.Merge(cdiags)
 
 	// Expand <ledger>/docs/by-account into synthetic document directives.
@@ -153,6 +162,47 @@ func cloneMeta(m ast.Metadata) ast.Metadata {
 	out := make(ast.Metadata, len(m))
 	for k, v := range m {
 		out[k] = v
+	}
+	return out
+}
+
+// commodityTolerances merges CUE #Commodity policy with journal commodity metadata.
+// Journal meta keys "precision" / "tolerance" overlay CUE when present.
+func commodityTolerances(p *project.Project, journal map[string]CommodityInfo) map[string]*big.Rat {
+	out := map[string]*big.Rat{}
+	policies := map[string]config.CommodityPolicy{}
+	if p != nil && p.Config != nil {
+		policies = config.CommodityPolicies(p.Config.Value)
+	}
+	// Start from CUE.
+	for name, pol := range policies {
+		if pol.Tolerance != nil {
+			out[name] = new(big.Rat).Set(pol.Tolerance)
+		}
+	}
+	// Overlay journal commodity directive metadata.
+	for name, info := range journal {
+		pol := config.PolicyFor(policies, name)
+		if s := strings.TrimSpace(info.Metadata["precision"]); s != "" {
+			if n, ok := new(big.Rat).SetString(s); ok && n.IsInt() {
+				prec := int(n.Num().Int64())
+				if prec >= 0 && prec < 32 {
+					pol.Precision = prec
+					pol.Tolerance = config.HalfULP(prec)
+				}
+			}
+		}
+		if s := strings.TrimSpace(info.Metadata["tolerance"]); s != "" {
+			if t, ok := new(big.Rat).SetString(s); ok && t.Sign() >= 0 {
+				pol.Tolerance = t
+			}
+		}
+		if pol.Tolerance != nil {
+			out[name] = new(big.Rat).Set(pol.Tolerance)
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

@@ -108,19 +108,27 @@ func ExpandClosing(dirs []ast.Directive, booked []BookedTxn) ([]ast.Directive, d
 // BookWithClosing books dirs, expands closing: TRUE from filled postings (including
 // residuals), then re-books with synthetic balance/close so assertions run in date order.
 // When no closing metadata is present, books once.
-func BookWithClosing(dirs []ast.Directive) (e *Engine, out []ast.Directive, diags diag.List) {
+// setup is optional (e.g. set CommTol); applied to each Engine before Book.
+func BookWithClosing(dirs []ast.Directive, setup func(*Engine)) (e *Engine, out []ast.Directive, diags diag.List) {
 	out = dirs
+	newE := func() *Engine {
+		eng := New()
+		if setup != nil {
+			setup(eng)
+		}
+		return eng
+	}
 	if !hasClosingMeta(dirs) {
-		e = New()
+		e = newE()
 		e.Book(dirs)
 		return e, dirs, e.Diags
 	}
-	probe := New()
+	probe := newE()
 	probe.Book(dirs)
 	var cdiags diag.List
 	out, cdiags = ExpandClosing(dirs, probe.Txns)
 	diags.Merge(cdiags)
-	e = New()
+	e = newE()
 	e.Book(out)
 	diags.Merge(e.Diags)
 	return e, out, diags
