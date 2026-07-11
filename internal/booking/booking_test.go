@@ -63,6 +63,40 @@ func TestUnbalanced(t *testing.T) {
 	}
 }
 
+func TestOversellUsesTxnNetNotSinglePosting(t *testing.T) {
+	// Same txn: sell then buy same account+commodity. Per-posting check would
+	// oversell; whole-txn net is zero relative to start+buys.
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Broker:X"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-02-01"), File: "t", Line: 3}, Flag: "*",
+			Postings: []ast.Posting{
+				// reduce first in source order (would fail if checked alone with 0 inventory)
+				{Account: "Assets:Broker:X", Units: amt("-5", "X"), Cost: &ast.CostSpec{Number: r("10"), Commodity: "BRL"}},
+				{Account: "Assets:Broker:X", Units: amt("5", "X"), Cost: &ast.CostSpec{Number: r("10"), Commodity: "BRL"}},
+				{Account: "Assets:Cash", Units: amt("0", "BRL")},
+			},
+		},
+	})
+	for _, d := range e.Diags {
+		if strings.Contains(d.Message, "oversell") {
+			t.Fatalf("false oversell on net-zero inv txn: %v", e.Diags)
+		}
+	}
+	if e.Diags.HasErrors() {
+		t.Fatalf("errors: %v", e.Diags)
+	}
+	pos := e.getPos("Assets:Broker:X", "X")
+	if pos == nil || pos.Units.Cmp(r("0")) != 0 {
+		// buy 5 sell 5 from empty → end 0
+		if pos == nil || pos.Units.Sign() != 0 {
+			t.Fatalf("pos=%+v", pos)
+		}
+	}
+}
+
 func TestOversellIsWarning(t *testing.T) {
 	e := New()
 	e.Book([]ast.Directive{

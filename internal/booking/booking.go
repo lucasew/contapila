@@ -189,10 +189,6 @@ func (e *Engine) checkAccount(date time.Time, account, file string, line int) {
 func (e *Engine) bookTxn(t ast.Transaction) {
 	// residual index
 	resIdx := -1
-	type weight struct {
-		comm string
-		amt  *big.Rat
-	}
 	weights := map[string]*big.Rat{}
 	addW := func(comm string, n *big.Rat) {
 		if weights[comm] == nil {
@@ -201,8 +197,29 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 		weights[comm].Add(weights[comm], n)
 	}
 
+	type invKey struct{ acct, comm string }
+	type invOp struct {
+		buy      bool // true = increase, false = reduce
+		account  string
+		comm     string
+		units    *big.Rat // positive magnitude
+		total    *big.Rat // cost basis total (positive)
+		costComm string
+	}
+
 	filled := make([]FilledPosting, len(t.Postings))
-	// First pass: inventory effects and weights for non-residual
+	var ops []invOp
+	buyNet := map[invKey]*big.Rat{}
+	sellNet := map[invKey]*big.Rat{}
+	addNet := func(m map[invKey]*big.Rat, k invKey, n *big.Rat) {
+		if m[k] == nil {
+			m[k] = big.NewRat(0, 1)
+		}
+		m[k].Add(m[k], n)
+	}
+
+	// Phase 1: plan inventory + weights without mutating positions/balances.
+	// Oversell is judged on the whole txn net per (account, commodity), not per posting.
 	for i, p := range t.Postings {
 		e.checkAccount(t.Date, p.Account, t.File, t.Line)
 		if p.Units == nil {
@@ -238,6 +255,7 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 		}
 
 		if hasInv && (p.Cost != nil || units.Sign() != 0) {
+			k := invKey{p.Account, comm}
 			if units.Sign() > 0 {
 				// buy: need explicit cost
 				if p.Cost == nil || p.Cost.Empty || p.Cost.Number == nil {
@@ -247,27 +265,25 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 				unitCost := p.Cost.Number
 				costComm := p.Cost.Commodity
 				total := new(big.Rat).Mul(new(big.Rat).Set(units), new(big.Rat).Set(unitCost))
-				if err := e.buy(p.Account, comm, units, total, costComm); err != nil {
-					e.Diags.Error(t.File, t.Line, err.Error())
-					return
-				}
+				ops = append(ops, invOp{
+					buy: true, account: p.Account, comm: comm,
+					units: new(big.Rat).Set(units), total: total, costComm: costComm,
+				})
+				addNet(buyNet, k, units)
 				fp.CostBasis = &ast.Amount{Number: total, Commodity: costComm}
 			} else if units.Sign() < 0 {
-				// sell / reduce
-				pos := e.getPos(p.Account, comm)
-				if pos == nil || pos.Units.Sign() == 0 {
-					// warn (not error): check may still pass; do not invent inventory
-					e.Diags.Warn(t.File, t.Line, fmt.Sprintf("oversell %s: no inventory", comm))
-					return
-				}
+				// sell / reduce — cost basis from pre-txn average; oversell checked on nets below
 				sellUnits := new(big.Rat).Neg(units) // positive
-				if sellUnits.Cmp(pos.Units) > 0 {
-					e.Diags.Warn(t.File, t.Line, fmt.Sprintf("oversell %s: have %s need %s", comm, pos.Units.FloatString(6), sellUnits.FloatString(6)))
-					return
+				addNet(sellNet, k, sellUnits)
+				pos := e.getPos(p.Account, comm)
+				avg := big.NewRat(0, 1)
+				costComm := ""
+				if pos != nil && pos.Units.Sign() != 0 {
+					avg = pos.Avg()
+					costComm = pos.CostComm
 				}
-				avg := pos.Avg()
-				if p.Cost != nil && !p.Cost.Empty && p.Cost.Number != nil {
-					// must match average
+				if p.Cost != nil && !p.Cost.Empty && p.Cost.Number != nil && pos != nil && pos.Units.Sign() != 0 {
+					// must match average (pre-txn)
 					diff := new(big.Rat).Sub(new(big.Rat).Set(p.Cost.Number), avg)
 					if diff.Abs(diff).Cmp(e.tol(comm)) > 0 {
 						e.Diags.Error(t.File, t.Line, fmt.Sprintf("sell cost %s != average %s", p.Cost.Number.FloatString(6), avg.FloatString(6)))
@@ -275,11 +291,10 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 					}
 				}
 				totalCost := new(big.Rat).Mul(sellUnits, avg)
-				costComm := pos.CostComm
-				if err := e.sell(p.Account, comm, sellUnits, totalCost); err != nil {
-					e.Diags.Error(t.File, t.Line, err.Error())
-					return
-				}
+				ops = append(ops, invOp{
+					buy: false, account: p.Account, comm: comm,
+					units: sellUnits, total: totalCost, costComm: costComm,
+				})
 				fp.CostBasis = &ast.Amount{Number: new(big.Rat).Neg(totalCost), Commodity: costComm}
 			}
 		}
@@ -287,13 +302,10 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 		// weight for balancing
 		w := postingWeight(p, units, fp.CostBasis)
 		addW(w.comm, w.amt)
-
-		// update bare balance units
-		e.addBal(p.Account, comm, units)
 		filled[i] = fp
 	}
 
-	// Residual
+	// Residual (weights only; balances applied after inventory plan succeeds)
 	if resIdx >= 0 {
 		// residual absorbs -sum(weights) per commodity; if >1 commodity with residual needed, error
 		var nonzero []string
@@ -311,7 +323,6 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 			c := nonzero[0]
 			n := new(big.Rat).Neg(weights[c])
 			filled[resIdx].Units = &ast.Amount{Number: n, Commodity: c}
-			e.addBal(filled[resIdx].Account, c, n)
 			addW(c, n)
 		} else {
 			// zero residual — leave units 0 in first weight commodity or empty
@@ -324,6 +335,60 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 				e.Diags.Error(t.File, t.Line, fmt.Sprintf("unbalanced transaction for %s: %s", c, a.FloatString(8)))
 			}
 		}
+	}
+
+	// Phase 2: oversell on whole-txn net inventory (start + buys − sells).
+	for k, sell := range sellNet {
+		if sell == nil || sell.Sign() <= 0 {
+			continue
+		}
+		start := big.NewRat(0, 1)
+		if pos := e.getPos(k.acct, k.comm); pos != nil && pos.Units != nil {
+			start = new(big.Rat).Set(pos.Units)
+		}
+		buy := big.NewRat(0, 1)
+		if b := buyNet[k]; b != nil {
+			buy = b
+		}
+		available := new(big.Rat).Add(start, buy)
+		if sell.Cmp(available) > 0 {
+			// warn (not error): do not invent inventory; skip applying this txn's inventory+balances
+			if available.Sign() == 0 {
+				e.Diags.Warn(t.File, t.Line, fmt.Sprintf("oversell %s: no inventory", k.comm))
+			} else {
+				e.Diags.Warn(t.File, t.Line, fmt.Sprintf("oversell %s: have %s need %s", k.comm, available.FloatString(6), sell.FloatString(6)))
+			}
+			return
+		}
+	}
+
+	// Phase 3: apply inventory — increases first, then reductions (so same-txn buys fund sells).
+	for _, op := range ops {
+		if !op.buy {
+			continue
+		}
+		if err := e.buy(op.account, op.comm, op.units, op.total, op.costComm); err != nil {
+			e.Diags.Error(t.File, t.Line, err.Error())
+			return
+		}
+	}
+	for _, op := range ops {
+		if op.buy {
+			continue
+		}
+		if err := e.sell(op.account, op.comm, op.units, op.total); err != nil {
+			// Should not happen after net oversell check; treat as warn and abort apply.
+			e.Diags.Warn(t.File, t.Line, fmt.Sprintf("oversell %s: %v", op.comm, err))
+			return
+		}
+	}
+
+	// Phase 4: bare unit balances for all filled legs
+	for _, fp := range filled {
+		if fp.Units == nil || fp.Units.Number == nil || fp.Units.Commodity == "" {
+			continue
+		}
+		e.addBal(fp.Account, fp.Units.Commodity, fp.Units.Number)
 	}
 
 	e.Txns = append(e.Txns, BookedTxn{Txn: t, Postings: filled})
