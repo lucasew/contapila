@@ -126,9 +126,9 @@ type pageData struct {
 	NetWorthRows []nwRow
 	NetWorthTot  string
 	AsOf         string
-	Time        string
-	PeriodLabel string
-	Error       string
+	Time         string
+	PeriodLabel  string
+	Error        string
 	// Account page
 	AccountName       string
 	AccountBalances   []balanceRow
@@ -155,12 +155,12 @@ type pageData struct {
 
 // priceSeriesRow is one base/quote pair summary on the prices report.
 type priceSeriesRow struct {
-	Base, Quote       string
-	Count             int
-	FirstDate         string
-	LastDate          string
-	LastRate          string
-	LastMeta          []metaKV
+	Base, Quote string
+	Count       int
+	FirstDate   string
+	LastDate    string
+	LastRate    string
+	LastMeta    []metaKV
 }
 
 // pricePointRow is one observation on a commodity's price history.
@@ -339,7 +339,6 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "ledger.html", data)
 }
-
 
 func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("ledger")
@@ -1095,5 +1094,3 @@ func buildNetWorthRows(lines []engine.NetWorthTreeLine) []nwRow {
 	}
 	return rows
 }
-
-
