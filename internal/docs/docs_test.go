@@ -55,11 +55,11 @@ func TestScanByAccount(t *testing.T) {
 func TestMergePrefersExplicit(t *testing.T) {
 	path := "personal/docs/by-account/Assets/Cash/20240101_x.txt"
 	syn := []ast.Document{{
-		Meta: ast.Meta{Date: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+		Meta:    ast.Meta{Date: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
 		Account: "Assets:Cash", Path: path, Synthetic: true,
 	}}
 	exp := []ast.Document{{
-		Meta: ast.Meta{Date: time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), File: "main.beancount"},
+		Meta:    ast.Meta{Date: time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), File: "main.beancount"},
 		Account: "Assets:Cash", Path: path, Synthetic: false,
 	}}
 	out := Merge(exp, syn)

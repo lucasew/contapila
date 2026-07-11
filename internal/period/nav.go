@@ -8,13 +8,13 @@ import (
 
 // Interval kinds used in the navbar (Fava-style).
 const (
-	KindEmpty    = ""
-	KindYear     = "year"
-	KindQuarter  = "quarter"
-	KindMonth    = "month"
-	KindWeek     = "week"
-	KindDay      = "day"
-	KindCustom   = "custom"
+	KindEmpty   = ""
+	KindYear    = "year"
+	KindQuarter = "quarter"
+	KindMonth   = "month"
+	KindWeek    = "week"
+	KindDay     = "day"
+	KindCustom  = "custom"
 )
 
 // Kind returns the interval kind of a filter expression.

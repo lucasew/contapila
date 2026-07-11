@@ -76,8 +76,6 @@ func printDiags(ds diag.List) {
 	}
 }
 
-
-
 func withLedgers(args []string, fn func(*engine.Ledger) error) error {
 	p, pdb, pdiags, err := engine.OpenProject(mustCwd())
 	if err != nil {
