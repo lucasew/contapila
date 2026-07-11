@@ -28,15 +28,20 @@ type BarPoint struct {
 // NetWorthSeries returns net worth in op currency after each event that changes
 // asset/liability positions or market prices within [from, to]. Empty bounds = open side.
 // Single forward booking pass (not rebook-per-point); price days revalue holdings.
+// Leading/trailing zero-value samples are dropped (same idea as PnL empty-bin edge trim).
 func (l *Ledger) NetWorthSeries(from, to time.Time) ([]SeriesPoint, error) {
 	if l.OpCurrency == "" {
 		return nil, nil
 	}
-	return l.walkBalanceSeries(from, to, func(acct string) bool {
+	pts, err := l.walkBalanceSeries(from, to, func(acct string) bool {
 		return booking.IsAsset(acct) || booking.IsLiability(acct)
 	}, func(b *booking.Engine, asOf time.Time) *big.Rat {
 		return l.netWorthFromBook(b, asOf)
 	})
+	if err != nil {
+		return nil, err
+	}
+	return trimZeroEdgeSeries(pts), nil
 }
 
 // AccountSeries returns market value in op currency after each event touching the
@@ -287,6 +292,29 @@ func trimEmptyEdgeBars(bars []BarPoint) []BarPoint {
 		return nil
 	}
 	return bars[lo : hi+1]
+}
+
+func seriesPointEmpty(p SeriesPoint) bool {
+	return p.Value == nil || p.Value.Sign() == 0
+}
+
+// trimZeroEdgeSeries drops leading/trailing zero net-worth samples.
+// Interior zeros (temporary wipeouts) are kept.
+func trimZeroEdgeSeries(pts []SeriesPoint) []SeriesPoint {
+	if len(pts) == 0 {
+		return pts
+	}
+	lo, hi := 0, len(pts)-1
+	for lo <= hi && seriesPointEmpty(pts[lo]) {
+		lo++
+	}
+	for hi >= lo && seriesPointEmpty(pts[hi]) {
+		hi--
+	}
+	if lo > hi {
+		return nil
+	}
+	return pts[lo : hi+1]
 }
 
 func binLabel(b period.Range, kind period.BinKind) string {

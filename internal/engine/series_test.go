@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"math/big"
 	"path/filepath"
 	"testing"
 	"time"
@@ -33,6 +34,34 @@ func TestExampleNetWorthSeries(t *testing.T) {
 		if !pts[i].Date.After(pts[i-1].Date) && !pts[i].Date.Equal(pts[i-1].Date) {
 			t.Fatalf("dates not ordered")
 		}
+	}
+}
+
+func TestTrimZeroEdgeSeries(t *testing.T) {
+	z := big.NewRat(0, 1)
+	n := big.NewRat(10, 1)
+	pts := []SeriesPoint{
+		{Date: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), Value: z},
+		{Date: time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC), Value: z},
+		{Date: time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC), Value: n},
+		{Date: time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC), Value: z}, // interior zero kept
+		{Date: time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC), Value: n},
+		{Date: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), Value: z},
+	}
+	got := trimZeroEdgeSeries(pts)
+	// drop Jan–Feb leading zeros + June trailing zero → Mar, Apr(0), May
+	if len(got) != 3 {
+		t.Fatalf("len=%d want 3", len(got))
+	}
+	if !got[0].Date.Equal(time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("first=%s", got[0].Date.Format("2006-01-02"))
+	}
+	if !got[len(got)-1].Date.Equal(time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("last=%s", got[len(got)-1].Date.Format("2006-01-02"))
+	}
+	// interior zero preserved
+	if got[1].Value.Sign() != 0 {
+		t.Fatal("expected interior zero kept")
 	}
 }
 
