@@ -9,6 +9,7 @@ import (
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/parser"
+	"github.com/lucasew/contapila-go/internal/source"
 )
 
 // LoadFile parses a file and expands includes depth-first.
@@ -41,13 +42,13 @@ func loadOne(path string, out *[]ast.Directive, diags *diag.List, seen, stack ma
 	stack[real] = true
 	defer delete(stack, real)
 
-	src, err := os.ReadFile(abs)
+	f, err := source.New(abs)
 	if err != nil {
 		return err
 	}
 	seen[real] = true
 
-	dirs, pdiags, err := parser.Parse(abs, src)
+	dirs, pdiags, err := parser.ParseFile(f)
 	diags.Merge(pdiags)
 	if err != nil {
 		return err

@@ -4,34 +4,14 @@ import (
 	"testing"
 
 	"github.com/lucasew/contapila-go/internal/ast"
+	"github.com/lucasew/contapila-go/internal/source"
 )
 
-func TestLineTableAt(t *testing.T) {
-	src := []byte("a\nbb\nccc\n")
-	lt := newLineTable(src)
-	cases := []struct {
-		off  uint32
-		want int
-	}{
-		{0, 1},
-		{1, 1},   // '\n' of line 1
-		{2, 2},   // 'b'
-		{4, 2},   // '\n' of line 2
-		{5, 3},   // 'c'
-		{8, 3},   // last '\n'
-		{100, 3}, // past end → last line
-	}
-	for _, c := range cases {
-		if got := lt.At(c.off); got != c.want {
-			t.Errorf("At(%d)=%d want %d", c.off, got, c.want)
-		}
-	}
-}
-
-func TestLineTableEmpty(t *testing.T) {
-	lt := newLineTable(nil)
-	if lt.At(0) != 1 {
-		t.Fatalf("empty: %d", lt.At(0))
+func TestSourceFileLineAtViaParse(t *testing.T) {
+	// Line mapping is owned by source.File; covered there and via Meta.Line.
+	f := source.NewString("t.beancount", "a\nbb\nccc\n")
+	if f.LineAt(5) != 3 {
+		t.Fatalf("LineAt(5)=%d", f.LineAt(5))
 	}
 }
 
@@ -54,5 +34,8 @@ func TestParseDirectiveLines(t *testing.T) {
 	}
 	if o0.Line != 1 || o1.Line != 2 {
 		t.Fatalf("lines %d %d", o0.Line, o1.Line)
+	}
+	if o0.File != "t.beancount" {
+		t.Fatalf("file=%s", o0.File)
 	}
 }

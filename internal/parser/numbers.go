@@ -4,22 +4,23 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lucasew/contapila-go/internal/source"
 	"github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar"
 )
 
 // evalNumberExpr evaluates a Beancount number / unary / binary expression tree.
 // Supports +, -, *, / and unary minus as exposed by the tree-sitter grammar.
-func evalNumberExpr(src []byte, n *grammar.Node) *big.Rat {
+func evalNumberExpr(f *source.File, n *grammar.Node) *big.Rat {
 	if n == nil || n.IsNull() {
 		return nil
 	}
 	switch n.Type() {
 	case "number":
-		return rat(strings.TrimSpace(slice(src, n)))
+		return rat(strings.TrimSpace(nodeText(f, n)))
 	case "unary_number_expr":
-		return evalUnaryExpr(src, n)
+		return evalUnaryExpr(f, n)
 	case "binary_number_expr":
-		return evalBinaryExpr(src, n)
+		return evalBinaryExpr(f, n)
 	}
 	// Unwrap single named child expr, or find first number-ish descendant.
 	var found *big.Rat
@@ -27,12 +28,12 @@ func evalNumberExpr(src []byte, n *grammar.Node) *big.Rat {
 		c := n.NamedChild(i)
 		switch c.Type() {
 		case "number", "unary_number_expr", "binary_number_expr":
-			if r := evalNumberExpr(src, c); r != nil {
+			if r := evalNumberExpr(f, c); r != nil {
 				return r
 			}
 		default:
 			if found == nil {
-				found = evalNumberExpr(src, c)
+				found = evalNumberExpr(f, c)
 			}
 		}
 	}
@@ -40,12 +41,12 @@ func evalNumberExpr(src []byte, n *grammar.Node) *big.Rat {
 		return found
 	}
 	// Last resort: parse whole text (handles simple "-1.5").
-	t := strings.TrimSpace(slice(src, n))
+	t := strings.TrimSpace(nodeText(f, n))
 	t = strings.ReplaceAll(t, " ", "")
 	return rat(t)
 }
 
-func evalUnaryExpr(src []byte, n *grammar.Node) *big.Rat {
+func evalUnaryExpr(f *source.File, n *grammar.Node) *big.Rat {
 	neg := false
 	var inner *big.Rat
 	// Prefer full child walk (ops may be unnamed in some builds).
@@ -55,7 +56,7 @@ func evalUnaryExpr(src []byte, n *grammar.Node) *big.Rat {
 		case "minus", "-":
 			neg = true
 		case "number", "unary_number_expr", "binary_number_expr":
-			inner = evalNumberExpr(src, c)
+			inner = evalNumberExpr(f, c)
 		}
 	}
 	for i := uint32(0); i < n.NamedChildCount(); i++ {
@@ -65,12 +66,12 @@ func evalUnaryExpr(src []byte, n *grammar.Node) *big.Rat {
 			neg = true
 		case "number", "unary_number_expr", "binary_number_expr":
 			if inner == nil {
-				inner = evalNumberExpr(src, c)
+				inner = evalNumberExpr(f, c)
 			}
 		}
 	}
 	if inner == nil {
-		t := strings.TrimSpace(slice(src, n))
+		t := strings.TrimSpace(nodeText(f, n))
 		t = strings.ReplaceAll(t, " ", "")
 		inner = rat(t)
 	}
@@ -87,7 +88,7 @@ func evalUnaryExpr(src []byte, n *grammar.Node) *big.Rat {
 	return out
 }
 
-func evalBinaryExpr(src []byte, n *grammar.Node) *big.Rat {
+func evalBinaryExpr(f *source.File, n *grammar.Node) *big.Rat {
 	var left, right *big.Rat
 	op := ""
 	// Named children order: left, op, right (ops are named: plus/minus/asterisk/slash).
@@ -96,9 +97,9 @@ func evalBinaryExpr(src []byte, n *grammar.Node) *big.Rat {
 		switch c.Type() {
 		case "number", "unary_number_expr", "binary_number_expr":
 			if left == nil {
-				left = evalNumberExpr(src, c)
+				left = evalNumberExpr(f, c)
 			} else {
-				right = evalNumberExpr(src, c)
+				right = evalNumberExpr(f, c)
 			}
 		case "plus":
 			op = "+"
@@ -134,7 +135,7 @@ func evalBinaryExpr(src []byte, n *grammar.Node) *big.Rat {
 	}
 	if left == nil || right == nil || op == "" {
 		// Fallback: whole-node text (may fail for complex trees).
-		return rat(strings.ReplaceAll(strings.TrimSpace(slice(src, n)), " ", ""))
+		return rat(strings.ReplaceAll(strings.TrimSpace(nodeText(f, n)), " ", ""))
 	}
 	out := new(big.Rat)
 	switch op {

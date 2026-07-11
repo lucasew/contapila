@@ -3,114 +3,119 @@ package parser
 import (
 	"fmt"
 	"math/big"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
+	"github.com/lucasew/contapila-go/internal/source"
 	"github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar"
 	bc "github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar/beancount"
 )
 
 // Parse converts Beancount source into directives using modernc tree-sitter.
+// Prefer ParseFile when the caller already has a source.File.
 func Parse(filename string, src []byte) ([]ast.Directive, diag.List, error) {
+	return ParseFile(source.NewString(filename, string(src)))
+}
+
+// ParseFile is Parse with a pre-built source.File (path + text + line index).
+func ParseFile(f *source.File) ([]ast.Directive, diag.List, error) {
+	if f == nil {
+		return nil, nil, fmt.Errorf("nil source file")
+	}
 	p := grammar.NewParser()
 	defer p.Delete()
 	if !p.SetLanguage(bc.Language()) {
 		return nil, nil, fmt.Errorf("failed to set beancount language")
 	}
-	tree := p.ParseString(string(src))
+	tree := p.ParseString(f.Text)
 	defer tree.Delete()
 	root := tree.RootNode()
 	if root.IsNull() {
-		return nil, nil, fmt.Errorf("null parse tree for %s", filename)
+		return nil, nil, fmt.Errorf("null parse tree for %s", f.Path)
 	}
-
-	// One O(n) newline scan; each line lookup is O(log lines) binary search.
-	// Avoids rescanning the file for every directive/metadata key.
-	lines := newLineTable(src)
 
 	var diags diag.List
 	var out []ast.Directive
 	for i := uint32(0); i < root.NamedChildCount(); i++ {
-		collectDirectives(filename, src, root.NamedChild(i), &diags, lines, &out)
+		collectDirectives(f, root.NamedChild(i), &diags, &out)
 	}
 	return out, diags, nil
 }
 
 // collectDirectives walks the tree, ignoring org-mode section structure and comments.
 // Section nodes are containers only (headlines like "* Assets"); nested directives are collected.
-func collectDirectives(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable, out *[]ast.Directive) {
+func collectDirectives(f *source.File, n *grammar.Node, diags *diag.List, out *[]ast.Directive) {
 	if n == nil || n.IsNull() {
 		return
 	}
 	if n.IsError() {
-		diags.Error(file, lines.At(n.StartByte()), fmt.Sprintf("syntax error near %q", clip(slice(src, n), 40)))
+		diags.Error(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("syntax error near %q", clip(nodeText(f, n), 40)))
 		return
 	}
 	switch n.Type() {
 	case "section":
 		// Org/markdown headings: structure only — do not warn, walk children.
 		for i := uint32(0); i < n.NamedChildCount(); i++ {
-			collectDirectives(file, src, n.NamedChild(i), diags, lines, out)
+			collectDirectives(f, n.NamedChild(i), diags, out)
 		}
 		return
 	case "comment", "headline", "item":
 		return
 	}
-	if d, ok := convert(file, src, n, diags, lines); ok {
+	if d, ok := convert(f, n, diags); ok {
 		*out = append(*out, d)
 	}
 }
 
-func convert(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) (ast.Directive, bool) {
+func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, bool) {
 	switch n.Type() {
 	case "option":
-		return ast.Option{Meta: meta(file, src, n, lines), Key: unquote(textField(src, n, "key")), Value: unquote(textField(src, n, "value"))}, true
+		return ast.Option{Meta: meta(f, n), Key: unquote(textField(f, n, "key")), Value: unquote(textField(f, n, "value"))}, true
 	case "include":
 		// include has a string child, not always a field
 		path := ""
 		for i := uint32(0); i < n.NamedChildCount(); i++ {
 			c := n.NamedChild(i)
 			if c.Type() == "string" {
-				path = unquote(slice(src, c))
+				path = unquote(nodeText(f, c))
 				break
 			}
 		}
-		return ast.Include{Meta: meta(file, src, n, lines), Path: path}, true
+		return ast.Include{Meta: meta(f, n), Path: path}, true
 	case "commodity":
 		o := ast.Commodity{
-			Meta:     meta(file, src, n, lines),
-			Currency: textField(src, n, "currency"),
-			Metadata: parseKeyValues(src, n),
+			Meta:     meta(f, n),
+			Currency: textField(f, n, "currency"),
+			Metadata: parseKeyValues(f, n),
 		}
 		return o, true
 	case "open":
 		o := ast.Open{
-			Meta:     meta(file, src, n, lines),
-			Account:  textField(src, n, "account"),
-			Metadata: parseKeyValues(src, n),
+			Meta:     meta(f, n),
+			Account:  textField(f, n, "account"),
+			Metadata: parseKeyValues(f, n),
 		}
 		for i := uint32(0); i < n.NamedChildCount(); i++ {
 			c := n.NamedChild(i)
 			if c.Type() == "currency" {
-				o.Currencies = append(o.Currencies, strings.TrimSpace(slice(src, c)))
+				o.Currencies = append(o.Currencies, strings.TrimSpace(nodeText(f, c)))
 			}
 		}
 		return o, true
 	case "close":
-		warnIgnoredKeyValues(file, src, n, diags, lines)
-		return ast.Close{Meta: meta(file, src, n, lines), Account: textField(src, n, "account")}, true
+		warnIgnoredKeyValues(f, n, diags)
+		return ast.Close{Meta: meta(f, n), Account: textField(f, n, "account")}, true
 	case "transaction":
-		return convertTxn(file, src, n, diags, lines), true
+		return convertTxn(f, n, diags), true
 	case "price":
-		amt, _ := parseAmountNode(src, field(n, "amount"))
+		amt, _ := parseAmountNode(f, field(n, "amount"))
 		return ast.Price{
-			Meta:     meta(file, src, n, lines),
-			Currency: textField(src, n, "currency"),
+			Meta:     meta(f, n),
+			Currency: textField(f, n, "currency"),
 			Amount:   amt,
-			Metadata: parseKeyValues(src, n),
+			Metadata: parseKeyValues(f, n),
 		}, true
 	case "balance":
 		// amount may be field "amount" or amount_tolerance child
@@ -127,41 +132,41 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List, lines l
 				}
 			}
 		}
-		amt, _ := parseAmountNode(src, an)
+		amt, _ := parseAmountNode(f, an)
 		return ast.Balance{
-			Meta:     meta(file, src, n, lines),
-			Account:  textField(src, n, "account"),
+			Meta:     meta(f, n),
+			Account:  textField(f, n, "account"),
 			Amount:   amt,
-			Metadata: parseKeyValues(src, n),
+			Metadata: parseKeyValues(f, n),
 		}, true
 	case "pad":
-		warnIgnoredKeyValues(file, src, n, diags, lines)
+		warnIgnoredKeyValues(f, n, diags)
 		return ast.Pad{
-			Meta:        meta(file, src, n, lines),
-			Account:     textField(src, n, "account"),
-			FromAccount: textField(src, n, "from_account"),
+			Meta:        meta(f, n),
+			Account:     textField(f, n, "account"),
+			FromAccount: textField(f, n, "from_account"),
 		}, true
 	case "note":
-		warnIgnoredKeyValues(file, src, n, diags, lines)
-		return ast.Note{Meta: meta(file, src, n, lines), Account: textField(src, n, "account"), Comment: unquote(textField(src, n, "note"))}, true
+		warnIgnoredKeyValues(f, n, diags)
+		return ast.Note{Meta: meta(f, n), Account: textField(f, n, "account"), Comment: unquote(textField(f, n, "note"))}, true
 	case "event":
 		return ast.Event{
-			Meta:     meta(file, src, n, lines),
-			Type:     unquote(textField(src, n, "type")),
-			Desc:     unquote(textField(src, n, "desc")),
-			Metadata: parseKeyValues(src, n),
+			Meta:     meta(f, n),
+			Type:     unquote(textField(f, n, "type")),
+			Desc:     unquote(textField(f, n, "desc")),
+			Metadata: parseKeyValues(f, n),
 		}, true
 	case "document":
 		// 2020-01-01 document Assets:Cash "docs/..."
 		path := ""
 		if fn := field(n, "filename"); fn != nil {
-			path = unquote(strings.TrimSpace(slice(src, fn)))
+			path = unquote(strings.TrimSpace(nodeText(f, fn)))
 			if path == "" {
 				// filename node may wrap a string child
 				for i := uint32(0); i < fn.NamedChildCount(); i++ {
 					c := fn.NamedChild(i)
 					if c.Type() == "string" {
-						path = unquote(slice(src, c))
+						path = unquote(nodeText(f, c))
 						break
 					}
 				}
@@ -171,33 +176,33 @@ func convert(file string, src []byte, n *grammar.Node, diags *diag.List, lines l
 			for i := uint32(0); i < n.NamedChildCount(); i++ {
 				c := n.NamedChild(i)
 				if c.Type() == "string" {
-					path = unquote(slice(src, c))
+					path = unquote(nodeText(f, c))
 					break
 				}
 			}
 		}
-		warnIgnoredKeyValues(file, src, n, diags, lines)
+		warnIgnoredKeyValues(f, n, diags)
 		return ast.Document{
-			Meta:    meta(file, src, n, lines),
-			Account: textField(src, n, "account"),
+			Meta:    meta(f, n),
+			Account: textField(f, n, "account"),
 			Path:    path,
 		}, true
 	case "query", "custom":
-		diags.Warn(file, lines.At(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
+		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
 	case "comment":
 		return nil, false
 	case "pushtag", "poptag", "pushmeta", "popmeta":
-		diags.Warn(file, lines.At(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
+		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
 	default:
-		diags.Warn(file, lines.At(n.StartByte()), fmt.Sprintf("unsupported directive %q skipped", n.Type()))
+		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("unsupported directive %q skipped", n.Type()))
 		return nil, false
 	}
 }
 
 // parseKeyValues collects key_value children into a metadata map (string values).
-func parseKeyValues(src []byte, n *grammar.Node) ast.Metadata {
+func parseKeyValues(f *source.File, n *grammar.Node) ast.Metadata {
 	if n == nil {
 		return nil
 	}
@@ -207,7 +212,7 @@ func parseKeyValues(src []byte, n *grammar.Node) ast.Metadata {
 		if c.Type() != "key_value" {
 			continue
 		}
-		key, val := keyValuePair(src, c)
+		key, val := keyValuePair(f, c)
 		if key == "" {
 			continue
 		}
@@ -219,26 +224,26 @@ func parseKeyValues(src []byte, n *grammar.Node) ast.Metadata {
 	return md
 }
 
-func keyValuePair(src []byte, n *grammar.Node) (key, val string) {
-	key = textField(src, n, "key")
+func keyValuePair(f *source.File, n *grammar.Node) (key, val string) {
+	key = textField(f, n, "key")
 	if key == "" {
 		for j := uint32(0); j < n.NamedChildCount(); j++ {
 			ch := n.NamedChild(j)
 			if ch.Type() == "key" {
-				key = strings.TrimSpace(slice(src, ch))
+				key = strings.TrimSpace(nodeText(f, ch))
 				break
 			}
 		}
 	}
 	// value is often a field, or a string / number child under "value"
 	if vf := field(n, "value"); vf != nil {
-		val = metadataValue(src, vf)
+		val = metadataValue(f, vf)
 	}
 	if val == "" {
 		for j := uint32(0); j < n.NamedChildCount(); j++ {
 			ch := n.NamedChild(j)
 			if ch.Type() == "value" || ch.Type() == "string" || ch.Type() == "number" {
-				val = metadataValue(src, ch)
+				val = metadataValue(f, ch)
 				if val != "" {
 					break
 				}
@@ -248,37 +253,37 @@ func keyValuePair(src []byte, n *grammar.Node) (key, val string) {
 	return key, val
 }
 
-func metadataValue(src []byte, n *grammar.Node) string {
+func metadataValue(f *source.File, n *grammar.Node) string {
 	if n == nil {
 		return ""
 	}
 	switch n.Type() {
 	case "string":
-		return unquote(slice(src, n))
+		return unquote(nodeText(f, n))
 	case "number", "bool", "currency", "account", "tag", "link", "date":
-		return strings.TrimSpace(slice(src, n))
+		return strings.TrimSpace(nodeText(f, n))
 	case "value":
 		// unwrap single named child if present
 		for i := uint32(0); i < n.NamedChildCount(); i++ {
-			if s := metadataValue(src, n.NamedChild(i)); s != "" {
+			if s := metadataValue(f, n.NamedChild(i)); s != "" {
 				return s
 			}
 		}
-		return unquote(strings.TrimSpace(slice(src, n)))
+		return unquote(strings.TrimSpace(nodeText(f, n)))
 	default:
 		// try nested string
 		for i := uint32(0); i < n.NamedChildCount(); i++ {
-			if s := metadataValue(src, n.NamedChild(i)); s != "" {
+			if s := metadataValue(f, n.NamedChild(i)); s != "" {
 				return s
 			}
 		}
-		t := strings.TrimSpace(slice(src, n))
+		t := strings.TrimSpace(nodeText(f, n))
 		return unquote(t)
 	}
 }
 
 // warnIgnoredKeyValues emits a warn for each key_value child (metadata not stored yet).
-func warnIgnoredKeyValues(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) {
+func warnIgnoredKeyValues(f *source.File, n *grammar.Node, diags *diag.List) {
 	if n == nil || diags == nil {
 		return
 	}
@@ -287,20 +292,20 @@ func warnIgnoredKeyValues(file string, src []byte, n *grammar.Node, diags *diag.
 		if c.Type() != "key_value" {
 			continue
 		}
-		key, _ := keyValuePair(src, c)
+		key, _ := keyValuePair(f, c)
 		if key == "" {
-			key = strings.TrimSpace(slice(src, c))
+			key = strings.TrimSpace(nodeText(f, c))
 		}
-		diags.Warn(file, lines.At(c.StartByte()), fmt.Sprintf("metadata %q ignored (not stored yet)", key))
+		diags.Warn(f.Path, f.LineAtU32(c.StartByte()), fmt.Sprintf("metadata %q ignored (not stored yet)", key))
 	}
 }
 
-func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) ast.Transaction {
+func convertTxn(f *source.File, n *grammar.Node, diags *diag.List) ast.Transaction {
 	txn := ast.Transaction{
-		Meta:      meta(file, src, n, lines),
-		Flag:      strings.TrimSpace(textField(src, n, "txn")),
-		Narration: unquote(textField(src, n, "narration")),
-		Payee:     unquote(textField(src, n, "payee")),
+		Meta:      meta(f, n),
+		Flag:      strings.TrimSpace(textField(f, n, "txn")),
+		Narration: unquote(textField(f, n, "narration")),
+		Payee:     unquote(textField(f, n, "payee")),
 	}
 	// Walk named children in source order. Beancount grammar places posting key_value
 	// as siblings of posting under the transaction (not nested under posting).
@@ -312,7 +317,7 @@ func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List, line
 		case "tags_links":
 			for j := uint32(0); j < c.NamedChildCount(); j++ {
 				ch := c.NamedChild(j)
-				t := slice(src, ch)
+				t := nodeText(f, ch)
 				switch ch.Type() {
 				case "tag":
 					txn.Tags = append(txn.Tags, strings.TrimPrefix(t, "#"))
@@ -321,7 +326,7 @@ func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List, line
 				}
 			}
 		case "key_value":
-			key, val := keyValuePair(src, c)
+			key, val := keyValuePair(f, c)
 			if key == "" {
 				continue
 			}
@@ -338,18 +343,18 @@ func convertTxn(file string, src []byte, n *grammar.Node, diags *diag.List, line
 				last.Metadata[key] = val
 			}
 		case "posting":
-			txn.Postings = append(txn.Postings, convertPosting(file, src, c, diags, lines))
+			txn.Postings = append(txn.Postings, convertPosting(f, c, diags))
 		}
 	}
 	txn.Metadata = txnMD
 	return txn
 }
 
-func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List, lines lineTable) ast.Posting {
+func convertPosting(f *source.File, n *grammar.Node, diags *diag.List) ast.Posting {
 	// Nested key_value under posting (if grammar ever nests them) plus sibling handling in convertTxn.
 	p := ast.Posting{
-		Account:  textField(src, n, "account"),
-		Metadata: parseKeyValues(src, n),
+		Account:  textField(f, n, "account"),
+		Metadata: parseKeyValues(f, n),
 	}
 	// amount field or incomplete_amount child
 	an := field(n, "amount")
@@ -367,7 +372,7 @@ func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List, 
 		for i := uint32(0); i < n.NamedChildCount(); i++ {
 			c := n.NamedChild(i)
 			if c.Type() == "ERROR" || c.IsError() {
-				if num := evalNumberExpr(src, c); num != nil {
+				if num := evalNumberExpr(f, c); num != nil {
 					p.Units = &ast.Amount{Number: num, Commodity: ""}
 					break
 				}
@@ -375,17 +380,16 @@ func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List, 
 		}
 	}
 	if an != nil {
-		if amt, ok := parseAmountNode(src, an); ok {
+		if amt, ok := parseAmountNode(f, an); ok {
 			p.Units = &amt
 		}
 	}
 	// Number present but no commodity → error (not a residual empty leg).
 	if p.Units != nil && p.Units.Number != nil && strings.TrimSpace(p.Units.Commodity) == "" {
-		line := lines.At(n.StartByte())
-		diags.Error(file, line, fmt.Sprintf("amount missing commodity on %s", p.Account))
+		diags.Error(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("amount missing commodity on %s", p.Account))
 	}
 	if cs := field(n, "cost_spec"); cs != nil {
-		p.Cost = parseCost(src, cs)
+		p.Cost = parseCost(f, cs)
 	}
 	// price: child "atat" or "at" + field price_annotation
 	hasAtAt := false
@@ -400,7 +404,7 @@ func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List, 
 		}
 	}
 	if pa := field(n, "price_annotation"); pa != nil {
-		if amt, ok := parseAmountNode(src, firstAmountish(pa)); ok {
+		if amt, ok := parseAmountNode(f, firstAmountish(pa)); ok {
 			p.Price = &ast.PriceSpec{Number: amt.Number, Commodity: amt.Commodity, Total: hasAtAt || !hasAt && hasAtAt}
 			if hasAtAt {
 				p.Price.Total = true
@@ -419,7 +423,7 @@ func convertPosting(file string, src []byte, n *grammar.Node, diags *diag.List, 
 	return p
 }
 
-func parseCost(src []byte, n *grammar.Node) *ast.CostSpec {
+func parseCost(f *source.File, n *grammar.Node) *ast.CostSpec {
 	// cost_spec → cost_comp_list → cost_comp → compound_amount | date | …
 	empty := true
 	var num *big.Rat
@@ -430,15 +434,15 @@ func parseCost(src []byte, n *grammar.Node) *ast.CostSpec {
 		case "compound_amount":
 			empty = false
 			if per := field(c, "per"); per != nil {
-				num = parseNumber(src, per)
+				num = parseNumber(f, per)
 			}
 			if cu := field(c, "currency"); cu != nil {
-				cur = strings.TrimSpace(slice(src, cu))
+				cur = strings.TrimSpace(nodeText(f, cu))
 			}
 			// also total form
 			if num == nil {
 				if t := field(c, "total"); t != nil {
-					num = parseNumber(src, t)
+					num = parseNumber(f, t)
 				}
 			}
 			// compound_amount may expose number/currency as direct children
@@ -447,23 +451,23 @@ func parseCost(src []byte, n *grammar.Node) *ast.CostSpec {
 					ch := c.NamedChild(i)
 					if ch.Type() == "number" || ch.Type() == "unary_number_expr" || ch.Type() == "binary_number_expr" {
 						if num == nil {
-							num = parseNumber(src, ch)
+							num = parseNumber(f, ch)
 						}
 					}
 					if ch.Type() == "currency" && cur == "" {
-						cur = strings.TrimSpace(slice(src, ch))
+						cur = strings.TrimSpace(nodeText(f, ch))
 					}
 				}
 			}
 		case "date":
-			if d, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(slice(src, c)), time.UTC); err == nil {
+			if d, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(nodeText(f, c)), time.UTC); err == nil {
 				costDate = d
 				empty = false
 			}
 		}
 	})
 	// empty braces {}
-	text := strings.TrimSpace(slice(src, n))
+	text := strings.TrimSpace(nodeText(f, n))
 	if text == "{}" || text == "{ }" {
 		return &ast.CostSpec{Empty: true}
 	}
@@ -496,7 +500,7 @@ func firstAmountish(n *grammar.Node) *grammar.Node {
 	return n
 }
 
-func parseAmountNode(src []byte, n *grammar.Node) (ast.Amount, bool) {
+func parseAmountNode(f *source.File, n *grammar.Node) (ast.Amount, bool) {
 	if n == nil {
 		return ast.Amount{}, false
 	}
@@ -509,18 +513,18 @@ func parseAmountNode(src []byte, n *grammar.Node) (ast.Amount, bool) {
 		switch c.Type() {
 		case "binary_number_expr", "unary_number_expr":
 			if num == nil {
-				num = evalNumberExpr(src, c)
+				num = evalNumberExpr(f, c)
 			}
 		case "number":
 			if num == nil {
-				num = evalNumberExpr(src, c)
+				num = evalNumberExpr(f, c)
 			}
 		case "currency":
-			cur = strings.TrimSpace(slice(src, c))
+			cur = strings.TrimSpace(nodeText(f, c))
 		}
 	}
 	if num == nil {
-		num = evalNumberExpr(src, n)
+		num = evalNumberExpr(f, n)
 	}
 	if num == nil {
 		return ast.Amount{}, false
@@ -528,50 +532,21 @@ func parseAmountNode(src []byte, n *grammar.Node) (ast.Amount, bool) {
 	return ast.Amount{Number: num, Commodity: cur}, true
 }
 
-func parseNumber(src []byte, n *grammar.Node) *big.Rat {
-	return evalNumberExpr(src, n)
+func parseNumber(f *source.File, n *grammar.Node) *big.Rat {
+	return evalNumberExpr(f, n)
 }
 
-func meta(file string, src []byte, n *grammar.Node, lines lineTable) ast.Meta {
+func meta(f *source.File, n *grammar.Node) ast.Meta {
 	d := time.Time{}
 	if dn := field(n, "date"); dn != nil {
-		d, _ = time.ParseInLocation("2006-01-02", strings.TrimSpace(slice(src, dn)), time.UTC)
+		d, _ = time.ParseInLocation("2006-01-02", strings.TrimSpace(nodeText(f, dn)), time.UTC)
 	}
-	return ast.Meta{Date: d, File: file, Line: lines.At(n.StartByte())}
-}
-
-// lineTable maps byte offsets → 1-based line numbers.
-// starts[i] is the byte offset where line i+1 begins.
-type lineTable struct {
-	starts []int
-}
-
-func newLineTable(src []byte) lineTable {
-	// Pre-size ~1 entry per 40 bytes (typical ledger line length); grows if denser.
-	starts := make([]int, 1, len(src)/40+2)
-	starts[0] = 0
-	for i, b := range src {
-		if b == '\n' && i+1 < len(src) {
-			starts = append(starts, i+1)
-		}
+	path, line := "", 0
+	if f != nil {
+		path = f.Path
+		line = f.LineAtU32(n.StartByte())
 	}
-	return lineTable{starts: starts}
-}
-
-// At returns the 1-based line containing byte offset off.
-func (lt lineTable) At(off uint32) int {
-	if len(lt.starts) == 0 {
-		return 1
-	}
-	o := int(off)
-	// largest i with starts[i] <= o
-	i := sort.Search(len(lt.starts), func(i int) bool {
-		return lt.starts[i] > o
-	}) - 1
-	if i < 0 {
-		return 1
-	}
-	return i + 1
+	return ast.Meta{Date: d, File: path, Line: line}
 }
 
 func field(n *grammar.Node, name string) *grammar.Node {
@@ -586,23 +561,20 @@ func field(n *grammar.Node, name string) *grammar.Node {
 	return nil
 }
 
-func textField(src []byte, n *grammar.Node, name string) string {
+func textField(f *source.File, n *grammar.Node, name string) string {
 	c := field(n, name)
 	if c == nil {
 		return ""
 	}
-	return strings.TrimSpace(slice(src, c))
+	return strings.TrimSpace(nodeText(f, c))
 }
 
-func slice(src []byte, n *grammar.Node) string {
-	if n == nil || n.IsNull() {
+// nodeText returns the source text covered by a tree-sitter node.
+func nodeText(f *source.File, n *grammar.Node) string {
+	if f == nil || n == nil || n.IsNull() {
 		return ""
 	}
-	s, e := int(n.StartByte()), int(n.EndByte())
-	if s < 0 || e > len(src) || s > e {
-		return ""
-	}
-	return string(src[s:e])
+	return f.Slice(int(n.StartByte()), int(n.EndByte()))
 }
 
 func unquote(s string) string {
