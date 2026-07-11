@@ -4,21 +4,8 @@
   {{template "head" .}}
 </head>
 {{template "app-open" .}}
-    {{if or .OpCurrency .PeriodLabel (and (or (eq .Page "balances") (eq .Page "networth")) .AsOf)}}
-    <p class="mb-3 text-xs text-base-content/60 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-      {{if .OpCurrency}}<span class="font-mono">{{.OpCurrency}}</span>{{end}}
-      {{if .PeriodLabel}}
-      <span class="font-mono text-base-content/80" title="{{.Time}}">{{.PeriodLabel}}</span>
-      {{end}}
-      {{if and (or (eq .Page "balances") (eq .Page "networth")) .AsOf}}
-      <span>as of {{.AsOf}}</span>
-      {{end}}
-    </p>
-    {{end}}
-
-    {{if .Error}}
-    <div role="alert" class="alert alert-error alert-soft py-2 text-xs mb-3"><span>{{.Error}}</span></div>
-    {{end}}
+    {{template "period-meta" .}}
+    {{template "page-error" .}}
 
     {{if eq .Page "check"}}
       {{if .OK}}
@@ -66,7 +53,7 @@
 
     {{if eq .Page "balances"}}
       {{if not .BalanceRows}}
-      <p class="text-xs text-base-content/60">No balances for this as-of date.</p>
+      {{template "empty-note" "No balances for this as-of date."}}
       {{else}}
       <div class="overflow-x-auto border border-base-300">
         <table class="table table-xs pnl-tree" data-pnl-tree>
@@ -79,14 +66,7 @@
           <tbody>
             {{range .BalanceRows}}
             <tr class="{{if .IsRollup}}font-semibold bg-base-200/40{{end}}" data-account="{{if .Path}}{{.Path}}{{else}}{{.Account}}{{end}}">
-              <td class="font-mono text-xs" {{if .PadLeft}}style="padding-left: {{.PadLeft}}"{{end}}>
-                {{if .IsRollup}}
-                <button type="button" class="pnl-toggle btn btn-ghost btn-xs btn-square align-middle h-5 min-h-0 w-5 p-0" data-pnl-toggle aria-expanded="true" title="Collapse">▼</button>
-                {{else}}
-                <span class="inline-block w-5" aria-hidden="true"></span>
-                {{end}}
-                <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}" title="{{.Account}}">{{if .Name}}{{.Name}}{{else}}{{.Account}}{{end}}</a>
-              </td>
+              {{template "tree-account-cell" dict "Row" . "Ledger" $.LedgerName "Time" $.Time}}
               <td class="text-right tabular text-xs font-medium whitespace-nowrap">
                 {{if .Amount}}
                 {{.Amount}}{{if .Commodity}} <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a>{{end}}
@@ -99,68 +79,12 @@
           </tbody>
         </table>
       </div>
-      <script src="/static/pnl-tree.js" defer></script>
+      {{template "pnl-tree-script" .}}
       {{end}}
     {{end}}
 
     {{if eq .Page "journal"}}
-      {{if not .Journal}}
-      <p class="text-xs text-base-content/60">No journal entries in this range.</p>
-      {{else}}
-      <div class="border border-base-300 divide-y divide-base-300">
-        {{range .Journal}}
-        <article class="px-2 py-1.5">
-          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
-            <time class="font-mono tabular text-base-content/70">{{.Date.Format "2006-01-02"}}</time>
-            <span class="text-[0.65rem] uppercase tracking-wide opacity-50">{{.Kind}}</span>
-            {{if .Payee}}<span class="font-medium">{{.Payee}}</span>{{end}}
-            {{if and .Payee .Narration}}<span class="opacity-40">·</span>{{end}}
-            {{if .Narration}}<span class="{{if .Payee}}text-base-content/80{{else}}font-medium{{end}}">{{.Narration}}</span>{{end}}
-            {{if .Comment}}<span class="text-base-content/60">{{.Comment}}</span>{{end}}
-            {{if .Account}}<span class="font-mono text-[0.7rem]">{{.Account}}</span>{{end}}
-          </div>
-          {{if .Metadata}}
-          <table class="w-auto mt-0.5 border-collapse font-mono text-[0.65rem] leading-tight">
-            <tbody>
-              {{range $k, $v := .Metadata}}
-              <tr>
-                <td class="py-0 pr-1.5 pl-0 text-right font-semibold align-baseline whitespace-nowrap">{{$k}}</td>
-                <td class="py-0 pl-0 text-left text-base-content/70 align-baseline">{{$v}}</td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-          {{end}}
-          {{if .Postings}}
-          <ul class="mt-0.5 space-y-0 font-mono text-xs">
-            {{range .Postings}}
-            <li class="leading-5">
-              <div class="flex flex-wrap justify-between gap-2">
-                <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
-                {{if .Units}}
-                <span class="tabular text-base-content/90">{{.Units.Number.FloatString 4}} <a class="link link-hover link-primary" href="{{commodityURL $.LedgerName .Units.Commodity $.Time}}">{{.Units.Commodity}}</a></span>
-                {{end}}
-              </div>
-              {{if .Metadata}}
-              <table class="w-auto ml-2 border-collapse font-mono text-[0.65rem] leading-tight">
-                <tbody>
-                  {{range $k, $v := .Metadata}}
-                  <tr>
-                    <td class="py-0 pr-1.5 pl-0 text-right font-semibold align-baseline whitespace-nowrap">{{$k}}</td>
-                    <td class="py-0 pl-0 text-left text-base-content/60 align-baseline">{{$v}}</td>
-                  </tr>
-                  {{end}}
-                </tbody>
-              </table>
-              {{end}}
-            </li>
-            {{end}}
-          </ul>
-          {{end}}
-        </article>
-        {{end}}
-      </div>
-      {{end}}
+      {{template "journal-list" .}}
     {{end}}
 
     {{if eq .Page "pnl"}}
@@ -177,14 +101,7 @@
               <tbody>
                 {{range .IncomeRows}}
                 <tr class="{{if .IsRollup}}font-semibold bg-base-200/40{{end}}" data-account="{{.Account}}">
-                  <td class="font-mono text-xs" {{if .PadLeft}}style="padding-left: {{.PadLeft}}"{{end}}>
-                    {{if .IsRollup}}
-                    <button type="button" class="pnl-toggle btn btn-ghost btn-xs btn-square align-middle h-5 min-h-0 w-5 p-0" data-pnl-toggle aria-expanded="true" title="Collapse">▼</button>
-                    {{else}}
-                    <span class="inline-block w-5" aria-hidden="true"></span>
-                    {{end}}
-                    <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}" title="{{.Account}}">{{if .Name}}{{.Name}}{{else}}{{.Account}}{{end}}</a>
-                  </td>
+                  {{template "tree-account-cell" dict "Row" . "Ledger" $.LedgerName "Time" $.Time}}
                   <td class="text-right tabular text-xs whitespace-nowrap">{{.Amount}}{{if .Commodity}} <span class="font-mono text-base-content/60">{{.Commodity}}</span>{{end}}</td>
                 </tr>
                 {{end}}
@@ -203,14 +120,7 @@
               <tbody>
                 {{range .ExpenseRows}}
                 <tr class="{{if .IsRollup}}font-semibold bg-base-200/40{{end}}" data-account="{{.Account}}">
-                  <td class="font-mono text-xs" {{if .PadLeft}}style="padding-left: {{.PadLeft}}"{{end}}>
-                    {{if .IsRollup}}
-                    <button type="button" class="pnl-toggle btn btn-ghost btn-xs btn-square align-middle h-5 min-h-0 w-5 p-0" data-pnl-toggle aria-expanded="true" title="Collapse">▼</button>
-                    {{else}}
-                    <span class="inline-block w-5" aria-hidden="true"></span>
-                    {{end}}
-                    <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}" title="{{.Account}}">{{if .Name}}{{.Name}}{{else}}{{.Account}}{{end}}</a>
-                  </td>
+                  {{template "tree-account-cell" dict "Row" . "Ledger" $.LedgerName "Time" $.Time}}
                   <td class="text-right tabular text-xs whitespace-nowrap">{{.Amount}}{{if .Commodity}} <span class="font-mono text-base-content/60">{{.Commodity}}</span>{{end}}</td>
                 </tr>
                 {{end}}
@@ -220,7 +130,7 @@
           {{end}}
         </section>
       </div>
-      <script src="/static/pnl-tree.js" defer></script>
+      {{template "pnl-tree-script" .}}
     {{end}}
 
     {{if eq .Page "networth"}}
@@ -234,7 +144,7 @@
         </div>
       </div>
       {{if not .NetWorthRows}}
-      <p class="text-xs text-base-content/60">No asset/liability positions.</p>
+      {{template "empty-note" "No asset/liability positions."}}
       {{else}}
       <div class="overflow-x-auto border border-base-300">
         <table class="table table-xs pnl-tree" data-pnl-tree>
@@ -249,14 +159,7 @@
           <tbody>
             {{range .NetWorthRows}}
             <tr class="{{if .IsRollup}}font-semibold bg-base-200/40{{end}}" data-account="{{.Path}}">
-              <td class="font-mono text-xs" {{if .PadLeft}}style="padding-left: {{.PadLeft}}"{{end}}>
-                {{if .IsRollup}}
-                <button type="button" class="pnl-toggle btn btn-ghost btn-xs btn-square align-middle h-5 min-h-0 w-5 p-0" data-pnl-toggle aria-expanded="true" title="Collapse">▼</button>
-                {{else}}
-                <span class="inline-block w-5" aria-hidden="true"></span>
-                {{end}}
-                <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}" title="{{.Account}}">{{if .Name}}{{.Name}}{{else}}{{.Account}}{{end}}</a>
-              </td>
+              {{template "tree-account-cell" dict "Row" . "Ledger" $.LedgerName "Time" $.Time}}
               <td class="text-right tabular text-xs font-medium whitespace-nowrap">
                 {{if .Units}}
                 {{.Units}}{{if .Commodity}} <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName .Commodity $.Time}}">{{.Commodity}}</a>{{end}}
@@ -273,14 +176,14 @@
           </tbody>
         </table>
       </div>
-      <script src="/static/pnl-tree.js" defer></script>
+      {{template "pnl-tree-script" .}}
       {{end}}
       {{end}}
     {{end}}
 
     {{if eq .Page "documents"}}
       {{if not .Documents}}
-      <p class="text-xs text-base-content/60">No documents for this ledger.</p>
+      {{template "empty-note" "No documents for this ledger."}}
       {{else}}
       <div class="overflow-x-auto border border-base-300">
         <table class="table table-xs pnl-tree" data-pnl-tree>
@@ -328,14 +231,14 @@
           </tbody>
         </table>
       </div>
-      <script src="/static/pnl-tree.js" defer></script>
+      {{template "pnl-tree-script" .}}
       {{end}}
     {{end}}
 
     {{if eq .Page "prices"}}
       <p class="mb-2 text-xs text-base-content/60">Shared project prices (<span class="font-mono">prices.beancount</span>) — last write wins per day.</p>
       {{if not .PriceSeries}}
-      <p class="text-xs text-base-content/60">No prices loaded.</p>
+      {{template "empty-note" "No prices loaded."}}
       {{else}}
       <div class="overflow-x-auto border border-base-300">
         <table class="table table-xs table-zebra">

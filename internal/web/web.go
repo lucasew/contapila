@@ -61,6 +61,22 @@ func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 			}
 			return template.JS(b)
 		},
+		// dict builds a map for partials that need row + page fields, e.g.
+		// {{template "tree-account-cell" dict "Row" . "Ledger" $.LedgerName "Time" $.Time}}
+		"dict": func(kv ...any) (map[string]any, error) {
+			if len(kv)%2 != 0 {
+				return nil, fmt.Errorf("dict: need even number of args")
+			}
+			m := make(map[string]any, len(kv)/2)
+			for i := 0; i < len(kv); i += 2 {
+				k, ok := kv[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict: key must be string")
+				}
+				m[k] = kv[i+1]
+			}
+			return m, nil
+		},
 		"ledgerURL": func(ledger, page, timeFilter string) string {
 			u := "/l/" + url.PathEscape(ledger) + "/" + url.PathEscape(page)
 			if timeFilter != "" {
