@@ -305,9 +305,10 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 		filled[i] = fp
 	}
 
-	// Residual (weights only; balances applied after inventory plan succeeds)
+	// Residual (weights only; balances applied after inventory plan succeeds).
+	// One empty posting absorbs -sum(weights) for every residual commodity and
+	// expands to one filled amount per commodity on that account.
 	if resIdx >= 0 {
-		// residual absorbs -sum(weights) per commodity; if >1 commodity with residual needed, error
 		var nonzero []string
 		for c, a := range weights {
 			if a.Sign() != 0 && new(big.Rat).Abs(a).Cmp(e.tol(c)) > 0 {
@@ -315,18 +316,28 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 			}
 		}
 		sort.Strings(nonzero)
-		if len(nonzero) > 1 {
-			e.Diags.Error(t.File, t.Line, fmt.Sprintf("residual cannot balance multiple commodities %v", nonzero))
-			return
-		}
-		if len(nonzero) == 1 {
-			c := nonzero[0]
-			n := new(big.Rat).Neg(weights[c])
-			filled[resIdx].Units = &ast.Amount{Number: n, Commodity: c}
-			addW(c, n)
-		} else {
-			// zero residual — leave units 0 in first weight commodity or empty
+		if len(nonzero) == 0 {
+			// zero residual — leave units 0 with empty commodity
 			filled[resIdx].Units = &ast.Amount{Number: big.NewRat(0, 1), Commodity: ""}
+		} else {
+			resAcct := filled[resIdx].Account
+			resMeta := filled[resIdx].Metadata
+			expanded := make([]FilledPosting, 0, len(filled)+len(nonzero)-1)
+			for i, fp := range filled {
+				if i != resIdx {
+					expanded = append(expanded, fp)
+					continue
+				}
+				for _, c := range nonzero {
+					n := new(big.Rat).Neg(weights[c])
+					expanded = append(expanded, FilledPosting{
+						Account:  resAcct,
+						Units:    &ast.Amount{Number: n, Commodity: c},
+						Metadata: resMeta,
+					})
+				}
+			}
+			filled = expanded
 		}
 	} else {
 		// must balance

@@ -329,7 +329,8 @@ So an `open` and a transaction on the same day book correctly even if includes p
 ### 7.4 Residual leg (no magic)
 
 - At most **one** posting with **missing amount** absorbs the remainder (typically gains).
-- **No** implicit default gains account; **no** auto-inserted legs.
+- That residual absorbs **every** unbalanced commodity: booked form expands to one amount per residual commodity on the residual account (source still has a single empty leg).
+- **No** implicit default gains account; **no** auto-inserted source legs.
 - Unbalanced transaction without an empty residual posting → **error**.
 - Explicit `{cost}` on a sell that is not the current average (beyond tolerance) → **error**.
 - Selling more units than inventory → **warn** (do not invent inventory; check still passes).
@@ -419,7 +420,6 @@ Use **`log/slog`** for warnings. `check` fails only on **errors**.
 | Over-sell (no inventory / not enough units) | **warn** (skip inventing inventory) |
 | Bad average cost on reduce | **error** |
 | Amount with number but no commodity | **error** (not residual) |
-| Residual needs >1 commodity | **error** |
 | Unknown `option` | **warn** |
 | `include` literal path missing | **error** |
 | `include` glob, zero matches | **warn** |

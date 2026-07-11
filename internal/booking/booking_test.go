@@ -47,6 +47,56 @@ func TestResidualCash(t *testing.T) {
 	}
 }
 
+func TestResidualMultiCommodity(t *testing.T) {
+	// One empty residual absorbs every leftover commodity.
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash:BRL"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash:USD"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Equity:Opening"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-02"), File: "t"},
+			Flag: "*", Narration: "seed",
+			Postings: []ast.Posting{
+				{Account: "Assets:Cash:BRL", Units: amt("100", "BRL")},
+				{Account: "Assets:Cash:USD", Units: amt("20", "USD")},
+				{Account: "Equity:Opening"},
+			},
+		},
+	})
+	if e.Diags.HasErrors() {
+		t.Fatalf("errors: %v", e.Diags)
+	}
+	if got := e.balOf("Equity:Opening", "BRL"); got.Cmp(r("-100")) != 0 {
+		t.Fatalf("BRL residual got %s", got.FloatString(4))
+	}
+	if got := e.balOf("Equity:Opening", "USD"); got.Cmp(r("-20")) != 0 {
+		t.Fatalf("USD residual got %s", got.FloatString(4))
+	}
+	if len(e.Txns) != 1 {
+		t.Fatalf("txns=%d", len(e.Txns))
+	}
+	// Source has 3 postings; residual expands to 2 filled amounts → 4 booked legs.
+	if n := len(e.Txns[0].Postings); n != 4 {
+		t.Fatalf("filled postings=%d want 4", n)
+	}
+	var brl, usd bool
+	for _, fp := range e.Txns[0].Postings {
+		if fp.Account != "Equity:Opening" || fp.Units == nil {
+			continue
+		}
+		switch fp.Units.Commodity {
+		case "BRL":
+			brl = fp.Units.Number.Cmp(r("-100")) == 0
+		case "USD":
+			usd = fp.Units.Number.Cmp(r("-20")) == 0
+		}
+	}
+	if !brl || !usd {
+		t.Fatalf("filled residual legs missing: brl=%v usd=%v posts=%+v", brl, usd, e.Txns[0].Postings)
+	}
+}
+
 func TestUnbalanced(t *testing.T) {
 	e := New()
 	e.Book([]ast.Directive{
