@@ -3,7 +3,6 @@ package engine
 import (
 	"math/big"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -43,69 +42,53 @@ func balancesTreeFromMap(bals map[string]map[string]*big.Rat) []BalanceTreeLine 
 		return nil
 	}
 
-	nodes := map[string]bool{}
+	leaves := make([]string, 0, len(byAcct))
 	for a := range byAcct {
-		parts := strings.Split(a, ":")
-		for i := 1; i <= len(parts); i++ {
-			nodes[strings.Join(parts[:i], ":")] = true
-		}
+		leaves = append(leaves, a)
 	}
-	var names []string
-	for n := range nodes {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-
-	hasChild := map[string]bool{}
-	for _, n := range names {
-		for _, m := range names {
-			if strings.HasPrefix(m, n+":") {
-				hasChild[n] = true
-				break
-			}
-		}
-	}
+	tree := NewAccountTree(leaves)
 
 	// A prefix node is "present" if any leaf account is under it.
 	hasBalanceUnder := map[string]bool{}
-	for _, n := range names {
+	for _, n := range tree.Names {
 		for a := range byAcct {
-			if a == n || strings.HasPrefix(a, n+":") {
+			if accountUnder(a, n) {
 				hasBalanceUnder[n] = true
 				break
 			}
 		}
 	}
 
-	out := make([]BalanceTreeLine, 0, len(names)+8)
-	for _, n := range names {
+	out := make([]BalanceTreeLine, 0, len(tree.Names)+8)
+	for _, n := range tree.Names {
 		if !hasBalanceUnder[n] {
 			continue
 		}
 		ag := byAcct[n]
+		child := tree.HasChild[n]
 		row := BalanceTreeLine{
 			Account:  n,
 			Path:     n,
 			Name:     accountLeaf(n),
-			Depth:    strings.Count(n, ":"),
-			IsRollup: hasChild[n],
+			Depth:    accountDepth(n),
+			IsRollup: child,
 		}
-		if !hasChild[n] && ag != nil && len(ag) == 1 {
+		if !child && ag != nil && len(ag) == 1 {
 			for c, u := range ag {
 				row.Commodity = c
 				row.Amount = new(big.Rat).Set(u)
 			}
 		}
-		if !hasChild[n] && ag != nil && len(ag) > 1 {
+		if !child && ag != nil && len(ag) > 1 {
 			row.IsRollup = true
 		}
 		// Structural parents (no own balances) are always rollups
-		if hasChild[n] {
+		if child {
 			row.IsRollup = true
 		}
 		out = append(out, row)
 
-		if !hasChild[n] && ag != nil && len(ag) > 1 {
+		if !child && ag != nil && len(ag) > 1 {
 			var cs []string
 			for c := range ag {
 				cs = append(cs, c)
@@ -116,7 +99,7 @@ func balancesTreeFromMap(bals map[string]map[string]*big.Rat) []BalanceTreeLine 
 					Account:   n,
 					Path:      n + TreePathSep + c,
 					Name:      c,
-					Depth:     strings.Count(n, ":") + 1,
+					Depth:     accountDepth(n) + 1,
 					Amount:    new(big.Rat).Set(ag[c]),
 					Commodity: c,
 					IsRollup:  false,

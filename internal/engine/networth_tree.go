@@ -3,7 +3,6 @@ package engine
 import (
 	"math/big"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -21,9 +20,6 @@ type NetWorthTreeLine struct {
 	IsRollup  bool
 	UsedCost  bool
 }
-
-// TreePathSep separates account path from commodity on multi-ccy leaf rows.
-const TreePathSep = "\x1f"
 
 // NetWorthTree returns Assets/Liabilities as a collapsible account tree.
 func (l *Ledger) NetWorthTree(asOf time.Time) ([]NetWorthTreeLine, *big.Rat, error) {
@@ -76,26 +72,19 @@ func netWorthTreeFromLines(lines []NetWorthLine) []NetWorthTreeLine {
 		a.commVal[ln.Commodity].Add(a.commVal[ln.Commodity], ln.Value)
 	}
 
-	nodes := map[string]bool{}
+	leaves := make([]string, 0, len(byAcct))
 	for a := range byAcct {
-		parts := strings.Split(a, ":")
-		for i := 1; i <= len(parts); i++ {
-			nodes[strings.Join(parts[:i], ":")] = true
-		}
+		leaves = append(leaves, a)
 	}
-	var names []string
-	for n := range nodes {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	tree := NewAccountTree(leaves)
 
 	rollupVal := map[string]*big.Rat{}
 	rollupCost := map[string]bool{}
-	for _, n := range names {
+	for _, n := range tree.Names {
 		tot := big.NewRat(0, 1)
 		cost := false
 		for a, ag := range byAcct {
-			if a == n || strings.HasPrefix(a, n+":") {
+			if accountUnder(a, n) {
 				tot.Add(tot, ag.value)
 				if ag.usedCost {
 					cost = true
@@ -108,45 +97,36 @@ func netWorthTreeFromLines(lines []NetWorthLine) []NetWorthTreeLine {
 		}
 	}
 
-	hasChild := map[string]bool{}
-	for _, n := range names {
-		for _, m := range names {
-			if strings.HasPrefix(m, n+":") {
-				hasChild[n] = true
-				break
-			}
-		}
-	}
-
-	out := make([]NetWorthTreeLine, 0, len(names)+8)
-	for _, n := range names {
+	out := make([]NetWorthTreeLine, 0, len(tree.Names)+8)
+	for _, n := range tree.Names {
 		val := rollupVal[n]
 		if val == nil {
 			continue
 		}
+		child := tree.HasChild[n]
 		row := NetWorthTreeLine{
 			Account:  n,
 			Path:     n,
 			Name:     accountLeaf(n),
-			Depth:    strings.Count(n, ":"),
+			Depth:    accountDepth(n),
 			Value:    new(big.Rat).Set(val),
-			IsRollup: hasChild[n],
+			IsRollup: child,
 			UsedCost: rollupCost[n],
 		}
 		ag := byAcct[n]
-		if !hasChild[n] && ag != nil && len(ag.comms) == 1 {
+		if !child && ag != nil && len(ag.comms) == 1 {
 			for c, u := range ag.comms {
 				row.Commodity = c
 				row.Units = new(big.Rat).Set(u)
 			}
 		}
 		// Multi-commodity leaf account is a rollup of commodity sub-rows
-		if !hasChild[n] && ag != nil && len(ag.comms) > 1 {
+		if !child && ag != nil && len(ag.comms) > 1 {
 			row.IsRollup = true
 		}
 		out = append(out, row)
 
-		if !hasChild[n] && ag != nil && len(ag.comms) > 1 {
+		if !child && ag != nil && len(ag.comms) > 1 {
 			var cs []string
 			for c := range ag.comms {
 				cs = append(cs, c)
@@ -157,7 +137,7 @@ func netWorthTreeFromLines(lines []NetWorthLine) []NetWorthTreeLine {
 					Account:   n,
 					Path:      n + TreePathSep + c,
 					Name:      c,
-					Depth:     strings.Count(n, ":") + 1,
+					Depth:     accountDepth(n) + 1,
 					Units:     new(big.Rat).Set(ag.comms[c]),
 					Commodity: c,
 					Value:     new(big.Rat).Set(ag.commVal[c]),

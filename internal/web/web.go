@@ -625,30 +625,14 @@ func documentTreeRows(docs []ast.Document) []docRow {
 		})
 	}
 
-	nodes := map[string]bool{}
+	leaves := make([]string, 0, len(byAcct))
 	for a := range byAcct {
-		parts := strings.Split(a, ":")
-		for i := 1; i <= len(parts); i++ {
-			nodes[strings.Join(parts[:i], ":")] = true
-		}
+		leaves = append(leaves, a)
 	}
-	var names []string
-	for n := range nodes {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	tree := engine.NewAccountTree(leaves)
 
-	hasChild := map[string]bool{}
-	for _, n := range names {
-		for _, m := range names {
-			if strings.HasPrefix(m, n+":") {
-				hasChild[n] = true
-				break
-			}
-		}
-	}
 	hasDocsUnder := map[string]bool{}
-	for _, n := range names {
+	for _, n := range tree.Names {
 		for a, list := range byAcct {
 			if len(list) == 0 {
 				continue
@@ -660,21 +644,12 @@ func documentTreeRows(docs []ast.Document) []docRow {
 		}
 	}
 
-	padFor := func(depth int) string {
-		if depth <= 0 {
-			return ""
-		}
-		return strconv.FormatFloat(float64(depth)*0.75, 'f', 2, 64) + "rem"
-	}
-	// engine.TreePathSep is \x1f — keep in sync with pnl-tree.js
-	const treeSep = "\x1f"
-
-	out := make([]docRow, 0, len(names)+len(docs))
+	out := make([]docRow, 0, len(tree.Names)+len(docs))
 	// Unassigned docs first (flat).
 	for _, fi := range noAcct {
 		out = append(out, docRow{
 			Date:      fi.date,
-			TreePath:  treeSep + fi.path,
+			TreePath:  engine.TreePathSep + fi.path,
 			Name:      fi.name,
 			Path:      fi.path,
 			Href:      fi.href,
@@ -684,7 +659,7 @@ func documentTreeRows(docs []ast.Document) []docRow {
 		})
 	}
 
-	for _, n := range names {
+	for _, n := range tree.Names {
 		if !hasDocsUnder[n] {
 			continue
 		}
@@ -694,9 +669,10 @@ func documentTreeRows(docs []ast.Document) []docRow {
 		if i := strings.LastIndex(n, ":"); i >= 0 && i+1 < len(n) {
 			leaf = n[i+1:]
 		}
+		child := tree.HasChild[n]
 
 		// Single doc, no sub-accounts → one flat leaf row (like single-commodity balance).
-		if !hasChild[n] && len(own) == 1 {
+		if !child && len(own) == 1 {
 			fi := own[0]
 			out = append(out, docRow{
 				Date:      fi.date,
@@ -708,21 +684,21 @@ func documentTreeRows(docs []ast.Document) []docRow {
 				FileName:  fi.name,
 				Synthetic: fi.synthetic,
 				Depth:     depth,
-				PadLeft:   padFor(depth),
+				PadLeft:   treePadLeft(depth),
 				IsDoc:     false, // show account name; file in File column
 			})
 			continue
 		}
 
 		// Parent or multi-doc leaf: rollup account row, then document children if any on this node.
-		isRollup := hasChild[n] || len(own) > 0
+		isRollup := child || len(own) > 0
 		out = append(out, docRow{
 			Account:  n,
 			TreePath: n,
 			Name:     leaf,
 			Depth:    depth,
 			IsRollup: isRollup,
-			PadLeft:  padFor(depth),
+			PadLeft:  treePadLeft(depth),
 		})
 		if len(own) == 0 {
 			continue
@@ -733,14 +709,14 @@ func documentTreeRows(docs []ast.Document) []docRow {
 			out = append(out, docRow{
 				Date:      fi.date,
 				Account:   n,
-				TreePath:  n + treeSep + fi.path,
+				TreePath:  n + engine.TreePathSep + fi.path,
 				Name:      fi.name,
 				Path:      fi.path,
 				Href:      fi.href,
 				FileName:  fi.name,
 				Synthetic: fi.synthetic,
 				Depth:     depth + 1,
-				PadLeft:   padFor(depth + 1),
+				PadLeft:   treePadLeft(depth + 1),
 				IsDoc:     true,
 			})
 		}
@@ -1002,34 +978,44 @@ func buildBalances(bals map[string]map[string]*big.Rat) []balanceRow {
 	return rows
 }
 
+// treePadLeft is CSS padding-left for hierarchical tree rows (0.75rem per depth).
+func treePadLeft(depth int) string {
+	if depth <= 0 {
+		return ""
+	}
+	return strconv.FormatFloat(float64(depth)*0.75, 'f', 2, 64) + "rem"
+}
+
+func treeLabel(name, account string) string {
+	if name != "" {
+		return name
+	}
+	return account
+}
+
+func treePath(path, account string) string {
+	if path != "" {
+		return path
+	}
+	return account
+}
+
 func buildBalanceTreeRows(lines []engine.BalanceTreeLine) []balanceRow {
 	rows := make([]balanceRow, 0, len(lines))
 	for _, ln := range lines {
-		pad := ""
-		if ln.Depth > 0 {
-			pad = strconv.FormatFloat(float64(ln.Depth)*0.75, 'f', 2, 64) + "rem"
-		}
-		name := ln.Name
-		if name == "" {
-			name = ln.Account
-		}
-		path := ln.Path
-		if path == "" {
-			path = ln.Account
-		}
 		amt := ""
 		if ln.Amount != nil {
 			amt = ln.Amount.FloatString(4)
 		}
 		rows = append(rows, balanceRow{
 			Account:   ln.Account,
-			Path:      path,
-			Name:      name,
+			Path:      treePath(ln.Path, ln.Account),
+			Name:      treeLabel(ln.Name, ln.Account),
 			Commodity: ln.Commodity,
 			Amount:    amt,
 			Depth:     ln.Depth,
 			IsRollup:  ln.IsRollup,
-			PadLeft:   pad,
+			PadLeft:   treePadLeft(ln.Depth),
 		})
 	}
 	return rows
@@ -1038,23 +1024,18 @@ func buildBalanceTreeRows(lines []engine.BalanceTreeLine) []balanceRow {
 func buildPnLRows(lines []engine.PnLLine) []balanceRow {
 	rows := make([]balanceRow, 0, len(lines))
 	for _, ln := range lines {
-		pad := ""
-		if ln.Depth > 0 {
-			// 0.75rem per level
-			pad = strconv.FormatFloat(float64(ln.Depth)*0.75, 'f', 2, 64) + "rem"
-		}
-		name := ln.Name
-		if name == "" {
-			name = ln.Account
+		amt := ""
+		if ln.Amount != nil {
+			amt = ln.Amount.FloatString(2)
 		}
 		rows = append(rows, balanceRow{
 			Account:   ln.Account,
-			Name:      name,
+			Name:      treeLabel(ln.Name, ln.Account),
 			Commodity: ln.Commodity,
-			Amount:    ln.Amount.FloatString(2),
+			Amount:    amt,
 			Depth:     ln.Depth,
 			IsRollup:  ln.IsRollup,
-			PadLeft:   pad,
+			PadLeft:   treePadLeft(ln.Depth),
 		})
 	}
 	return rows
@@ -1063,33 +1044,25 @@ func buildPnLRows(lines []engine.PnLLine) []balanceRow {
 func buildNetWorthRows(lines []engine.NetWorthTreeLine) []nwRow {
 	rows := make([]nwRow, 0, len(lines))
 	for _, ln := range lines {
-		pad := ""
-		if ln.Depth > 0 {
-			pad = strconv.FormatFloat(float64(ln.Depth)*0.75, 'f', 2, 64) + "rem"
-		}
-		name := ln.Name
-		if name == "" {
-			name = ln.Account
-		}
-		path := ln.Path
-		if path == "" {
-			path = ln.Account
-		}
 		units := ""
 		if ln.Units != nil {
 			units = ln.Units.FloatString(4)
 		}
+		val := ""
+		if ln.Value != nil {
+			val = ln.Value.FloatString(2)
+		}
 		rows = append(rows, nwRow{
 			Account:   ln.Account,
-			Path:      path,
-			Name:      name,
+			Path:      treePath(ln.Path, ln.Account),
+			Name:      treeLabel(ln.Name, ln.Account),
 			Commodity: ln.Commodity,
 			Units:     units,
-			Value:     ln.Value.FloatString(2),
+			Value:     val,
 			UsedCost:  ln.UsedCost,
 			Depth:     ln.Depth,
 			IsRollup:  ln.IsRollup,
-			PadLeft:   pad,
+			PadLeft:   treePadLeft(ln.Depth),
 		})
 	}
 	return rows

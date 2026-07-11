@@ -2,8 +2,6 @@ package engine
 
 import (
 	"math/big"
-	"sort"
-	"strings"
 	"time"
 )
 
@@ -43,24 +41,17 @@ func (l *Ledger) pnlTreeSection(m map[string]map[string]*big.Rat) []PnLLine {
 		return nil
 	}
 
-	nodes := map[string]bool{}
+	leaves := make([]string, 0, len(flat))
 	for a := range flat {
-		parts := strings.Split(a, ":")
-		for i := 1; i <= len(parts); i++ {
-			nodes[strings.Join(parts[:i], ":")] = true
-		}
+		leaves = append(leaves, a)
 	}
-	var names []string
-	for n := range nodes {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	tree := NewAccountTree(leaves)
 
 	rollup := map[string]*big.Rat{}
-	for _, n := range names {
+	for _, n := range tree.Names {
 		tot := big.NewRat(0, 1)
 		for a, v := range flat {
-			if a == n || strings.HasPrefix(a, n+":") {
+			if accountUnder(a, n) {
 				tot.Add(tot, v)
 			}
 		}
@@ -69,18 +60,8 @@ func (l *Ledger) pnlTreeSection(m map[string]map[string]*big.Rat) []PnLLine {
 		}
 	}
 
-	hasChild := map[string]bool{}
-	for _, n := range names {
-		for _, m := range names {
-			if strings.HasPrefix(m, n+":") {
-				hasChild[n] = true
-				break
-			}
-		}
-	}
-
-	out := make([]PnLLine, 0, len(names))
-	for _, n := range names {
+	out := make([]PnLLine, 0, len(tree.Names))
+	for _, n := range tree.Names {
 		amt := rollup[n]
 		if amt == nil {
 			continue
@@ -88,21 +69,13 @@ func (l *Ledger) pnlTreeSection(m map[string]map[string]*big.Rat) []PnLLine {
 		out = append(out, PnLLine{
 			Account:   n,
 			Name:      accountLeaf(n),
-			Depth:     strings.Count(n, ":"),
+			Depth:     accountDepth(n),
 			Amount:    new(big.Rat).Set(amt),
-			IsRollup:  hasChild[n],
+			IsRollup:  tree.HasChild[n],
 			Commodity: l.OpCurrency,
 		})
 	}
 	return out
-}
-
-// accountLeaf is the last ":" segment (Income:Ativo:BR → BR).
-func accountLeaf(account string) string {
-	if i := strings.LastIndex(account, ":"); i >= 0 && i+1 < len(account) {
-		return account[i+1:]
-	}
-	return account
 }
 
 // pnlConvert maps a native signed amount to op currency (signed).
