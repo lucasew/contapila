@@ -283,28 +283,44 @@
       <p class="text-xs text-base-content/60">No documents for this ledger.</p>
       {{else}}
       <div class="overflow-x-auto border border-base-300">
-        <table class="table table-xs table-zebra">
+        <table class="table table-xs pnl-tree" data-pnl-tree>
           <thead>
             <tr>
-              <th>Date</th>
               <th>Account</th>
+              <th class="text-right">Date</th>
               <th>File</th>
             </tr>
           </thead>
           <tbody>
             {{range .Documents}}
-            <tr>
-              <td class="font-mono tabular text-xs text-base-content/70">{{.Date}}</td>
-              <td class="font-mono text-xs">
-                {{if .Account}}
-                <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}">{{.Account}}</a>
+            <tr class="{{if .IsRollup}}font-semibold bg-base-200/40{{end}}" data-account="{{if .TreePath}}{{.TreePath}}{{else}}{{.Account}}{{end}}">
+              <td class="font-mono text-xs" {{if .PadLeft}}style="padding-left: {{.PadLeft}}"{{end}}>
+                {{if .IsRollup}}
+                <button type="button" class="pnl-toggle btn btn-ghost btn-xs btn-square align-middle h-5 min-h-0 w-5 p-0" data-pnl-toggle aria-expanded="true" title="Collapse">▼</button>
+                {{else}}
+                <span class="inline-block w-5" aria-hidden="true"></span>
+                {{end}}
+                {{if .IsDoc}}
+                  {{if .Href}}
+                  <a class="link link-hover link-primary" href="{{.Href}}" title="{{.Path}}">{{.Name}}</a>
+                  {{else}}
+                  <span class="text-base-content/80" title="{{.Path}}">{{.Name}}</span>
+                  {{end}}
+                {{else if .Account}}
+                <a class="link link-hover link-primary" href="{{accountURL $.LedgerName .Account $.Time}}" title="{{.Account}}">{{if .Name}}{{.Name}}{{else}}{{.Account}}{{end}}</a>
+                {{else}}
+                <span>{{.Name}}</span>
                 {{end}}
               </td>
+              <td class="text-right font-mono tabular text-xs text-base-content/70">{{.Date}}</td>
               <td class="font-mono text-xs">
-                {{if .Href}}
-                <a class="link link-hover link-primary" href="{{.Href}}" title="{{.Path}}">{{.Name}}</a>
-                {{else}}
-                <span title="{{.Path}}">{{.Name}}</span>
+                {{/* File column: only for single-doc account leaves (multi-doc leaves link in Account col) */}}
+                {{if and (not .IsDoc) (not .IsRollup) (or .Href .FileName)}}
+                  {{if .Href}}
+                  <a class="link link-hover link-primary" href="{{.Href}}" title="{{.Path}}">{{if .FileName}}{{.FileName}}{{else}}{{.Name}}{{end}}</a>
+                  {{else}}
+                  <span title="{{.Path}}">{{.FileName}}</span>
+                  {{end}}
                 {{end}}
               </td>
             </tr>
@@ -312,6 +328,7 @@
           </tbody>
         </table>
       </div>
+      <script src="/static/pnl-tree.js" defer></script>
       {{end}}
     {{end}}
 

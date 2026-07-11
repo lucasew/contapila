@@ -177,11 +177,17 @@ type metaKV struct {
 
 type docRow struct {
 	Date      string
-	Account   string // owning account (for sidebar)
-	Path      string // project-relative
-	Href      string // /docs/... URL
-	Name      string // base filename
+	Account   string // owning account (for links)
+	TreePath  string // collapse key (account, or account+\x1f+file path)
+	Name      string // leaf label: account segment or filename
+	Path      string // project-relative file path
+	Href      string // /docfile/... URL
+	FileName  string // base filename
 	Synthetic bool
+	Depth     int
+	IsRollup  bool
+	IsDoc     bool // document leaf under an account
+	PadLeft   string
 }
 
 type balanceRow struct {
@@ -324,7 +330,7 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case "documents":
-		data.Documents = documentRows(l.Documents)
+		data.Documents = documentTreeRows(l.Documents)
 	case "prices":
 		data.PriceSeries = priceSeriesRows(s.Prices)
 	default:
@@ -565,13 +571,182 @@ func documentRows(docs []ast.Document) []docRow {
 		rows = append(rows, docRow{
 			Date:      d.Date.Format("2006-01-02"),
 			Account:   d.Account,
+			TreePath:  d.Account,
 			Path:      p,
 			Href:      href,
 			Name:      path.Base(p),
+			FileName:  path.Base(p),
 			Synthetic: d.Synthetic,
 		})
 	}
 	return rows
+}
+
+// documentTreeRows builds a collapsible account hierarchy for the documents report
+// (same collapse semantics as balances / net worth / P&L).
+func documentTreeRows(docs []ast.Document) []docRow {
+	if len(docs) == 0 {
+		return nil
+	}
+	type fileInfo struct {
+		date      string
+		path      string
+		href      string
+		name      string
+		synthetic bool
+	}
+	byAcct := map[string][]fileInfo{}
+	var noAcct []fileInfo
+	for _, d := range docs {
+		p := filepath.ToSlash(d.Path)
+		p = strings.TrimPrefix(p, "/")
+		href := ""
+		if docsutil.IsLedgerDocPath(p) {
+			href = "/docfile/" + p
+		}
+		fi := fileInfo{
+			date:      d.Date.Format("2006-01-02"),
+			path:      p,
+			href:      href,
+			name:      path.Base(p),
+			synthetic: d.Synthetic,
+		}
+		if d.Account == "" {
+			noAcct = append(noAcct, fi)
+			continue
+		}
+		byAcct[d.Account] = append(byAcct[d.Account], fi)
+	}
+	for a := range byAcct {
+		sort.SliceStable(byAcct[a], func(i, j int) bool {
+			if byAcct[a][i].date != byAcct[a][j].date {
+				return byAcct[a][i].date < byAcct[a][j].date
+			}
+			return byAcct[a][i].path < byAcct[a][j].path
+		})
+	}
+
+	nodes := map[string]bool{}
+	for a := range byAcct {
+		parts := strings.Split(a, ":")
+		for i := 1; i <= len(parts); i++ {
+			nodes[strings.Join(parts[:i], ":")] = true
+		}
+	}
+	var names []string
+	for n := range nodes {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	hasChild := map[string]bool{}
+	for _, n := range names {
+		for _, m := range names {
+			if strings.HasPrefix(m, n+":") {
+				hasChild[n] = true
+				break
+			}
+		}
+	}
+	hasDocsUnder := map[string]bool{}
+	for _, n := range names {
+		for a, list := range byAcct {
+			if len(list) == 0 {
+				continue
+			}
+			if a == n || strings.HasPrefix(a, n+":") {
+				hasDocsUnder[n] = true
+				break
+			}
+		}
+	}
+
+	padFor := func(depth int) string {
+		if depth <= 0 {
+			return ""
+		}
+		return strconv.FormatFloat(float64(depth)*0.75, 'f', 2, 64) + "rem"
+	}
+	// engine.TreePathSep is \x1f — keep in sync with pnl-tree.js
+	const treeSep = "\x1f"
+
+	out := make([]docRow, 0, len(names)+len(docs))
+	// Unassigned docs first (flat).
+	for _, fi := range noAcct {
+		out = append(out, docRow{
+			Date:      fi.date,
+			TreePath:  treeSep + fi.path,
+			Name:      fi.name,
+			Path:      fi.path,
+			Href:      fi.href,
+			FileName:  fi.name,
+			Synthetic: fi.synthetic,
+			IsDoc:     true,
+		})
+	}
+
+	for _, n := range names {
+		if !hasDocsUnder[n] {
+			continue
+		}
+		own := byAcct[n]
+		depth := strings.Count(n, ":")
+		leaf := n
+		if i := strings.LastIndex(n, ":"); i >= 0 && i+1 < len(n) {
+			leaf = n[i+1:]
+		}
+
+		// Single doc, no sub-accounts → one flat leaf row (like single-commodity balance).
+		if !hasChild[n] && len(own) == 1 {
+			fi := own[0]
+			out = append(out, docRow{
+				Date:      fi.date,
+				Account:   n,
+				TreePath:  n,
+				Name:      leaf,
+				Path:      fi.path,
+				Href:      fi.href,
+				FileName:  fi.name,
+				Synthetic: fi.synthetic,
+				Depth:     depth,
+				PadLeft:   padFor(depth),
+				IsDoc:     false, // show account name; file in File column
+			})
+			continue
+		}
+
+		// Parent or multi-doc leaf: rollup account row, then document children if any on this node.
+		isRollup := hasChild[n] || len(own) > 0
+		out = append(out, docRow{
+			Account:  n,
+			TreePath: n,
+			Name:     leaf,
+			Depth:    depth,
+			IsRollup: isRollup,
+			PadLeft:  padFor(depth),
+		})
+		if len(own) == 0 {
+			continue
+		}
+		// Always list docs under the account when it's a multi-doc leaf or has children.
+		// (Single-doc leaf already returned above.)
+		for _, fi := range own {
+			out = append(out, docRow{
+				Date:      fi.date,
+				Account:   n,
+				TreePath:  n + treeSep + fi.path,
+				Name:      fi.name,
+				Path:      fi.path,
+				Href:      fi.href,
+				FileName:  fi.name,
+				Synthetic: fi.synthetic,
+				Depth:     depth + 1,
+				PadLeft:   padFor(depth + 1),
+				IsDoc:     true,
+			})
+		}
+	}
+	return out
 }
 
 // handleDocFile serves project-relative paths under <ledger>/docs/ only.
