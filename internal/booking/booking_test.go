@@ -313,3 +313,123 @@ func TestTxnBeforeOpenDateNotOpened(t *testing.T) {
 		t.Fatalf("expected not opened for txn before open date, diags=%v", e.Diags)
 	}
 }
+
+func TestBuyWithTotalPriceAsCost(t *testing.T) {
+	// 10 X @@ 100 BRL → unit cost 10 BRL, inventory position established.
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Broker:X"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-10"), File: "t"}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Broker:X", Units: amt("10", "X"), Price: &ast.PriceSpec{Number: r("100"), Commodity: "BRL", Total: true}},
+				{Account: "Assets:Cash", Units: amt("-100", "BRL")},
+			},
+		},
+	})
+	if e.Diags.HasErrors() {
+		t.Fatalf("errors: %v", e.Diags)
+	}
+	pos := e.getPos("Assets:Broker:X", "X")
+	if pos == nil || pos.Units.Cmp(r("10")) != 0 {
+		t.Fatalf("units: %+v", pos)
+	}
+	if pos.TotalCost.Cmp(r("100")) != 0 || pos.CostComm != "BRL" {
+		t.Fatalf("cost: total=%s comm=%s", pos.TotalCost.FloatString(4), pos.CostComm)
+	}
+	if pos.Avg().Cmp(r("10")) != 0 {
+		t.Fatalf("avg %s", pos.Avg().FloatString(4))
+	}
+}
+
+func TestBuyWithUnitPriceAsCost(t *testing.T) {
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Broker:X"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-10"), File: "t"}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Broker:X", Units: amt("10", "X"), Price: &ast.PriceSpec{Number: r("10"), Commodity: "BRL", Total: false}},
+				{Account: "Assets:Cash", Units: amt("-100", "BRL")},
+			},
+		},
+	})
+	if e.Diags.HasErrors() {
+		t.Fatalf("errors: %v", e.Diags)
+	}
+	pos := e.getPos("Assets:Broker:X", "X")
+	if pos == nil || pos.Avg().Cmp(r("10")) != 0 {
+		t.Fatalf("pos=%+v avg=%v", pos, pos)
+	}
+}
+
+func TestSecondBuyWithPriceAfterCosted(t *testing.T) {
+	// First buy with {...}, second with @@ — must merge average, not error.
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Broker:X"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-10"), File: "t"}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Broker:X", Units: amt("10", "X"), Cost: &ast.CostSpec{Number: r("10"), Commodity: "BRL"}},
+				{Account: "Assets:Cash"},
+			},
+		},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-02-10"), File: "t"}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Broker:X", Units: amt("5", "X"), Price: &ast.PriceSpec{Number: r("75"), Commodity: "BRL", Total: true}},
+				{Account: "Assets:Cash", Units: amt("-75", "BRL")},
+			},
+		},
+	})
+	if e.Diags.HasErrors() {
+		t.Fatalf("errors: %v", e.Diags)
+	}
+	pos := e.getPos("Assets:Broker:X", "X")
+	if pos == nil || pos.Units.Cmp(r("15")) != 0 {
+		t.Fatalf("units: %+v", pos)
+	}
+	// total cost 100 + 75 = 175; avg 175/15
+	if pos.TotalCost.Cmp(r("175")) != 0 {
+		t.Fatalf("total cost %s", pos.TotalCost.FloatString(4))
+	}
+	wantAvg := r("175/15")
+	if pos.Avg().Cmp(wantAvg) != 0 {
+		t.Fatalf("avg %s want %s", pos.Avg().FloatString(6), wantAvg.FloatString(6))
+	}
+}
+
+func TestBuyPriceThenSellUsesAvgCost(t *testing.T) {
+	e := New()
+	e.Book([]ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Broker:X"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Income:Gains"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-10"), File: "t"}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Broker:X", Units: amt("10", "X"), Price: &ast.PriceSpec{Number: r("100"), Commodity: "BRL", Total: true}},
+				{Account: "Assets:Cash"},
+			},
+		},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-03-10"), File: "t"}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:Broker:X", Units: amt("-5", "X"), Price: &ast.PriceSpec{Number: r("80"), Commodity: "BRL", Total: true}},
+				{Account: "Assets:Cash", Units: amt("80", "BRL")},
+				{Account: "Income:Gains"},
+			},
+		},
+	})
+	if e.Diags.HasErrors() {
+		t.Fatalf("errors: %v", e.Diags)
+	}
+	// cost of 5 = 50; proceeds 80; gains credit -30
+	if g := e.balOf("Income:Gains", "BRL"); g.Cmp(r("-30")) != 0 {
+		t.Fatalf("gains %s", g.FloatString(4))
+	}
+}

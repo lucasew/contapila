@@ -297,7 +297,9 @@ Internal stages are separate packages; the public surface stays a deep module (s
 
 ### 7.2 Buys (increases)
 
-- Require **explicit cost** `{...}` on inventory increases.
+- Inventory increases need a cost basis: **explicit cost** `{...}`, or **`@` / `@@` price** when braces are omitted.
+- `@` → unit cost; `@@` → unit cost = total / units (same commodity as the price).
+- `{...}` wins over `@`/`@@` when both are present.
 - New units merge into the average cost of the position.
 
 ### 7.3 Sells (reductions) — Shape 4

@@ -248,8 +248,9 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 			Metadata: p.Metadata,
 		}
 
-		// Inventory with cost (model A) when cost present OR reducing position with average
-		hasInv := p.Cost != nil || e.hasPosition(p.Account, comm)
+		// Inventory (model A): explicit cost, @/@@ as cost on increases, or reduce existing position.
+		buyUnitCost, buyCostComm, buyCostOK := resolveIncreaseCost(p, units)
+		hasInv := p.Cost != nil || e.hasPosition(p.Account, comm) || (units.Sign() > 0 && buyCostOK)
 		if p.Cost != nil || (units.Sign() < 0 && e.hasPosition(p.Account, comm)) {
 			hasInv = true
 		}
@@ -257,13 +258,13 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 		if hasInv && (p.Cost != nil || units.Sign() != 0) {
 			k := invKey{p.Account, comm}
 			if units.Sign() > 0 {
-				// buy: need explicit cost
-				if p.Cost == nil || p.Cost.Empty || p.Cost.Number == nil {
-					e.Diags.Error(t.File, t.Line, fmt.Sprintf("buy of %s %s requires explicit cost", units.FloatString(4), comm))
+				// buy: {...} cost, or @/@@ price as cost basis
+				if !buyCostOK {
+					e.Diags.Error(t.File, t.Line, fmt.Sprintf("buy of %s %s requires explicit cost {...} or price @/@@", units.FloatString(4), comm))
 					return
 				}
-				unitCost := p.Cost.Number
-				costComm := p.Cost.Commodity
+				unitCost := buyUnitCost
+				costComm := buyCostComm
 				total := new(big.Rat).Mul(new(big.Rat).Set(units), new(big.Rat).Set(unitCost))
 				ops = append(ops, invOp{
 					buy: true, account: p.Account, comm: comm,
@@ -410,10 +411,33 @@ type wpair struct {
 	amt  *big.Rat
 }
 
+// resolveIncreaseCost returns unit cost for an inventory increase from {...}
+// or, if cost is omitted, from @ (unit) / @@ (total) price.
+func resolveIncreaseCost(p ast.Posting, units *big.Rat) (unitCost *big.Rat, costComm string, ok bool) {
+	if p.Cost != nil && !p.Cost.Empty && p.Cost.Number != nil {
+		return new(big.Rat).Set(p.Cost.Number), p.Cost.Commodity, true
+	}
+	if p.Price == nil || p.Price.Number == nil || strings.TrimSpace(p.Price.Commodity) == "" {
+		return nil, "", false
+	}
+	if units == nil || units.Sign() == 0 {
+		return nil, "", false
+	}
+	absU := new(big.Rat).Abs(new(big.Rat).Set(units))
+	if p.Price.Total {
+		// @@ total → unit cost = |total| / |units|
+		tot := new(big.Rat).Abs(new(big.Rat).Set(p.Price.Number))
+		return new(big.Rat).Quo(tot, absU), p.Price.Commodity, true
+	}
+	// @ unit price
+	return new(big.Rat).Set(p.Price.Number), p.Price.Commodity, true
+}
+
 func postingWeight(p ast.Posting, units *big.Rat, costBasis *ast.Amount) wpair {
 	// Contapila model A: inventory legs contribute cost basis to the balance so the
 	// residual (Income:Gains) absorbs proceeds − cost. Cash legs use explicit amounts.
-	// Price (@/@@) is for the cash/proceeds side of the txn, not inventory weight.
+	// On reductions, @/@@ is proceeds annotation; weight still uses inventory cost basis.
+	// On increases without {...}, @/@@ is resolved into CostBasis before this runs.
 	if costBasis != nil && costBasis.Number != nil && costBasis.Commodity != "" {
 		return wpair{costBasis.Commodity, new(big.Rat).Set(costBasis.Number)}
 	}
