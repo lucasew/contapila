@@ -15,6 +15,7 @@ import (
 	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/web"
 	"github.com/lucasew/contapila-go/pkg/project"
+	"github.com/lucasew/contapila-go/pkg/version"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +27,7 @@ func main() {
 	root := &cobra.Command{
 		Use:           "contapila",
 		Short:         "Contapila — Beancount-class ledger in Go",
+		Version:       version.GetBuildID(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Parse -C before subcommands; discovery starts from this directory.
