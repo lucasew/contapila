@@ -50,7 +50,7 @@ commodities: {
 		if v != 2 {
 			t.Errorf("expected precision 2, got %d", v)
 		}
-		usd := cfg.Value.FillPath(cue.ParsePath("commodities.USD"), map[string]interface{}{})
+		usd := cfg.Value.FillPath(cue.ParsePath("commodities.USD"), map[string]any{})
 		usdPrecision := usd.LookupPath(cue.ParsePath("commodities.USD.precision"))
 		v, err = usdPrecision.Int64()
 		if err != nil {
