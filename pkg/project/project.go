@@ -110,7 +110,10 @@ func OpenProject(cwd string) (*Project, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	journals := config.ProjectJournals(cfg.Value)
+	journals, err := config.ProjectJournals(cfg.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read project_journals: %w", err)
+	}
 	var (
 		pricePairs     []config.PricePair
 		pricesPath     string

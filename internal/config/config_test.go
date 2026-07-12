@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/cuecontext"
 )
 
 func TestLoad(t *testing.T) {
@@ -161,6 +162,56 @@ price_pairs: {
 		}
 		if _, err := Load(b, "contapila.cue", discovered, nil); err != nil {
 			t.Fatalf("example config: %v", err)
+		}
+	})
+}
+
+func TestProjectJournals(t *testing.T) {
+	t.Run("prelude defaults", func(t *testing.T) {
+		cfg, err := Load([]byte("{}"), "test.cue", nil, nil)
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		journals, err := ProjectJournals(cfg.Value)
+		if err != nil {
+			t.Fatalf("ProjectJournals: %v", err)
+		}
+		if len(journals) != 2 {
+			t.Fatalf("expected 2 default journals, got %d: %+v", len(journals), journals)
+		}
+		if journals[0].Path != "prices.beancount" || journals[0].Role != "prices" {
+			t.Errorf("journals[0]=%+v", journals[0])
+		}
+		if journals[1].Path != "indexes.beancount" || journals[1].Role != "stream" {
+			t.Errorf("journals[1]=%+v", journals[1])
+		}
+	})
+
+	t.Run("non-list project_journals is an error", func(t *testing.T) {
+		// Bypass Load schema so we can exercise List() failure directly.
+		ctx := cuecontext.New()
+		v := ctx.CompileString(`project_journals: 42`)
+		if err := v.Err(); err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		_, err := ProjectJournals(v)
+		if err == nil {
+			t.Fatal("expected error for non-list project_journals")
+		}
+		if !strings.Contains(err.Error(), "project_journals") {
+			t.Errorf("error should mention project_journals: %v", err)
+		}
+	})
+
+	t.Run("missing field is empty", func(t *testing.T) {
+		ctx := cuecontext.New()
+		v := ctx.CompileString(`other: true`)
+		journals, err := ProjectJournals(v)
+		if err != nil {
+			t.Fatalf("ProjectJournals: %v", err)
+		}
+		if journals != nil {
+			t.Fatalf("expected nil journals, got %+v", journals)
 		}
 	})
 }
