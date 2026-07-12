@@ -41,7 +41,7 @@ func ExpandDatedCosts(dirs []ast.Directive, pdb *prices.DB) []ast.Directive {
 			}
 			base := p.Units.Commodity
 			quote := p.Cost.Commodity
-			dt := dateOnlyUTC(p.Cost.Date)
+			dt := dateOnly(p.Cost.Date)
 			k := priceKey(dt, base, quote)
 			if seen[k] {
 				continue
@@ -71,9 +71,4 @@ func ExpandDatedCosts(dirs []ast.Directive, pdb *prices.DB) []ast.Directive {
 
 func priceKey(d time.Time, base, quote string) string {
 	return d.Format("2006-01-02") + "|" + base + "|" + quote
-}
-
-func dateOnlyUTC(t time.Time) time.Time {
-	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
