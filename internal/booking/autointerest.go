@@ -199,10 +199,10 @@ func ProjectedUnits(
 	idx IndexDB,
 	asOf time.Time,
 ) map[string]*big.Rat {
-	asOf = dateOnlyUTC(asOf)
-	openDate = dateOnlyUTC(openDate)
+	asOf = dateOnly(asOf)
+	openDate = dateOnly(openDate)
 	if !closeDate.IsZero() {
-		closeDate = dateOnlyUTC(closeDate)
+		closeDate = dateOnly(closeDate)
 		// Projection stops at close (exclusive of growth on/after close day).
 		if !asOf.Before(closeDate) {
 			asOf = closeDate.AddDate(0, 0, -1)
@@ -230,7 +230,7 @@ func ProjectedUnits(
 					continue
 				}
 				events = append(events, ev{
-					day: dateOnlyUTC(v.Date), kind: "txn",
+					day: dateOnly(v.Date), kind: "txn",
 					comm: p.Units.Commodity, delta: new(big.Rat).Set(p.Units.Number),
 				})
 			}
@@ -239,7 +239,7 @@ func ProjectedUnits(
 				continue
 			}
 			events = append(events, ev{
-				day: dateOnlyUTC(v.Date), kind: "balance",
+				day: dateOnly(v.Date), kind: "balance",
 				comm: v.Amount.Commodity, delta: new(big.Rat).Set(v.Amount.Number), set: true,
 			})
 		}
