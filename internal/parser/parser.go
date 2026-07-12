@@ -113,7 +113,11 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 	case "transaction":
 		return convertTxn(f, n, diags), true
 	case "price":
-		amt, _ := parseAmountNode(f, field(n, "amount"))
+		amt, ok := parseAmountNode(f, field(n, "amount"))
+		if !ok {
+			diags.Error(f.Path, f.LineAtU32(n.StartByte()), "price missing or invalid amount; skipped")
+			return nil, false
+		}
 		return ast.Price{
 			Meta:     meta(f, n),
 			Currency: textField(f, n, "currency"),
@@ -135,7 +139,11 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 				}
 			}
 		}
-		amt, _ := parseAmountNode(f, an)
+		amt, ok := parseAmountNode(f, an)
+		if !ok {
+			diags.Error(f.Path, f.LineAtU32(n.StartByte()), "balance missing or invalid amount; skipped")
+			return nil, false
+		}
 		return ast.Balance{
 			Meta:     meta(f, n),
 			Account:  textField(f, n, "account"),
