@@ -8,6 +8,7 @@ import (
 
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
+	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/source"
 	"github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar"
 	bc "github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar/beancount"
@@ -530,7 +531,7 @@ func parseCost(f *source.File, n *grammar.Node) *ast.CostSpec {
 				}
 			}
 		case "date":
-			if d, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(nodeText(f, c)), time.UTC); err == nil {
+			if d, err := period.ParseDate(strings.TrimSpace(nodeText(f, c))); err == nil {
 				costDate = d
 				empty = false
 			}
@@ -609,7 +610,7 @@ func parseNumber(f *source.File, n *grammar.Node) *big.Rat {
 func meta(f *source.File, n *grammar.Node) ast.Meta {
 	d := time.Time{}
 	if dn := field(n, "date"); dn != nil {
-		d, _ = time.ParseInLocation("2006-01-02", strings.TrimSpace(nodeText(f, dn)), time.UTC)
+		d, _ = period.ParseDate(strings.TrimSpace(nodeText(f, dn)))
 	}
 	path, line := "", 0
 	start, end := 0, 0
