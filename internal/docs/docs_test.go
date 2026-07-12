@@ -69,10 +69,29 @@ func TestMergePrefersExplicit(t *testing.T) {
 }
 
 func TestIsLedgerDocPath(t *testing.T) {
-	if !IsLedgerDocPath("personal/docs/by-account/x") {
-		t.Fatal("expected true")
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"personal/docs/by-account/x", true},
+		{"personal/docs/README.md", true},
+		{"/personal/docs/x", true},
+		{"personal/main.beancount", false},
+		{"personal/docs", false},
+		{"docs/foo/bar", false},
+		{"", false},
+		{".", false},
+		{"../docs/x", false},
+		{"personal/docs/../secret", false},
+		{"personal/docs/foo/../../etc/passwd", false},
+		{"personal/docs//x", false},
+		{"//personal/docs/x", true},
+		{"personal/./docs/x", true}, // "." collapsed by Clean
+		{"acme/docs/by-account/a/b.txt", true},
 	}
-	if IsLedgerDocPath("personal/main.beancount") {
-		t.Fatal("expected false")
+	for _, tc := range cases {
+		if got := IsLedgerDocPath(tc.in); got != tc.want {
+			t.Errorf("IsLedgerDocPath(%q)=%v want %v", tc.in, got, tc.want)
+		}
 	}
 }
