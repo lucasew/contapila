@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +28,10 @@ import (
 var workDir string
 
 func main() {
+	// Text handler on stderr at Info so engine/project slog.Warn (and any Info)
+	// stay operator-visible and intentionally configured for a CLI tool.
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
 	root := &cobra.Command{
 		Use:           "contapila",
 		Short:         "Contapila — Beancount-class ledger in Go",
