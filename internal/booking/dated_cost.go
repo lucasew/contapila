@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/lucasew/contapila-go/internal/ast"
+	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/prices"
 )
 
@@ -41,7 +42,7 @@ func ExpandDatedCosts(dirs []ast.Directive, pdb *prices.DB) []ast.Directive {
 			}
 			base := p.Units.Commodity
 			quote := p.Cost.Commodity
-			dt := dateOnly(p.Cost.Date)
+			dt := period.DateOnly(p.Cost.Date)
 			k := priceKey(dt, base, quote)
 			if seen[k] {
 				continue

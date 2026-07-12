@@ -48,7 +48,7 @@ func Kind(filter string, now time.Time) string {
 
 // At returns the absolute filter expression of the given kind covering t.
 func At(kind string, t time.Time) string {
-	t = dateOnly(t.UTC())
+	t = DateOnly(t.UTC())
 	switch kind {
 	case KindYear:
 		return fmt.Sprintf("%04d", t.Year())
@@ -69,7 +69,7 @@ func At(kind string, t time.Time) string {
 
 // AnchorDate is a representative date inside the filter (start, or now if empty).
 func AnchorDate(filter string, now time.Time) time.Time {
-	now = dateOnly(now.UTC())
+	now = DateOnly(now.UTC())
 	if strings.TrimSpace(filter) == "" {
 		return now
 	}
@@ -91,7 +91,7 @@ func SetInterval(filter string, now time.Time, kind string) string {
 // Shift moves the filter by delta steps of its natural interval (±1 month, year, …).
 // Empty filter starts from the current period of the given fallback kind (default month).
 func Shift(filter string, now time.Time, delta int) (string, error) {
-	now = dateOnly(now.UTC())
+	now = DateOnly(now.UTC())
 	filter = strings.TrimSpace(filter)
 	kind := Kind(filter, now)
 	if kind == KindEmpty {

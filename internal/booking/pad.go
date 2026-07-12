@@ -2,10 +2,10 @@ package booking
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
+	"github.com/lucasew/contapila-go/internal/period"
 )
 
 // ExpandPads materializes Beancount pad directives as synthetic transactions
@@ -25,7 +25,7 @@ func ExpandPads(dirs []ast.Directive, setup func(*Engine)) ([]ast.Directive, dia
 			diff := new(big.Rat).Sub(new(big.Rat).Set(b.Amount.Number), actual)
 			if new(big.Rat).Abs(diff).Cmp(probe.tol(b.Amount.Commodity)) > 0 {
 				if pad, ok := probe.Pad[b.Account]; ok {
-					if !dateOnly(pad.Date).Equal(dateOnly(b.Date)) {
+					if !period.DateOnly(pad.Date).Equal(period.DateOnly(b.Date)) {
 						synth = append(synth, padTxn(pad, b, diff))
 					}
 				}
@@ -54,11 +54,4 @@ func padTxn(p ast.Pad, b ast.Balance, diff *big.Rat) ast.Transaction {
 			{Account: p.FromAccount, Units: &ast.Amount{Number: new(big.Rat).Neg(n), Commodity: b.Amount.Commodity}},
 		},
 	}
-}
-
-func dateOnly(t time.Time) time.Time {
-	if t.IsZero() {
-		return t
-	}
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }

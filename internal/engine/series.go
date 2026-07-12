@@ -82,7 +82,7 @@ func (l *Ledger) walkBalanceSeries(
 			// options etc. — book at start
 			dt = time.Time{}
 		} else {
-			dt = dateOnly(dt)
+			dt = period.DateOnly(dt)
 		}
 		addDay(dt)
 		byDay[dt] = append(byDay[dt], d)
@@ -94,7 +94,7 @@ func (l *Ledger) walkBalanceSeries(
 				if pt.Date.IsZero() {
 					continue
 				}
-				dt := dateOnly(pt.Date)
+				dt := period.DateOnly(pt.Date)
 				addDay(dt)
 				priceDay[dt] = true
 			}
@@ -102,17 +102,17 @@ func (l *Ledger) walkBalanceSeries(
 	}
 	// Autointerest projection samples: index days + month-ends through today (or close).
 	if len(l.AutoInterest) > 0 {
-		today := dateOnly(time.Now())
+		today := period.DateOnly(time.Now())
 		for _, a := range l.AutoInterest {
 			end := today
 			if !a.CloseDate.IsZero() && a.CloseDate.Before(end) {
-				end = dateOnly(a.CloseDate).AddDate(0, 0, -1)
+				end = period.DateOnly(a.CloseDate).AddDate(0, 0, -1)
 			}
-			if end.Before(dateOnly(a.OpenDate)) {
+			if end.Before(period.DateOnly(a.OpenDate)) {
 				continue
 			}
 			// Month-ends.
-			for d := monthEndOnOrAfter(dateOnly(a.OpenDate)); !d.After(end); d = monthEndOnOrAfter(d.AddDate(0, 0, 1)) {
+			for d := monthEndOnOrAfter(period.DateOnly(a.OpenDate)); !d.After(end); d = monthEndOnOrAfter(d.AddDate(0, 0, 1)) {
 				addDay(d)
 				priceDay[d] = true // treat as revaluation sample even if book flat
 			}
@@ -121,8 +121,8 @@ func (l *Ledger) walkBalanceSeries(
 				if m := l.IndexDB[a.Rate.Indicator]; m != nil {
 					for dk := range m {
 						if dt, err := time.ParseInLocation("2006-01-02", dk, time.UTC); err == nil {
-							dt = dateOnly(dt)
-							if !dt.Before(dateOnly(a.OpenDate)) && !dt.After(end) {
+							dt = period.DateOnly(dt)
+							if !dt.Before(period.DateOnly(a.OpenDate)) && !dt.After(end) {
 								addDay(dt)
 								priceDay[dt] = true
 							}
@@ -138,8 +138,8 @@ func (l *Ledger) walkBalanceSeries(
 		if term.IsZero() {
 			term = time.Now()
 		}
-		term = dateOnly(term)
-		if from.IsZero() || !term.Before(dateOnly(from)) {
+		term = period.DateOnly(term)
+		if from.IsZero() || !term.Before(period.DateOnly(from)) {
 			addDay(term)
 			forceDay[term] = true
 		}
@@ -162,10 +162,10 @@ func (l *Ledger) walkBalanceSeries(
 		if day.IsZero() {
 			continue
 		}
-		if !from.IsZero() && day.Before(dateOnly(from)) {
+		if !from.IsZero() && day.Before(period.DateOnly(from)) {
 			continue
 		}
-		if !to.IsZero() && day.After(dateOnly(to)) {
+		if !to.IsZero() && day.After(period.DateOnly(to)) {
 			continue
 		}
 		// emit if this day could change relevant balances (txn, pad, balance+pad)
@@ -301,7 +301,7 @@ func (l *Ledger) autoInterestOf(acct string) *booking.AutoInterestAccount {
 }
 
 func monthEndOnOrAfter(t time.Time) time.Time {
-	t = dateOnly(t)
+	t = period.DateOnly(t)
 	// Last day of t's month.
 	end := time.Date(t.Year(), t.Month()+1, 0, 0, 0, 0, 0, time.UTC)
 	if !end.Before(t) {
@@ -428,8 +428,4 @@ func binLabel(b period.Range, kind period.BinKind) string {
 	default:
 		return b.Start.Format("2006-01")
 	}
-}
-
-func dateOnly(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }

@@ -91,8 +91,8 @@ func IterateBins(r Range, kind BinKind) []Range {
 	if r.Start.IsZero() || r.End.IsZero() {
 		return nil
 	}
-	start := dateOnly(r.Start)
-	end := dateOnly(r.End)
+	start := DateOnly(r.Start)
+	end := DateOnly(r.End)
 	if start.After(end) {
 		return nil
 	}
@@ -120,7 +120,7 @@ func IterateBins(r Range, kind BinKind) []Range {
 }
 
 func startOfBin(t time.Time, kind BinKind) time.Time {
-	t = dateOnly(t)
+	t = DateOnly(t)
 	switch kind {
 	case BinDay:
 		return t

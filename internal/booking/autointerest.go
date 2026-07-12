@@ -9,6 +9,7 @@ import (
 
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
+	"github.com/lucasew/contapila-go/internal/period"
 )
 
 // AutoInterestAccount is an asset open that carries interest_rate metadata.
@@ -199,10 +200,10 @@ func ProjectedUnits(
 	idx IndexDB,
 	asOf time.Time,
 ) map[string]*big.Rat {
-	asOf = dateOnly(asOf)
-	openDate = dateOnly(openDate)
+	asOf = period.DateOnly(asOf)
+	openDate = period.DateOnly(openDate)
 	if !closeDate.IsZero() {
-		closeDate = dateOnly(closeDate)
+		closeDate = period.DateOnly(closeDate)
 		// Projection stops at close (exclusive of growth on/after close day).
 		if !asOf.Before(closeDate) {
 			asOf = closeDate.AddDate(0, 0, -1)
@@ -230,7 +231,7 @@ func ProjectedUnits(
 					continue
 				}
 				events = append(events, ev{
-					day: dateOnly(v.Date), kind: "txn",
+					day: period.DateOnly(v.Date), kind: "txn",
 					comm: p.Units.Commodity, delta: new(big.Rat).Set(p.Units.Number),
 				})
 			}
@@ -239,7 +240,7 @@ func ProjectedUnits(
 				continue
 			}
 			events = append(events, ev{
-				day: dateOnly(v.Date), kind: "balance",
+				day: period.DateOnly(v.Date), kind: "balance",
 				comm: v.Amount.Commodity, delta: new(big.Rat).Set(v.Amount.Number), set: true,
 			})
 		}

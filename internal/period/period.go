@@ -53,7 +53,7 @@ func Parse(s string, now time.Time) (Range, error) {
 	if s == "" {
 		return Range{}, nil
 	}
-	now = dateOnly(now.UTC())
+	now = DateOnly(now.UTC())
 
 	// Range: "A - B" (spaces around hyphen, as in Fava).
 	if i := strings.Index(s, " - "); i >= 0 {
@@ -129,7 +129,7 @@ func parseOne(s string, now time.Time) (interval, error) {
 		if err != nil {
 			return interval{}, err
 		}
-		t = dateOnly(t)
+		t = DateOnly(t)
 		return interval{start: t, endExclusive: t.AddDate(0, 0, 1)}, nil
 	}
 	if m := reWeek.FindStringSubmatch(s); m != nil {
@@ -206,7 +206,11 @@ func isoWeekStart(year, week int) time.Time {
 	return week1Mon.AddDate(0, 0, (week-1)*7)
 }
 
-func dateOnly(t time.Time) time.Time {
+// DateOnly returns the UTC calendar day of t (00:00:00). Zero times stay zero.
+func DateOnly(t time.Time) time.Time {
+	if t.IsZero() {
+		return t
+	}
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
