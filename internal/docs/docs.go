@@ -19,11 +19,6 @@ const ByAccountDir = "by-account"
 // yyyymmdd at start of filename (SPEC §4.4).
 var datePrefix = regexp.MustCompile(`^(\d{8})`)
 
-// LedgerDocsRel returns <ledger>/docs relative to the project root.
-func LedgerDocsRel(ledger string) string {
-	return filepath.ToSlash(filepath.Join(ledger, "docs"))
-}
-
 // ScanByAccount walks <root>/<ledger>/docs/by-account and synthesizes document directives.
 // Account path is directory segments joined with ':' under by-account;
 // file names must start with yyyymmdd.
