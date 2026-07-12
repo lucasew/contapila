@@ -238,7 +238,7 @@ func (l *Ledger) netWorthFromBook(b *booking.Engine, asOf time.Time) *big.Rat {
 				continue
 			}
 			// Natural Beancount signs (liabilities are typically negative).
-			val, _ := l.convert(comm, units, asOf)
+			val, _ := l.marketConvert(comm, units, asOf, false)
 			total.Add(total, val)
 		}
 	}
@@ -256,7 +256,7 @@ func (l *Ledger) accountValueFromBook(b *booking.Engine, account string, asOf ti
 			if units.Sign() == 0 {
 				continue
 			}
-			val, _ := l.convert(comm, units, asOf)
+			val, _ := l.marketConvert(comm, units, asOf, false)
 			total.Add(total, val)
 		}
 	}
@@ -273,7 +273,7 @@ func (l *Ledger) accountValueFromBook(b *booking.Engine, account string, asOf ti
 			if units.Sign() == 0 {
 				continue
 			}
-			val, _ := l.convert(comm, units, asOf)
+			val, _ := l.marketConvert(comm, units, asOf, false)
 			total.Add(total, val)
 		}
 	}
@@ -350,7 +350,7 @@ func (l *Ledger) PnLBars(from, to time.Time, kind period.BinKind) []BarPoint {
 				if p.Units == nil || p.Units.Number == nil {
 					continue
 				}
-				val, _ := l.convertUnits(p.Units.Commodity, p.Units.Number, d)
+				val, _ := l.marketConvert(p.Units.Commodity, p.Units.Number, d, false)
 				if booking.IsIncome(p.Account) {
 					incSigned.Add(incSigned, val)
 				}
@@ -428,12 +428,6 @@ func binLabel(b period.Range, kind period.BinKind) string {
 	default:
 		return b.Start.Format("2006-01")
 	}
-}
-
-// convertUnits converts a unit amount of commodity to op currency as-of date (no inventory cost).
-// Quiet on unpriced commodities (PnLBars samples many postings).
-func (l *Ledger) convertUnits(comm string, units *big.Rat, asOf time.Time) (*big.Rat, bool) {
-	return l.marketConvert(comm, units, asOf, false)
 }
 
 func dateOnly(t time.Time) time.Time {
