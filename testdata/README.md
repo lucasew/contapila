@@ -15,12 +15,12 @@ contapila -C testdata/example web
 
 | Ledger | Exercises |
 |--------|-----------|
-| personal | Root `include` of commodities+prices; cards; CDB maturities; avg-cost equities; pad→balance; close temp account; tags; meta (warn); mirrored Acme distributions |
+| personal | Root commodities+prices includes; auto-loaded `indexes.beancount` (CDI); CDB/LCA `interest_rate`; cards; avg-cost equities; pad→balance; close temp; mirrored Acme distributions |
 | acme | AR/AP; root includes; pad/balance; close clearing; invoice meta |
 | ong | Grants deferred |
 | smuggle | `CIGPK` inventory |
 
-Also: `<ledger>/docs/by-account/…` (SPEC §4.4), CUE `links` (SPEC §4.5, not enforced), `query`/`custom` (warn+skip).
+Also: `<ledger>/docs/by-account/…` (SPEC §4.4), CUE `links` (SPEC §4.5, not enforced), `query` (warn+skip). Prelude `project_journals` auto-loads root `prices.beancount` + `indexes.beancount` (regenerate indexes with `scripts/fetch-cdi` + `contapila ingest`).
 
 ## `kitchensink/`
 

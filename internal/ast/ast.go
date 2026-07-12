@@ -47,6 +47,10 @@ type Meta struct {
 	Date time.Time
 	File string
 	Line int // 1-based source line; 0 if unknown
+	// StartByte/EndByte are source spans in the originating file (exclusive end).
+	// Zero means unknown (e.g. synthesized or JSON-decoded).
+	StartByte int
+	EndByte   int
 }
 
 func (m Meta) GetDate() time.Time { return m.Date }
@@ -82,7 +86,8 @@ type Open struct {
 
 type Close struct {
 	Meta
-	Account string
+	Account  string
+	Metadata Metadata
 }
 
 type Transaction struct {
@@ -114,12 +119,14 @@ type Pad struct {
 	Meta
 	Account     string
 	FromAccount string
+	Metadata    Metadata
 }
 
 type Note struct {
 	Meta
-	Account string
-	Comment string
+	Account  string
+	Comment  string
+	Metadata Metadata
 }
 
 type Event struct {
@@ -133,8 +140,9 @@ type Event struct {
 // Index series use Type "index": values [indicator string, daily return number].
 type Custom struct {
 	Meta
-	Type   string        // first string after `custom` (e.g. "index")
-	Values []CustomValue // remaining values in source order
+	Type     string        // first string after `custom` (e.g. "index")
+	Values   []CustomValue // remaining values in source order
+	Metadata Metadata
 }
 
 // CustomValue is one custom directive argument (string name or number).
@@ -150,6 +158,93 @@ type Document struct {
 	Account   string
 	Path      string // project-relative (e.g. personal/docs/by-account/Assets/Cash/20240101_x.txt)
 	Synthetic bool   // true when expanded from the docs/ tree at runtime
+	Metadata  Metadata
+}
+
+// IngestIDMetaKey is the journal metadata key used by `contapila ingest` for upserts.
+const IngestIDMetaKey = "ingest_id"
+
+// DirectiveMetadata returns metadata map for directives that carry one (may be nil).
+func DirectiveMetadata(d Directive) Metadata {
+	switch v := d.(type) {
+	case Commodity:
+		return v.Metadata
+	case Open:
+		return v.Metadata
+	case Close:
+		return v.Metadata
+	case Transaction:
+		return v.Metadata
+	case Price:
+		return v.Metadata
+	case Balance:
+		return v.Metadata
+	case Pad:
+		return v.Metadata
+	case Note:
+		return v.Metadata
+	case Event:
+		return v.Metadata
+	case Custom:
+		return v.Metadata
+	case Document:
+		return v.Metadata
+	default:
+		return nil
+	}
+}
+
+// SetDirectiveIngestID sets ingest_id metadata on d (must be a pointer-capable update via return).
+func WithIngestID(d Directive, id string) Directive {
+	if id == "" {
+		return d
+	}
+	switch v := d.(type) {
+	case Commodity:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Open:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Close:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Transaction:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Price:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Balance:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Pad:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Note:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Event:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Custom:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	case Document:
+		v.Metadata = metaWith(v.Metadata, IngestIDMetaKey, id)
+		return v
+	default:
+		return d
+	}
+}
+
+func metaWith(md Metadata, k, v string) Metadata {
+	out := Metadata{}
+	for key, val := range md {
+		out[key] = val
+	}
+	out[k] = v
+	return out
 }
 
 type Unknown struct {

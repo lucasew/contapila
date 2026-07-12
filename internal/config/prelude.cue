@@ -84,15 +84,33 @@ ledgers: [Name=string]: #Ledger & {
 	...
 }
 
+// One project-root beancount file the host auto-loads (paths relative to contapila.cue).
+#ProjectJournal: {
+	path: string
+	// prices → shared PriceDB (not injected into ledger streams)
+	// stream → prepended into every ledger directive stream
+	role: "prices" | "stream"
+	// when the file is absent: warn (slog) or ignore
+	missing: "warn" | "ignore" | *"ignore"
+}
+
 #Config: {
 	commodities: [string]: #Commodity
 	operating_currency?: [...string]
 	ledgers: [string]: #Ledger
 	links?:  [...#LedgerLink]
 	price_pairs?: [string]: #PricePair
+	// Auto-imported root journals (override wholesale in contapila.cue if needed).
+	project_journals: [...#ProjectJournal]
 }
 
 // Default instance fields (unified with host inject + user contapila.cue).
 commodities: [string]: #Commodity
 links?:      [...#LedgerLink]
 price_pairs: [string]: #PricePair
+
+// Default auto-imports — replace the whole list in contapila.cue to customize.
+project_journals: [...#ProjectJournal] | *[
+	{path: "prices.beancount", role: "prices", missing: "warn"},
+	{path: "indexes.beancount", role: "stream", missing: "ignore"},
+]

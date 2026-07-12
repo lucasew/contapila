@@ -33,6 +33,13 @@ type Config struct {
 	Value cue.Value
 }
 
+// ProjectJournal is one auto-loaded root beancount file from prelude project_journals.
+type ProjectJournal struct {
+	Path    string // relative to project root
+	Role    string // "prices" | "stream"
+	Missing string // "warn" | "ignore"
+}
+
 var ledgerIDRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
 
 // Load unifies embedded prelude ⊔ generated ledgers ⊔ generated price pairs ⊔ user contapila.cue.
@@ -71,6 +78,40 @@ func Load(userCue []byte, userFilename string, discovered []Ledger, pricePairs [
 	}
 
 	return &Config{Value: unified}, nil
+}
+
+// ProjectJournals reads project_journals from a unified config value (prelude defaults apply).
+func ProjectJournals(v cue.Value) []ProjectJournal {
+	if !v.Exists() {
+		return nil
+	}
+	list := v.LookupPath(cue.ParsePath("project_journals"))
+	if !list.Exists() {
+		return nil
+	}
+	iter, err := list.List()
+	if err != nil {
+		return nil
+	}
+	var out []ProjectJournal
+	for iter.Next() {
+		item := iter.Value()
+		path, _ := item.LookupPath(cue.ParsePath("path")).String()
+		role, _ := item.LookupPath(cue.ParsePath("role")).String()
+		missing, _ := item.LookupPath(cue.ParsePath("missing")).String()
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		if role != "prices" && role != "stream" {
+			continue
+		}
+		if missing != "warn" && missing != "ignore" {
+			missing = "ignore"
+		}
+		out = append(out, ProjectJournal{Path: path, Role: role, Missing: missing})
+	}
+	return out
 }
 
 // encodeLedgersCUE builds a closed ledgers struct from filesystem discovery.

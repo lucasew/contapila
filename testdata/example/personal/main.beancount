@@ -4,6 +4,7 @@ option "operating_currency" "BRL"
 ; Root shared declarations (real-repo style explicit includes).
 include "../commodities.beancount"
 include "../prices.beancount"
+; indexes.beancount is auto-loaded from project root (no include required)
 
 include "accounts.beancount"
 include "opening.beancount"

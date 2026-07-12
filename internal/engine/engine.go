@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math/big"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -100,6 +101,11 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 		}
 		stream = append(stream, d)
 	}
+	// Prelude project_journals with role "stream" are auto-injected into every ledger.
+	// Skip a path if the ledger stream already loaded that realpath via include.
+	stream, idiags := injectProjectStreamJournals(p, stream)
+	diags.Merge(idiags)
+
 	// {cost, date} on postings → synthetic price directives (+ PriceDB points).
 	stream = booking.ExpandDatedCosts(stream, pdb)
 
@@ -182,6 +188,57 @@ func cloneMeta(m ast.Metadata) ast.Metadata {
 		out[k] = v
 	}
 	return out
+}
+
+// injectProjectStreamJournals prepends prelude project_journals (role stream) into the ledger.
+// Paths already present in the stream (via include) are skipped to avoid double-load.
+func injectProjectStreamJournals(p *project.Project, stream []ast.Directive) ([]ast.Directive, diag.List) {
+	var diags diag.List
+	if p == nil || len(p.StreamJournals) == 0 {
+		return stream, diags
+	}
+	present := map[string]bool{}
+	for _, d := range stream {
+		f := d.GetFile()
+		if f == "" {
+			continue
+		}
+		fr, err := filepath.Abs(f)
+		if err != nil {
+			fr = f
+		}
+		present[fr] = true
+	}
+	var prefix []ast.Directive
+	for _, j := range p.StreamJournals {
+		abs, err := filepath.Abs(j.Path)
+		if err != nil {
+			abs = j.Path
+		}
+		if present[abs] {
+			continue
+		}
+		dirs, ldiags, err := loader.LoadFile(j.Path)
+		diags.Merge(ldiags)
+		if err != nil {
+			diags.Error(j.Path, 0, fmt.Sprintf("failed to load project journal %s: %v", j.RelPath, err))
+			continue
+		}
+		for _, d := range dirs {
+			if _, ok := d.(ast.Include); ok {
+				continue
+			}
+			prefix = append(prefix, d)
+		}
+		present[abs] = true
+	}
+	if len(prefix) == 0 {
+		return stream, diags
+	}
+	out := make([]ast.Directive, 0, len(prefix)+len(stream))
+	out = append(out, prefix...)
+	out = append(out, stream...)
+	return out, diags
 }
 
 // commodityTolerances merges CUE #Commodity policy with journal commodity metadata.

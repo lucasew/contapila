@@ -3,14 +3,17 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
 
+	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/engine"
+	"github.com/lucasew/contapila-go/internal/ingest"
 	"github.com/lucasew/contapila-go/internal/parser"
 	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/web"
@@ -51,7 +54,7 @@ func main() {
 		},
 	}
 	root.PersistentFlags().StringVarP(&workDir, "directory", "C", "", "run as if contapila started in this directory (project discovery)")
-	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), accountCmd(), parseCmd(), webCmd())
+	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), accountCmd(), parseCmd(), ingestCmd(), webCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -123,7 +126,22 @@ func statusCmd() *cobra.Command {
 			for _, l := range p.Ledgers {
 				fmt.Printf("  - %s (%s)\n", l.Name, l.MainPath)
 			}
-			fmt.Printf("Prices:            %s\n", p.PricesPath)
+			if p.PricesPath != "" {
+				switch {
+				case p.PricesMissing:
+					fmt.Printf("Prices:            %s (missing)\n", p.PricesPath)
+				case p.PricesEmpty:
+					fmt.Printf("Prices:            %s (empty)\n", p.PricesPath)
+				default:
+					fmt.Printf("Prices:            %s\n", p.PricesPath)
+				}
+			}
+			if len(p.StreamJournals) > 0 {
+				fmt.Printf("Stream journals (%d):\n", len(p.StreamJournals))
+				for _, j := range p.StreamJournals {
+					fmt.Printf("  - %s\n", j.Path)
+				}
+			}
 			fmt.Println("CUE:               Unified OK")
 			return nil
 		},
@@ -513,6 +531,79 @@ func parseCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// ingestCmd: contapila ingest --file path [-- CMD args…]
+// JSONL directives on producer stdout (or contapila stdin if no --).
+// With --, contapila stdin is passed through to CMD.
+func ingestCmd() *cobra.Command {
+	var file string
+	c := &cobra.Command{
+		Use:   "ingest --file <path> [-- CMD [args…]]",
+		Short: "Merge JSONL directives into a beancount file",
+		Long: `Read a stream of JSONL directive objects and merge them into --file.
+
+Without --, JSONL is read from contapila stdin.
+With -- CMD args, runs CMD (stdin passed through) and reads JSONL from CMD stdout.
+Logs from CMD should go to stderr.
+
+Each JSON line is one directive (full AST-shaped fields). Optional "id" becomes
+metadata ingest_id for upsert; without id, lines are appended.
+Any error or non-zero CMD exit aborts with no write.`,
+		Args:                  cobra.ArbitraryArgs,
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if file == "" {
+				return fmt.Errorf("--file is required")
+			}
+			var (
+				incoming []ast.Directive
+				err      error
+			)
+			// args after -- are the producer command
+			if len(args) > 0 {
+				ex := exec.Command(args[0], args[1:]...)
+				ex.Stdin = os.Stdin
+				ex.Stderr = os.Stderr
+				stdout, errPipe := ex.StdoutPipe()
+				if errPipe != nil {
+					return errPipe
+				}
+				if err := ex.Start(); err != nil {
+					return err
+				}
+				incoming, err = ingest.DecodeJSONL(stdout, os.Stderr)
+				waitErr := ex.Wait()
+				if err != nil {
+					return err
+				}
+				if waitErr != nil {
+					return fmt.Errorf("producer failed: %w", waitErr)
+				}
+			} else {
+				incoming, err = ingest.DecodeJSONL(os.Stdin, os.Stderr)
+				if err != nil {
+					return err
+				}
+			}
+
+			existing := ""
+			if b, rerr := os.ReadFile(file); rerr == nil {
+				existing = string(b)
+			} else if !os.IsNotExist(rerr) {
+				return rerr
+			}
+
+			out, err := ingest.Apply(existing, file, incoming)
+			if err != nil {
+				return err
+			}
+			return ingest.WriteFileAtomic(file, []byte(out))
+		},
+	}
+	c.Flags().StringVar(&file, "file", "", "target beancount file (created on success if missing)")
+	_ = c.MarkFlagRequired("file")
+	return c
 }
 
 func webCmd() *cobra.Command {

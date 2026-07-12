@@ -58,6 +58,7 @@ Illustrative commands (names may be refined at implement time):
 | `contapila journal [ledger]` | Period journal / activity |
 | `contapila pnl [ledger]` | Income vs expenses for a period |
 | `contapila networth [ledger]` | Net worth as-of (shared prices) |
+| `contapila ingest --file path [-- CMD …]` | Merge JSONL directives into a beancount file (upsert by `id` → `ingest_id`) |
 | `contapila web [ledger]` | Read-only HTTP UI |
 
 Ledger argument is the **directory name** under the project root (see §4).
@@ -97,6 +98,7 @@ Ledger argument is the **directory name** under the project root (see §4).
 <root>/
   contapila.cue           # required project marker; may be empty
   prices.beancount        # shared prices (empty/missing → warn)
+  indexes.beancount       # shared index series for autointerest (optional; auto-injected)
   personal/
     main.beancount        # ledger name = "personal"
   empresa/
@@ -113,14 +115,17 @@ Ledger argument is the **directory name** under the project root (see §4).
 | Recursive `**/main.beancount` | **No** |
 | Root-level `main.beancount` | Not an entrypoint |
 | Zero ledgers found | Error when running check/web/reports |
-| Shared prices | `<root>/prices.beancount` |
-| Prices empty or missing | **Warn**; empty price DB; conversion falls back per §8 |
+| Shared root journals | CUE `project_journals` (prelude defaults: `prices.beancount` + `indexes.beancount`) |
+| `role: "prices"` | Load into shared PriceDB; missing → **warn** by default |
+| `role: "stream"` | Auto-inject into every ledger stream (no `include` required); missing → ignore by default |
 | Includes | Paths relative to the **including file's directory**; globs allowed |
-| Optional root commodities | `<root>/commodities.beancount` — often `include`d from ledgers |
+| Optional root commodities | `<root>/commodities.beancount` — often `include`d from ledgers (not in default `project_journals`) |
 
-**Price DB:** for a given (base, quote, date), **last write wins** when loading `prices.beancount` (and if the same day appears twice).
+**Price DB:** for a given (base, quote, date), **last write wins** when loading prices journals (and if the same day appears twice).
 
-Ledgers may also `include "../prices.beancount"` / `include "../commodities.beancount"` so those directives appear in the ledger stream (real-repo style). The project-level PriceDB still comes from the root prices file path.
+**`project_journals` (prelude):** list of `{path, role, missing}` relative to the project root. Override the whole list in `contapila.cue` to add/remove auto-imports. Explicit ledger `include` of the same realpath is not double-loaded for `stream` roles.
+
+Ledgers may still `include "../prices.beancount"` / `include "../commodities.beancount"` for journal-visible copies; PriceDB still comes from `role: "prices"` journals.
 
 ### 4.3 Isolation and sharing
 
@@ -128,7 +133,8 @@ Ledgers may also `include "../prices.beancount"` / `include "../commodities.bean
 |---------|--------|
 | Inventory, transactions, pads, balance assertions, accounts (`open`/`close`) | **Per ledger** (isolated) |
 | Commodity policy (precision, tolerance, class) | **Shared** (project CUE) |
-| Market `price` directives | **Shared** (`prices.beancount` → one PriceDB for all ledgers) |
+| Market `price` directives | **Shared** (`project_journals` role `prices` → one PriceDB for all ledgers) |
+| Index series (`custom "index"`) | **Shared** (`project_journals` role `stream` auto-injected into each ledger) |
 
 Multiple entrypoints are **named parallel ledgers**, never merged into one inventory.
 
@@ -337,7 +343,7 @@ Built-in expander (not a plugin). On `open` with **`interest_rate`** (or alias *
 - Counterpart income account: `Assets:…` → `Income:Passivo:…` (string replace); synth `open` if missing.
 - **Materialize only on `balance`:** insert **`pad` day-before** from that income account to the asset (skip if user already wrote a pad). Bank balance is ground truth.
 - **Projection** (graphs / estimates): apply the curve using `custom "index" "CDI"|"IPCA" <daily_return>` in the stream; pure fixed also samples month-ends; horizon through `time.Now()`; **stops on `close`**.
-- Index series are stream-local (`custom` anywhere includes resolve them). No `fixes.beancount` write-back.
+- Index series: stream journals from `project_journals` (default `indexes.beancount`) are auto-injected; extra `custom "index"` may also appear via includes. No `fixes.beancount` write-back.
 
 CUE `#Account` documents `interest_rate` and unifies hyphen alias onto snake_case when opens are injected.
 

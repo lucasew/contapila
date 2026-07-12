@@ -15,17 +15,25 @@ type Ledger struct {
 	MainPath string
 }
 
+// StreamJournal is a project-root beancount file auto-injected into every ledger stream.
+type StreamJournal struct {
+	Path    string // absolute
+	RelPath string // as declared in project_journals
+}
+
 type Project struct {
-	Root          string
-	Config        *config.Config
-	Ledgers       []Ledger
+	Root    string
+	Config  *config.Config
+	Ledgers []Ledger
+	// PricesPath is the first project_journals entry with role "prices" ("" if none).
 	PricesPath    string
 	PricesMissing bool
 	PricesEmpty   bool
+	// StreamJournals are role "stream" files to inject into each ledger (absolute paths).
+	StreamJournals []StreamJournal
 }
 
 const ProjectMarker = "contapila.cue"
-const PricesFilename = "prices.beancount"
 const LedgerEntrypoint = "main.beancount"
 
 func findRoot(startDir string) (string, error) {
@@ -90,48 +98,89 @@ func OpenProject(cwd string) (*Project, error) {
 		discovered = append(discovered, config.Ledger{Name: l.Name, Main: l.MainPath})
 	}
 
-	pricesPath := filepath.Join(root, PricesFilename)
-	pricesMissing := false
-	pricesEmpty := false
-	var pricePairs []config.PricePair
-	if info, err := os.Stat(pricesPath); os.IsNotExist(err) {
-		slog.Warn("prices.beancount is missing", "path", pricesPath)
-		pricesMissing = true
-	} else if err == nil {
-		if info.Size() == 0 {
-			slog.Warn("prices.beancount is empty", "path", pricesPath)
-			pricesEmpty = true
-		} else {
-			// Pair inventory only for CUE (not full series). Full DB loads in engine.OpenProject.
-			if pdb, _, err := prices.LoadFile(pricesPath); err != nil {
-				slog.Warn("failed loading prices for CUE pair inject", "err", err)
-			} else {
-				for _, p := range pdb.Pairs() {
-					pricePairs = append(pricePairs, config.PricePair{Base: p.Base, Quote: p.Quote})
-				}
-			}
-		}
-	} else {
-		return nil, fmt.Errorf("failed to stat prices file: %w", err)
-	}
-
 	cuePath := filepath.Join(root, ProjectMarker)
 	cueBytes, err := os.ReadFile(cuePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", ProjectMarker, err)
 	}
 
-	cfg, err := config.Load(cueBytes, cuePath, discovered, pricePairs)
+	// First unify without price_pairs so we can read project_journals defaults.
+	cfg, err := config.Load(cueBytes, cuePath, discovered, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
+	journals := config.ProjectJournals(cfg.Value)
+	var (
+		pricePairs     []config.PricePair
+		pricesPath     string
+		pricesMissing  bool
+		pricesEmpty    bool
+		streamJournals []StreamJournal
+	)
+
+	for _, j := range journals {
+		abs := filepath.Join(root, j.Path)
+		info, err := os.Stat(abs)
+		switch {
+		case os.IsNotExist(err):
+			if j.Missing == "warn" {
+				slog.Warn("project journal missing", "path", abs, "role", j.Role)
+			}
+			if j.Role == "prices" && pricesPath == "" {
+				pricesPath = abs
+				pricesMissing = true
+			}
+			continue
+		case err != nil:
+			return nil, fmt.Errorf("failed to stat %s: %w", abs, err)
+		}
+
+		if info.Size() == 0 {
+			if j.Missing == "warn" {
+				slog.Warn("project journal empty", "path", abs, "role", j.Role)
+			}
+			if j.Role == "prices" && pricesPath == "" {
+				pricesPath = abs
+				pricesEmpty = true
+			}
+			continue
+		}
+
+		switch j.Role {
+		case "prices":
+			if pricesPath == "" {
+				pricesPath = abs
+			}
+			// Pair inventory for CUE (not full series).
+			if pdb, _, err := prices.LoadFile(abs); err != nil {
+				slog.Warn("failed loading prices for CUE pair inject", "path", abs, "err", err)
+			} else {
+				for _, p := range pdb.Pairs() {
+					pricePairs = append(pricePairs, config.PricePair{Base: p.Base, Quote: p.Quote})
+				}
+			}
+		case "stream":
+			streamJournals = append(streamJournals, StreamJournal{Path: abs, RelPath: j.Path})
+		}
+	}
+
+	// Re-unify with price_pairs when we discovered any (closed inventory for CUE overlays).
+	if len(pricePairs) > 0 {
+		cfg2, err := config.Load(cueBytes, cuePath, discovered, pricePairs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config with price pairs: %w", err)
+		}
+		cfg = cfg2
+	}
+
 	return &Project{
-		Root:          root,
-		Config:        cfg,
-		Ledgers:       ledgers,
-		PricesPath:    pricesPath,
-		PricesMissing: pricesMissing,
-		PricesEmpty:   pricesEmpty,
+		Root:           root,
+		Config:         cfg,
+		Ledgers:        ledgers,
+		PricesPath:     pricesPath,
+		PricesMissing:  pricesMissing,
+		PricesEmpty:    pricesEmpty,
+		StreamJournals: streamJournals,
 	}, nil
 }

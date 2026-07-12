@@ -105,8 +105,11 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 		}
 		return o, true
 	case "close":
-		warnIgnoredKeyValues(f, n, diags)
-		return ast.Close{Meta: meta(f, n), Account: textField(f, n, "account")}, true
+		return ast.Close{
+			Meta:     meta(f, n),
+			Account:  textField(f, n, "account"),
+			Metadata: parseKeyValues(f, n),
+		}, true
 	case "transaction":
 		return convertTxn(f, n, diags), true
 	case "price":
@@ -140,15 +143,19 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 			Metadata: parseKeyValues(f, n),
 		}, true
 	case "pad":
-		warnIgnoredKeyValues(f, n, diags)
 		return ast.Pad{
 			Meta:        meta(f, n),
 			Account:     textField(f, n, "account"),
 			FromAccount: textField(f, n, "from_account"),
+			Metadata:    parseKeyValues(f, n),
 		}, true
 	case "note":
-		warnIgnoredKeyValues(f, n, diags)
-		return ast.Note{Meta: meta(f, n), Account: textField(f, n, "account"), Comment: unquote(textField(f, n, "note"))}, true
+		return ast.Note{
+			Meta:     meta(f, n),
+			Account:  textField(f, n, "account"),
+			Comment:  unquote(textField(f, n, "note")),
+			Metadata: parseKeyValues(f, n),
+		}, true
 	case "event":
 		return ast.Event{
 			Meta:     meta(f, n),
@@ -181,11 +188,11 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 				}
 			}
 		}
-		warnIgnoredKeyValues(f, n, diags)
 		return ast.Document{
-			Meta:    meta(f, n),
-			Account: textField(f, n, "account"),
-			Path:    path,
+			Meta:     meta(f, n),
+			Account:  textField(f, n, "account"),
+			Path:     path,
+			Metadata: parseKeyValues(f, n),
 		}, true
 	case "query":
 		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
@@ -206,14 +213,13 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 // convertCustom parses: DATE custom "type" value…
 // Values may be strings, numbers, or bare names (grammar may tag names as account).
 func convertCustom(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, bool) {
-	warnIgnoredKeyValues(f, n, diags)
 	var typ string
 	var vals []ast.CustomValue
-	// Named children: date, string (type), custom_value…
+	// Named children: date, string (type), custom_value…, key_value
 	for i := uint32(0); i < n.NamedChildCount(); i++ {
 		c := n.NamedChild(i)
 		switch c.Type() {
-		case "date":
+		case "date", "key_value":
 			continue
 		case "string":
 			s := unquote(nodeText(f, c))
@@ -236,7 +242,12 @@ func convertCustom(f *source.File, n *grammar.Node, diags *diag.List) (ast.Direc
 		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), `custom directive missing type string; skipped`)
 		return nil, false
 	}
-	return ast.Custom{Meta: meta(f, n), Type: typ, Values: vals}, true
+	return ast.Custom{
+		Meta:     meta(f, n),
+		Type:     typ,
+		Values:   vals,
+		Metadata: parseKeyValues(f, n),
+	}, true
 }
 
 func parseCustomValue(f *source.File, n *grammar.Node) ast.CustomValue {
@@ -611,11 +622,18 @@ func meta(f *source.File, n *grammar.Node) ast.Meta {
 		d, _ = time.ParseInLocation("2006-01-02", strings.TrimSpace(nodeText(f, dn)), time.UTC)
 	}
 	path, line := "", 0
+	start, end := 0, 0
+	if n != nil && !n.IsNull() {
+		start = int(n.StartByte())
+		end = int(n.EndByte())
+	}
 	if f != nil {
 		path = f.Path
-		line = f.LineAtU32(n.StartByte())
+		if n != nil && !n.IsNull() {
+			line = f.LineAtU32(n.StartByte())
+		}
 	}
-	return ast.Meta{Date: d, File: path, Line: line}
+	return ast.Meta{Date: d, File: path, Line: line, StartByte: start, EndByte: end}
 }
 
 func field(n *grammar.Node, name string) *grammar.Node {

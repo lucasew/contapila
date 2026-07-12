@@ -13,10 +13,13 @@
 2023-07-01 open Assets:BR:Alfa:Poupanca BRL
 
 2023-07-01 open Assets:BR:Alfa:Investimento:CDB:20241201 BRL
+  interest_rate: "115% CDI"
 
 2023-07-01 open Assets:BR:Alfa:Investimento:CDB:20250601 BRL
+  interest_rate: "115% CDI"
 
 2023-07-01 open Assets:BR:Alfa:Investimento:LCA:20241115 BRL
+  interest_rate: "90% CDI"
 
 2023-07-01 open Assets:BR:Beta:ContaCorrente BRL
 
