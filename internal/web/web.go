@@ -32,6 +32,9 @@ var templateFS embed.FS
 //go:embed all:static
 var staticFS embed.FS
 
+// asOfLatest is used when no as-of date or period end is set: include all postings.
+var asOfLatest = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+
 type Server struct {
 	Project *project.Project
 	Prices  *prices.DB
@@ -47,7 +50,17 @@ func Listen(p *project.Project, pdb *prices.DB, defaultLedger string, addr strin
 	if defaultLedger != "" {
 		fmt.Printf("  ledger: http://%s/l/%s/check\n", addr, defaultLedger)
 	}
-	return http.ListenAndServe(addr, s.Handler())
+	// Explicit timeouts: bare ListenAndServe has none (slowloris / hung conns).
+	// Values sized for a local read-only ledger UI, not a high-traffic public API.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           s.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	return srv.ListenAndServe()
 }
 
 func New(p *project.Project, pdb *prices.DB) (*Server, error) {
@@ -273,14 +286,19 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 	asOfStr := q.Get("as-of")
 	var asOf time.Time
 	if asOfStr != "" {
-		asOf, _ = engine.ParseDate(asOfStr)
+		parsed, err := engine.ParseDate(asOfStr)
+		if err != nil {
+			http.Error(w, "invalid as-of date (want YYYY-MM-DD): "+asOfStr, http.StatusBadRequest)
+			return
+		}
+		asOf = parsed
 	}
 	if asOf.IsZero() && !pr.End.IsZero() {
 		asOf = pr.End
 		asOfStr = asOf.Format("2006-01-02")
 	}
 	if asOf.IsZero() {
-		asOf = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+		asOf = asOfLatest
 		asOfStr = ""
 	}
 
@@ -402,7 +420,7 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	asOf := pr.End
 	asOfStr := ""
 	if asOf.IsZero() {
-		asOf = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+		asOf = asOfLatest
 	} else {
 		asOfStr = asOf.Format("2006-01-02")
 	}
@@ -824,7 +842,7 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 	asOf := pr.End
 	asOfStr := ""
 	if asOf.IsZero() {
-		asOf = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+		asOf = asOfLatest
 	} else {
 		asOfStr = asOf.Format("2006-01-02")
 	}
