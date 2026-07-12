@@ -11,6 +11,10 @@ import (
 	"github.com/lucasew/contapila-go/internal/diag"
 )
 
+// defaultTolerance is the absolute balance/cash residual tolerance used when no
+// Engine.Tolerance or per-commodity CommTol is set: half ULP of precision 5 (5e-6).
+var defaultTolerance = big.NewRat(5, 1_000_000)
+
 // Position is average-cost inventory for one account+commodity (model A).
 type Position struct {
 	Units     *big.Rat
@@ -72,7 +76,7 @@ func New() *Engine {
 		Close:     map[string]time.Time{},
 		Bal:       map[string]map[string]*big.Rat{},
 		Pad:       map[string]ast.Pad{},
-		Tolerance: big.NewRat(5, 1000000), // 5e-6 default (precision 5 half-ulp-ish)
+		Tolerance: defaultTolerance,
 	}
 }
 
@@ -86,7 +90,7 @@ func (e *Engine) tol(comm string) *big.Rat {
 	if e.Tolerance != nil {
 		return e.Tolerance
 	}
-	return big.NewRat(5, 1000000)
+	return defaultTolerance
 }
 
 func (e *Engine) Book(dirs []ast.Directive) {
