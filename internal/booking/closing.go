@@ -8,6 +8,7 @@ import (
 
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
+	"github.com/lucasew/contapila-go/internal/period"
 )
 
 // ExpandClosing turns posting metadata closing: TRUE into synthetic directives:
@@ -176,6 +177,5 @@ func metaTruthy(md ast.Metadata, key string) bool {
 
 func nextDay(t time.Time) time.Time {
 	// Calendar day in UTC (directive dates are date-only UTC).
-	y, m, day := t.Date()
-	return time.Date(y, m, day+1, 0, 0, 0, 0, time.UTC)
+	return period.DateOnly(t).AddDate(0, 0, 1)
 }
