@@ -31,7 +31,8 @@ func (l *Ledger) pnlTreeSection(m map[string]map[string]*big.Rat) []PnLLine {
 			if n == nil || n.Sign() == 0 {
 				continue
 			}
-			sum.Add(sum, l.pnlConvert(comm, n))
+			v, _ := l.marketConvert(comm, n, AsOfLatest, false)
+			sum.Add(sum, v)
 		}
 		if sum.Sign() != 0 {
 			flat[acct] = sum
@@ -76,10 +77,4 @@ func (l *Ledger) pnlTreeSection(m map[string]map[string]*big.Rat) []PnLLine {
 		})
 	}
 	return out
-}
-
-// pnlConvert maps a native signed amount to op currency (signed) at latest market price.
-func (l *Ledger) pnlConvert(comm string, n *big.Rat) *big.Rat {
-	v, _ := l.marketConvert(comm, n, AsOfLatest, false)
-	return v
 }

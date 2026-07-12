@@ -620,7 +620,7 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 			}
 			// Beancount signs: assets usually debit (+), liabilities credit (−).
 			// NW = Σ signed market values (no cost-basis fallback).
-			val, unpriced := l.convert(comm, units, asOf)
+			val, unpriced := l.marketConvert(comm, units, asOf, true)
 			lines = append(lines, NetWorthLine{Account: acct, Commodity: comm, Units: units, Value: val, UsedCost: unpriced})
 			total.Add(total, val)
 		}
@@ -634,15 +634,9 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 	return lines, total, nil
 }
 
-// convert values units of comm into operating currency at market price only
+// marketConvert values units of comm into operating currency at market price only
 // (direct, inverse, or one intermediate hop via PriceDB). No cost-basis fallback.
 // The bool is true when market price was missing (value is 0).
-// Logs a warning when unpriced (NetWorth / series table paths).
-func (l *Ledger) convert(comm string, units *big.Rat, asOf time.Time) (*big.Rat, bool) {
-	return l.marketConvert(comm, units, asOf, true)
-}
-
-// marketConvert is the single FX conversion path used by NetWorth, series, and PnL.
 // logUnpriced should be true for table/NetWorth-style reports; false for dense
 // series walks (e.g. PnLBars) to avoid log spam.
 func (l *Ledger) marketConvert(comm string, units *big.Rat, asOf time.Time, logUnpriced bool) (*big.Rat, bool) {
