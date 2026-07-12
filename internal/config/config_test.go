@@ -214,6 +214,75 @@ func TestProjectJournals(t *testing.T) {
 			t.Fatalf("expected nil journals, got %+v", journals)
 		}
 	})
+
+	t.Run("wrong-type path is an error", func(t *testing.T) {
+		// Bypass Load schema so we can exercise String() type errors directly.
+		ctx := cuecontext.New()
+		v := ctx.CompileString(`project_journals: [{path: 42, role: "prices", missing: "warn"}]`)
+		if err := v.Err(); err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		_, err := ProjectJournals(v)
+		if err == nil {
+			t.Fatal("expected error for non-string path")
+		}
+		if !strings.Contains(err.Error(), "project_journals.path") {
+			t.Errorf("error should mention project_journals.path: %v", err)
+		}
+	})
+
+	t.Run("wrong-type role is an error", func(t *testing.T) {
+		ctx := cuecontext.New()
+		v := ctx.CompileString(`project_journals: [{path: "x.beancount", role: 99, missing: "warn"}]`)
+		if err := v.Err(); err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		_, err := ProjectJournals(v)
+		if err == nil {
+			t.Fatal("expected error for non-string role")
+		}
+		if !strings.Contains(err.Error(), "project_journals.role") {
+			t.Errorf("error should mention project_journals.role: %v", err)
+		}
+	})
+
+	t.Run("wrong-type missing is an error", func(t *testing.T) {
+		ctx := cuecontext.New()
+		v := ctx.CompileString(`project_journals: [{path: "x.beancount", role: "prices", missing: true}]`)
+		if err := v.Err(); err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		_, err := ProjectJournals(v)
+		if err == nil {
+			t.Fatal("expected error for non-string missing")
+		}
+		if !strings.Contains(err.Error(), "project_journals.missing") {
+			t.Errorf("error should mention project_journals.missing: %v", err)
+		}
+	})
+
+	t.Run("absent optional fields keep skip/default behavior", func(t *testing.T) {
+		ctx := cuecontext.New()
+		// No role → skip entry; empty path → skip; path+role only → missing defaults to ignore.
+		v := ctx.CompileString(`project_journals: [
+			{path: "skip-no-role.beancount"},
+			{path: "", role: "prices"},
+			{path: "ok.beancount", role: "stream"},
+		]`)
+		if err := v.Err(); err != nil {
+			t.Fatalf("compile: %v", err)
+		}
+		journals, err := ProjectJournals(v)
+		if err != nil {
+			t.Fatalf("ProjectJournals: %v", err)
+		}
+		if len(journals) != 1 {
+			t.Fatalf("expected 1 journal, got %d: %+v", len(journals), journals)
+		}
+		if journals[0].Path != "ok.beancount" || journals[0].Role != "stream" || journals[0].Missing != "ignore" {
+			t.Errorf("journals[0]=%+v", journals[0])
+		}
+	})
 }
 
 func TestEncodeLedgersCUE_content(t *testing.T) {

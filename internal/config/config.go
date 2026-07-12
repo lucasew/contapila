@@ -82,6 +82,10 @@ func Load(userCue []byte, userFilename string, discovered []Ledger, pricePairs [
 
 // ProjectJournals reads project_journals from a unified config value (prelude defaults apply).
 // Missing or empty project_journals yields a nil slice. A non-list value is an error.
+//
+// Per entry: path is required (empty/absent → skip entry). role and missing are optional
+// (absent role → skip entry; absent/invalid missing enum → "ignore"). Present fields with
+// the wrong CUE type return a decode error rather than silent empty defaults.
 func ProjectJournals(v cue.Value) ([]ProjectJournal, error) {
 	if !v.Exists() {
 		return nil, nil
@@ -97,9 +101,18 @@ func ProjectJournals(v cue.Value) ([]ProjectJournal, error) {
 	var out []ProjectJournal
 	for iter.Next() {
 		item := iter.Value()
-		path, _ := item.LookupPath(cue.ParsePath("path")).String()
-		role, _ := item.LookupPath(cue.ParsePath("role")).String()
-		missing, _ := item.LookupPath(cue.ParsePath("missing")).String()
+		path, err := journalStringField(item, "path")
+		if err != nil {
+			return nil, err
+		}
+		role, err := journalStringField(item, "role")
+		if err != nil {
+			return nil, err
+		}
+		missing, err := journalStringField(item, "missing")
+		if err != nil {
+			return nil, err
+		}
 		path = strings.TrimSpace(path)
 		if path == "" {
 			continue
@@ -113,6 +126,20 @@ func ProjectJournals(v cue.Value) ([]ProjectJournal, error) {
 		out = append(out, ProjectJournal{Path: path, Role: role, Missing: missing})
 	}
 	return out, nil
+}
+
+// journalStringField returns the string value of a journal entry field.
+// Absent fields yield ("", nil). Present non-string values are errors.
+func journalStringField(item cue.Value, field string) (string, error) {
+	fv := item.LookupPath(cue.ParsePath(field))
+	s, err := fv.String()
+	if err != nil {
+		if !fv.Exists() {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to decode project_journals.%s: %w", field, err)
+	}
+	return s, nil
 }
 
 // encodeLedgersCUE builds a closed ledgers struct from filesystem discovery.
