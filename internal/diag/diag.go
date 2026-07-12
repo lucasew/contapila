@@ -68,6 +68,19 @@ func (l List) HasWarnings() bool {
 	return false
 }
 
+// Format joins all diagnostics via Diagnostic.String(), one per line.
+// Empty lists return "". Prefer this for multi-line CLI/stderr output.
+func (l List) Format() string {
+	if len(l) == 0 {
+		return ""
+	}
+	parts := make([]string, len(l))
+	for i, d := range l {
+		parts[i] = d.String()
+	}
+	return strings.Join(parts, "\n")
+}
+
 // FormatErrors joins error-severity diagnostics via Diagnostic.String(),
 // separated by "; " for compact single-line error text (e.g. fmt.Errorf).
 // Warnings are omitted.

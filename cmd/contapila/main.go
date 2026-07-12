@@ -89,9 +89,10 @@ func projectCwd() (string, error) {
 }
 
 func printDiags(ds diag.List) {
-	for _, d := range ds {
-		fmt.Fprintln(os.Stderr, d.String())
+	if len(ds) == 0 {
+		return
 	}
+	fmt.Fprintln(os.Stderr, ds.Format())
 }
 
 func withLedgers(args []string, fn func(*engine.Ledger) error) error {
