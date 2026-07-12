@@ -1,11 +1,20 @@
 package parser
 
 import (
+	"math/big"
 	"strings"
 	"testing"
 
 	"github.com/lucasew/contapila-go/internal/ast"
 )
+
+func rRat(s string) *big.Rat {
+	x, ok := new(big.Rat).SetString(s)
+	if !ok {
+		panic(s)
+	}
+	return x
+}
 
 func TestParseBasic(t *testing.T) {
 	src := []byte(`
@@ -80,11 +89,19 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 	if doc.Account != "Assets:Cash" || doc.Path != "personal/docs/by-account/Assets/Cash/20200105_x.txt" {
 		t.Fatalf("document=%+v", doc)
 	}
-	// open + txn metadata stored; query/custom still warn; document parses
+	// open + txn metadata stored; query still warn; custom parses; document parses
 	if txn.Metadata["role"] != "meal" {
 		t.Fatalf("txn metadata=%v", txn.Metadata)
 	}
-	var hasQuery, hasCustom bool
+	var hasQuery bool
+	var custom ast.Custom
+	var hasCustomDir bool
+	for _, d := range dirs {
+		if v, ok := d.(ast.Custom); ok {
+			custom = v
+			hasCustomDir = true
+		}
+	}
 	for _, d := range diags {
 		if strings.Contains(d.Message, "metadata") {
 			t.Fatalf("metadata should be stored, not warned: %v", d.Message)
@@ -92,15 +109,42 @@ func TestParseOpenCurrencyAndMetaWarn(t *testing.T) {
 		if strings.Contains(d.Message, "query") {
 			hasQuery = true
 		}
-		if strings.Contains(d.Message, "custom") {
-			hasCustom = true
-		}
 		if strings.Contains(d.Message, "document") {
 			t.Fatalf("document should not warn-skip: %v", d.Message)
 		}
 	}
-	if !hasQuery || !hasCustom {
-		t.Fatalf("expected query/custom warns, diags=%v", diags)
+	if !hasQuery {
+		t.Fatalf("expected query warn, diags=%v", diags)
+	}
+	if !hasCustomDir || custom.Type != "fava-option" {
+		t.Fatalf("expected custom directive, got has=%v custom=%+v", hasCustomDir, custom)
+	}
+}
+
+func TestParseCustomIndex(t *testing.T) {
+	src := []byte(`2025-04-03 custom "index" "CDI" 0.000451
+`)
+	dirs, diags, err := Parse("t.beancount", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("diags=%v", diags)
+	}
+	var c ast.Custom
+	for _, d := range dirs {
+		if v, ok := d.(ast.Custom); ok {
+			c = v
+		}
+	}
+	if c.Type != "index" || len(c.Values) < 2 {
+		t.Fatalf("custom=%+v", c)
+	}
+	if c.Values[0].Text != "CDI" {
+		t.Fatalf("indicator=%q", c.Values[0].Text)
+	}
+	if c.Values[1].Number == nil || c.Values[1].Number.Cmp(rRat("0.000451")) != 0 {
+		t.Fatalf("rate=%v", c.Values[1].Number)
 	}
 }
 

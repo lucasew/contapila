@@ -129,6 +129,21 @@ type Event struct {
 	Metadata Metadata // key_value under the event directive (journal stream only)
 }
 
+// Custom is a Beancount custom directive (typed bag of values).
+// Index series use Type "index": values [indicator string, daily return number].
+type Custom struct {
+	Meta
+	Type   string        // first string after `custom` (e.g. "index")
+	Values []CustomValue // remaining values in source order
+}
+
+// CustomValue is one custom directive argument (string name or number).
+type CustomValue struct {
+	// Exactly one of Text or Number is set.
+	Text   string
+	Number *big.Rat
+}
+
 // Document is a Beancount document directive, or one synthesized from <ledger>/docs/by-account.
 type Document struct {
 	Meta

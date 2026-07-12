@@ -96,6 +96,38 @@ func (l *Ledger) walkBalanceSeries(
 			}
 		}
 	}
+	// Autointerest projection samples: index days + month-ends through today (or close).
+	if len(l.AutoInterest) > 0 {
+		today := dateOnly(time.Now())
+		for _, a := range l.AutoInterest {
+			end := today
+			if !a.CloseDate.IsZero() && a.CloseDate.Before(end) {
+				end = dateOnly(a.CloseDate).AddDate(0, 0, -1)
+			}
+			if end.Before(dateOnly(a.OpenDate)) {
+				continue
+			}
+			// Month-ends.
+			for d := monthEndOnOrAfter(dateOnly(a.OpenDate)); !d.After(end); d = monthEndOnOrAfter(d.AddDate(0, 0, 1)) {
+				addDay(d)
+				priceDay[d] = true // treat as revaluation sample even if book flat
+			}
+			// Index series days for this indicator.
+			if l.IndexDB != nil {
+				if m := l.IndexDB[a.Rate.Indicator]; m != nil {
+					for dk := range m {
+						if dt, err := time.ParseInLocation("2006-01-02", dk, time.UTC); err == nil {
+							dt = dateOnly(dt)
+							if !dt.Before(dateOnly(a.OpenDate)) && !dt.After(end) {
+								addDay(dt)
+								priceDay[dt] = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 	sort.SliceStable(order, func(i, j int) bool {
 		// undated directives (options, …) book first
 		if order[i].IsZero() != order[j].IsZero() {
@@ -177,16 +209,33 @@ func hasTouchBalance(b *booking.Engine, touch func(string) bool) bool {
 
 func (l *Ledger) netWorthFromBook(b *booking.Engine, asOf time.Time) *big.Rat {
 	total := big.NewRat(0, 1)
+	seen := map[string]bool{}
 	for acct, m := range b.AllBalances() {
 		if !booking.IsAsset(acct) && !booking.IsLiability(acct) {
 			continue
 		}
-		for comm, units := range m {
+		seen[acct] = true
+		unitsMap := l.unitsForDisplay(b, acct, m, asOf)
+		for comm, units := range unitsMap {
 			if units.Sign() == 0 {
 				continue
 			}
 			// Natural Beancount signs (liabilities are typically negative).
 			val, _ := l.convert(b, acct, comm, units, asOf)
+			total.Add(total, val)
+		}
+	}
+	// Autointerest assets with only projected balance (no book units yet).
+	for _, a := range l.AutoInterest {
+		if seen[a.Account] || !booking.IsAsset(a.Account) {
+			continue
+		}
+		unitsMap := l.unitsForDisplay(b, a.Account, nil, asOf)
+		for comm, units := range unitsMap {
+			if units.Sign() == 0 {
+				continue
+			}
+			val, _ := l.convert(b, a.Account, comm, units, asOf)
 			total.Add(total, val)
 		}
 	}
@@ -199,7 +248,8 @@ func (l *Ledger) accountValueFromBook(b *booking.Engine, account string, asOf ti
 		if !AccountMatches(acct, account) {
 			continue
 		}
-		for comm, units := range m {
+		unitsMap := l.unitsForDisplay(b, acct, m, asOf)
+		for comm, units := range unitsMap {
 			if units.Sign() == 0 {
 				continue
 			}
@@ -207,7 +257,54 @@ func (l *Ledger) accountValueFromBook(b *booking.Engine, account string, asOf ti
 			total.Add(total, val)
 		}
 	}
+	// Projected-only autointerest under this prefix.
+	for _, a := range l.AutoInterest {
+		if !AccountMatches(a.Account, account) {
+			continue
+		}
+		if _, ok := b.AllBalances()[a.Account]; ok {
+			continue
+		}
+		unitsMap := l.unitsForDisplay(b, a.Account, nil, asOf)
+		for comm, units := range unitsMap {
+			if units.Sign() == 0 {
+				continue
+			}
+			val, _ := l.convert(b, a.Account, comm, units, asOf)
+			total.Add(total, val)
+		}
+	}
 	return total
+}
+
+// unitsForDisplay returns book units, or autointerest projection when configured.
+func (l *Ledger) unitsForDisplay(b *booking.Engine, acct string, book map[string]*big.Rat, asOf time.Time) map[string]*big.Rat {
+	if cfg := l.autoInterestOf(acct); cfg != nil {
+		return booking.ProjectedUnits(acct, cfg.Rate, cfg.OpenDate, cfg.CloseDate, l.Dirs, l.IndexDB, asOf)
+	}
+	if book != nil {
+		return book
+	}
+	return map[string]*big.Rat{}
+}
+
+func (l *Ledger) autoInterestOf(acct string) *booking.AutoInterestAccount {
+	for i := range l.AutoInterest {
+		if l.AutoInterest[i].Account == acct {
+			return &l.AutoInterest[i]
+		}
+	}
+	return nil
+}
+
+func monthEndOnOrAfter(t time.Time) time.Time {
+	t = dateOnly(t)
+	// Last day of t's month.
+	end := time.Date(t.Year(), t.Month()+1, 0, 0, 0, 0, 0, time.UTC)
+	if !end.Before(t) {
+		return end
+	}
+	return time.Date(t.Year(), t.Month()+2, 0, 0, 0, 0, 0, time.UTC)
 }
 
 // PnLBars returns diverging bars for bins from the time filter.

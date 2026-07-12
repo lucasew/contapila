@@ -328,6 +328,19 @@ Directives are applied in order of:
 
 So an `open` and a transaction on the same day book correctly even if includes put the txn earlier in the raw stream. A transaction **before** the open **date** is still an error.
 
+### 7.3b Autointerest (indexed / fixed assets)
+
+Built-in expander (not a plugin). On `open` with **`interest_rate`** (or alias **`interest-rate`**):
+
+- Parse expression (spaces allowed): `115% CDI`, `IPCA + 10% aa`, `10% aa`, …  
+  Daily growth uses `α × index_return + plus_daily` where `plus_daily = (1+r)^(1/n)−1` (`aa`→365, `am`→30).
+- Counterpart income account: `Assets:…` → `Income:Passivo:…` (string replace); synth `open` if missing.
+- **Materialize only on `balance`:** insert **`pad` day-before** from that income account to the asset (skip if user already wrote a pad). Bank balance is ground truth.
+- **Projection** (graphs / estimates): apply the curve using `custom "index" "CDI"|"IPCA" <daily_return>` in the stream; pure fixed also samples month-ends; horizon through `time.Now()`; **stops on `close`**.
+- Index series are stream-local (`custom` anywhere includes resolve them). No `fixes.beancount` write-back.
+
+CUE `#Account` documents `interest_rate` and unifies hyphen alias onto snake_case when opens are injected.
+
 ### 7.4 Residual leg (no magic)
 
 - At most **one** posting with **missing amount** absorbs the remainder (typically gains).
@@ -399,10 +412,12 @@ Inventory cost basis (average cost, model A) remains for booking/gains; it is **
 | `note` | yes | Go (store/display) |
 | `event` | yes | Go (store/display) |
 | `document` | yes (store/display; also synthesized from `<ledger>/docs/by-account`) | Go |
+| `custom "index"` | yes — daily index return series for autointerest projection | Go |
+| `custom` (other types) | yes (stored; unused types ignored by booking) | Go |
 | `query` | no | — |
 | `pushtag` / `poptag` / `pushmeta` / `popmeta` | no | — |
 | `plugin` | no | — |
-| `custom` / unknown | warn + skip | — |
+| unknown | warn + skip | — |
 
 ---
 
@@ -422,6 +437,7 @@ Use **`log/slog`** for warnings. `check` fails only on **errors**.
 | Over-sell (no inventory / not enough units) | **warn** (skip inventing inventory) |
 | Bad average cost on reduce | **error** |
 | Amount with number but no commodity | **error** (not residual) |
+| Invalid `interest_rate` / `interest-rate` expression on open | **error** |
 | Unknown `option` | **warn** |
 | `include` literal path missing | **error** |
 | `include` glob, zero matches | **warn** |

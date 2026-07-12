@@ -51,6 +51,9 @@ type Ledger struct {
 	Accounts map[string]AccountInfo
 	// Commodities keyed by currency (from commodity directives in this ledger stream).
 	Commodities map[string]CommodityInfo
+	// AutoInterest accounts (interest_rate on open) and index series for projection.
+	AutoInterest []booking.AutoInterestAccount
+	IndexDB      booking.IndexDB
 }
 
 // OpenProject wraps project.OpenProject and loads shared prices.
@@ -89,16 +92,28 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 	if err != nil {
 		return nil, err
 	}
-	// filter stream: drop includes; collect documents, opens, commodities
+	// filter stream: drop includes
 	var stream []ast.Directive
-	var ledgerDocs []ast.Document
-	accounts := map[string]AccountInfo{}
-	commodities := map[string]CommodityInfo{}
 	for _, d := range dirs {
 		if _, ok := d.(ast.Include); ok {
 			continue
 		}
 		stream = append(stream, d)
+	}
+	// {cost, date} on postings → synthetic price directives (+ PriceDB points).
+	stream = booking.ExpandDatedCosts(stream, pdb)
+
+	// interest_rate opens → income counterpart opens + pad day-before balance.
+	diags.Merge(booking.ValidateAutoInterestRates(stream))
+	var adiags diag.List
+	stream, adiags = booking.ExpandAutoInterest(stream)
+	diags.Merge(adiags)
+
+	// Collect documents, opens, commodities after expand (includes synth income opens).
+	var ledgerDocs []ast.Document
+	accounts := map[string]AccountInfo{}
+	commodities := map[string]CommodityInfo{}
+	for _, d := range stream {
 		switch v := d.(type) {
 		case ast.Document:
 			ledgerDocs = append(ledgerDocs, v)
@@ -119,8 +134,6 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 			}
 		}
 	}
-	// {cost, date} on postings → synthetic price directives (+ PriceDB points).
-	stream = booking.ExpandDatedCosts(stream, pdb)
 
 	// CUE ⊔ journal commodity meta → per-commodity booking tolerances.
 	commTol := commodityTolerances(p, commodities)
@@ -130,6 +143,9 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 		e.CommTol = commTol
 	})
 	diags.Merge(cdiags)
+
+	autoInterest := booking.CollectAutoInterest(stream)
+	indexDB := booking.LoadIndexDB(stream)
 
 	// Expand <ledger>/docs/by-account into synthetic document directives.
 	synth, err := docs.ScanByAccount(p.Root, name)
@@ -142,16 +158,18 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 
 	op := inferOpCurrency(stream, p)
 	return &Ledger{
-		Name:        name,
-		Project:     p,
-		Dirs:        stream,
-		Book:        b,
-		Diags:       diags,
-		OpCurrency:  op,
-		Prices:      pdb,
-		Documents:   allDocs,
-		Accounts:    accounts,
-		Commodities: commodities,
+		Name:         name,
+		Project:      p,
+		Dirs:         stream,
+		Book:         b,
+		Diags:        diags,
+		OpCurrency:   op,
+		Prices:       pdb,
+		Documents:    allDocs,
+		Accounts:     accounts,
+		Commodities:  commodities,
+		AutoInterest: autoInterest,
+		IndexDB:      indexDB,
 	}, nil
 }
 

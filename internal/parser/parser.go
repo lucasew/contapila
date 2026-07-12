@@ -187,9 +187,11 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 			Account: textField(f, n, "account"),
 			Path:    path,
 		}, true
-	case "query", "custom":
+	case "query":
 		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
+	case "custom":
+		return convertCustom(f, n, diags)
 	case "comment":
 		return nil, false
 	case "pushtag", "poptag", "pushmeta", "popmeta":
@@ -199,6 +201,73 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("unsupported directive %q skipped", n.Type()))
 		return nil, false
 	}
+}
+
+// convertCustom parses: DATE custom "type" value…
+// Values may be strings, numbers, or bare names (grammar may tag names as account).
+func convertCustom(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, bool) {
+	warnIgnoredKeyValues(f, n, diags)
+	var typ string
+	var vals []ast.CustomValue
+	// Named children: date, string (type), custom_value…
+	for i := uint32(0); i < n.NamedChildCount(); i++ {
+		c := n.NamedChild(i)
+		switch c.Type() {
+		case "date":
+			continue
+		case "string":
+			s := unquote(nodeText(f, c))
+			if typ == "" {
+				typ = s
+				continue
+			}
+			vals = append(vals, ast.CustomValue{Text: s})
+		case "custom_value":
+			vals = append(vals, parseCustomValue(f, c))
+		case "number":
+			if num := evalNumberExpr(f, c); num != nil {
+				vals = append(vals, ast.CustomValue{Number: num})
+			}
+		case "account", "currency":
+			vals = append(vals, ast.CustomValue{Text: strings.TrimSpace(nodeText(f, c))})
+		}
+	}
+	if typ == "" {
+		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), `custom directive missing type string; skipped`)
+		return nil, false
+	}
+	return ast.Custom{Meta: meta(f, n), Type: typ, Values: vals}, true
+}
+
+func parseCustomValue(f *source.File, n *grammar.Node) ast.CustomValue {
+	// custom_value wraps string | number | account | …
+	for i := uint32(0); i < n.NamedChildCount(); i++ {
+		c := n.NamedChild(i)
+		switch c.Type() {
+		case "string":
+			return ast.CustomValue{Text: unquote(nodeText(f, c))}
+		case "number", "binary_number_expr", "unary_number_expr":
+			if num := evalNumberExpr(f, c); num != nil {
+				return ast.CustomValue{Number: num}
+			}
+		case "account", "currency":
+			return ast.CustomValue{Text: strings.TrimSpace(nodeText(f, c))}
+		case "amount":
+			if amt, ok := parseAmountNode(f, c); ok {
+				// Prefer number; commodity as text if present without separate slots.
+				if amt.Commodity != "" {
+					return ast.CustomValue{Text: amt.Number.FloatString(12) + " " + amt.Commodity}
+				}
+				return ast.CustomValue{Number: amt.Number}
+			}
+		}
+	}
+	// Fallback: whole node text
+	t := strings.TrimSpace(nodeText(f, n))
+	if num, ok := new(big.Rat).SetString(t); ok {
+		return ast.CustomValue{Number: num}
+	}
+	return ast.CustomValue{Text: unquote(t)}
 }
 
 // parseKeyValues collects key_value children into a metadata map (string values).

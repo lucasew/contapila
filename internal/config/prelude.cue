@@ -24,6 +24,13 @@
 	role?:        string
 	"asset-class"?: string
 	"asset_class"?: string
+	// Autointerest: canonical snake_case. Expression e.g. "115% CDI", "IPCA + 10% aa".
+	interest_rate?: string
+	// Journal / Beancount hyphen alias — unified onto interest_rate when set.
+	"interest-rate"?: string
+	if "interest-rate" != _|_ {
+		interest_rate: "interest-rate"
+	}
 	...
 }
 

@@ -128,8 +128,8 @@ func (e *Engine) Book(dirs []ast.Directive) {
 			e.Notes = append(e.Notes, v)
 		case ast.Event:
 			e.Events = append(e.Events, v)
-		case ast.Option, ast.Commodity, ast.Price, ast.Include, ast.Document, ast.Unknown:
-			// handled elsewhere
+		case ast.Option, ast.Commodity, ast.Price, ast.Include, ast.Document, ast.Unknown, ast.Custom:
+			// handled elsewhere (Custom index series used by autointerest projection)
 		}
 	}
 }
