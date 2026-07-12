@@ -1,6 +1,6 @@
 module github.com/lucasew/contapila-go
 
-go 1.25.0
+go 1.25.12
 
 require (
 	cuelang.org/go v0.17.0
