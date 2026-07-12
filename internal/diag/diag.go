@@ -56,6 +56,15 @@ func (l List) HasErrors() bool {
 	return false
 }
 
+func (l List) HasWarnings() bool {
+	for _, d := range l {
+		if d.Severity == Warn {
+			return true
+		}
+	}
+	return false
+}
+
 // Warn appends a warning. line is 1-based; use 0 if unknown.
 func (l *List) Warn(file string, line int, msg string) {
 	*l = append(*l, Diagnostic{Severity: Warn, Message: msg, File: file, Line: line})
