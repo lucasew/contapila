@@ -81,17 +81,18 @@ func Load(userCue []byte, userFilename string, discovered []Ledger, pricePairs [
 }
 
 // ProjectJournals reads project_journals from a unified config value (prelude defaults apply).
-func ProjectJournals(v cue.Value) []ProjectJournal {
+// Missing or empty project_journals yields a nil slice. A non-list value is an error.
+func ProjectJournals(v cue.Value) ([]ProjectJournal, error) {
 	if !v.Exists() {
-		return nil
+		return nil, nil
 	}
 	list := v.LookupPath(cue.ParsePath("project_journals"))
 	if !list.Exists() {
-		return nil
+		return nil, nil
 	}
 	iter, err := list.List()
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to list project_journals: %w", err)
 	}
 	var out []ProjectJournal
 	for iter.Next() {
@@ -111,7 +112,7 @@ func ProjectJournals(v cue.Value) []ProjectJournal {
 		}
 		out = append(out, ProjectJournal{Path: path, Role: role, Missing: missing})
 	}
-	return out
+	return out, nil
 }
 
 // encodeLedgersCUE builds a closed ledgers struct from filesystem discovery.
