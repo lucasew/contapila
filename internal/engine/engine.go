@@ -15,6 +15,7 @@ import (
 	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/docs"
 	"github.com/lucasew/contapila-go/internal/loader"
+	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/prices"
 	"github.com/lucasew/contapila-go/pkg/project"
 )
@@ -664,9 +665,8 @@ func LedgerNames(p *project.Project) []string {
 	return names
 }
 
+// ParseDate parses a YYYY-MM-DD calendar date in UTC.
+// Empty s yields the zero time and a nil error. Kept as a thin wrapper for cmd/web.
 func ParseDate(s string) (time.Time, error) {
-	if s == "" {
-		return time.Time{}, nil
-	}
-	return time.ParseInLocation("2006-01-02", s, time.UTC)
+	return period.ParseDate(s)
 }

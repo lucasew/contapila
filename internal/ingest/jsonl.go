@@ -7,9 +7,9 @@ import (
 	"io"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/lucasew/contapila-go/internal/ast"
+	"github.com/lucasew/contapila-go/internal/period"
 )
 
 // DecodeJSONL reads JSONL (one directive object per line) until EOF.
@@ -63,7 +63,7 @@ func decodeDirectiveLine(raw []byte) (ast.Directive, string, error) {
 	if base.Type == "" {
 		return nil, "", fmt.Errorf("missing type")
 	}
-	date, err := parseDate(base.Date)
+	date, err := period.ParseDate(base.Date)
 	if err != nil {
 		return nil, "", fmt.Errorf("date: %w", err)
 	}
@@ -315,7 +315,7 @@ func (jp jsonPosting) toPosting() (ast.Posting, error) {
 			cs.Number = n
 		}
 		if jp.Cost.Date != "" {
-			dt, err := parseDate(jp.Cost.Date)
+			dt, err := period.ParseDate(jp.Cost.Date)
 			if err != nil {
 				return p, err
 			}
@@ -331,13 +331,6 @@ func (jp jsonPosting) toPosting() (ast.Posting, error) {
 		p.Price = &ast.PriceSpec{Number: n, Commodity: jp.Price.Commodity, Total: jp.Price.Total}
 	}
 	return p, nil
-}
-
-func parseDate(s string) (time.Time, error) {
-	if s == "" {
-		return time.Time{}, fmt.Errorf("empty date")
-	}
-	return time.ParseInLocation("2006-01-02", s, time.UTC)
 }
 
 func parseRat(s string) (*big.Rat, error) {

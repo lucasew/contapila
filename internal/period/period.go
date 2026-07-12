@@ -214,6 +214,15 @@ func DateOnly(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
+// ParseDate parses a YYYY-MM-DD calendar date in UTC.
+// Empty s yields the zero time and a nil error (open/unbounded as-of style).
+func ParseDate(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	return time.ParseInLocation("2006-01-02", s, time.UTC)
+}
+
 func sameDay(a, b time.Time) bool {
 	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
 }
