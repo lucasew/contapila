@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -423,8 +424,11 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("ledger")
-	account := r.PathValue("account")
-	account, _ = url.PathUnescape(account)
+	account, err := url.PathUnescape(r.PathValue("account"))
+	if err != nil {
+		http.Error(w, "invalid account path encoding", http.StatusBadRequest)
+		return
+	}
 	// Wildcard may use slashes if any; join
 	if account == "" {
 		http.NotFound(w, r)
@@ -814,6 +818,7 @@ func documentTreeRows(docs []ast.Document) []docRow {
 }
 
 // handleDocFile serves project-relative paths under <ledger>/docs/ only.
+// OpenRoot scopes opens to the project root so path traversal cannot escape.
 func (s *Server) handleDocFile(w http.ResponseWriter, r *http.Request) {
 	rel := filepath.ToSlash(r.PathValue("path"))
 	rel = strings.TrimPrefix(path.Clean("/"+rel), "/")
@@ -821,27 +826,33 @@ func (s *Server) handleDocFile(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	full := filepath.Join(s.Project.Root, filepath.FromSlash(rel))
-	// Contain under project root
-	root := s.Project.Root
-	absFull, err1 := filepath.Abs(full)
-	absRoot, err2 := filepath.Abs(root)
-	if err1 != nil || err2 != nil {
+	root, err := os.OpenRoot(s.Project.Root)
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	sep := string(filepath.Separator)
-	if absFull != absRoot && !strings.HasPrefix(absFull, absRoot+sep) {
+	defer root.Close()
+	f, err := root.Open(filepath.FromSlash(rel))
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	http.ServeFile(w, r, full)
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil || st.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeContent(w, r, st.Name(), st.ModTime(), f)
 }
 
 func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("ledger")
-	commodity := r.PathValue("commodity")
-	commodity, _ = url.PathUnescape(commodity)
+	commodity, err := url.PathUnescape(r.PathValue("commodity"))
+	if err != nil {
+		http.Error(w, "invalid commodity path encoding", http.StatusBadRequest)
+		return
+	}
 	if commodity == "" {
 		http.NotFound(w, r)
 		return
