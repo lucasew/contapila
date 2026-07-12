@@ -401,3 +401,71 @@ func TestParsePayeeAndNarration(t *testing.T) {
 		t.Fatalf("narration-only: payee=%q narration=%q", narrOnly.Payee, narrOnly.Narration)
 	}
 }
+
+// Unparseable amount expressions (e.g. 1/0) still form price/balance nodes in the CST;
+// convert must emit an error and skip rather than stream a zero amount.
+func TestParsePriceInvalidAmountSkipped(t *testing.T) {
+	src := []byte(`
+2024-01-15 price B3_PETR4 1/0 BRL
+2024-01-16 price USD 5.00 BRL
+`)
+	dirs, diags, err := Parse("t.beancount", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !diags.HasErrors() {
+		t.Fatal("expected error for invalid price amount")
+	}
+	var found bool
+	for _, d := range diags {
+		if d.IsError() && strings.Contains(d.Message, "price") && strings.Contains(d.Message, "amount") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected price amount error, got %v", diags)
+	}
+	var prices []ast.Price
+	for _, d := range dirs {
+		if p, ok := d.(ast.Price); ok {
+			prices = append(prices, p)
+		}
+	}
+	if len(prices) != 1 || prices[0].Currency != "USD" {
+		t.Fatalf("want only valid USD price, got %+v", prices)
+	}
+}
+
+func TestParseBalanceInvalidAmountSkipped(t *testing.T) {
+	src := []byte(`
+2020-01-01 balance Assets:Cash 1/0 BRL
+2020-01-02 balance Assets:Cash 100.00 BRL
+`)
+	dirs, diags, err := Parse("t.beancount", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !diags.HasErrors() {
+		t.Fatal("expected error for invalid balance amount")
+	}
+	var found bool
+	for _, d := range diags {
+		if d.IsError() && strings.Contains(d.Message, "balance") && strings.Contains(d.Message, "amount") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected balance amount error, got %v", diags)
+	}
+	var bals []ast.Balance
+	for _, d := range dirs {
+		if b, ok := d.(ast.Balance); ok {
+			bals = append(bals, b)
+		}
+	}
+	if len(bals) != 1 || bals[0].Amount.Number == nil || bals[0].Amount.Number.Cmp(rRat("100")) != 0 {
+		t.Fatalf("want only valid 100 BRL balance, got %+v", bals)
+	}
+}
