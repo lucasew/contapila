@@ -70,16 +70,8 @@ func binFromSpan(r Range) BinKind {
 		// open-ended: prefer month unless clearly multi-year when both ends known later
 		return BinMonth
 	}
-	// ≥ 2 calendar years of span → year bins
-	years := r.End.Year() - r.Start.Year()
-	if r.End.YearDay() >= r.Start.YearDay() {
-		// same or later day-of-year counts full years between
-	}
-	// approximate: if end is on/after start+2y
-	if !r.End.Before(r.Start.AddDate(2, 0, 0)) {
-		return BinYear
-	}
-	if years >= 2 {
+	// ≥ 2 calendar years between start and end → year bins
+	if r.End.Year()-r.Start.Year() >= 2 {
 		return BinYear
 	}
 	// single day
@@ -90,7 +82,6 @@ func binFromSpan(r Range) BinKind {
 	if r.End.Before(r.Start.AddDate(0, 2, 0)) {
 		return BinDay
 	}
-	_ = years
 	return BinMonth
 }
 
