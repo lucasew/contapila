@@ -158,7 +158,17 @@
         return labels[i];
       });
     };
-    opts.axes[0].size = 56;
+    // Dense bins: rotate X labels 90° anticlockwise so they don't overlap.
+    var chartW = measureWidth(el);
+    var dense = n >= 10 || (n > 0 && chartW / n < 56);
+    if (dense) {
+      opts.axes[0].rotate = Math.PI / 2; // 90° CCW
+      opts.axes[0].size = 88;
+      opts.axes[0].gap = 8;
+      opts.padding = [8, 12, 4, 12];
+    } else {
+      opts.axes[0].size = 56;
+    }
     opts.series = [
       {
         label: "Period",
