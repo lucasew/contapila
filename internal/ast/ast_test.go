@@ -340,4 +340,3 @@ func TestAmountClone(t *testing.T) {
 		})
 	}
 }
-
