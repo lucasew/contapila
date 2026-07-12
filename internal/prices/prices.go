@@ -30,8 +30,6 @@ func NewDB() *DB {
 
 func PairKey(base, quote string) string { return base + "|" + quote }
 
-func key(base, quote string) string { return PairKey(base, quote) }
-
 // LoadFile loads prices.beancount (includes expanded).
 func LoadFile(path string) (*DB, diag.List, error) {
 	db := NewDB()
@@ -61,7 +59,7 @@ func (db *DB) Add(base, quote string, date time.Time, rate *big.Rat) {
 }
 
 func (db *DB) add(base, quote string, date time.Time, rate *big.Rat, md ast.Metadata, file string) {
-	k := key(base, quote)
+	k := PairKey(base, quote)
 	// Last write wins for the same (base, quote, date).
 	for i := range db.series[k] {
 		if db.series[k][i].Date.Equal(date) {
@@ -131,7 +129,7 @@ func (db *DB) Rate(base, quote string, asOf time.Time) (*big.Rat, time.Time, boo
 
 // direct returns quote per 1 base from an explicit price series only.
 func (db *DB) direct(base, quote string, asOf time.Time) (*big.Rat, time.Time, bool) {
-	pts := db.series[key(base, quote)]
+	pts := db.series[PairKey(base, quote)]
 	var best *Point
 	for i := range pts {
 		if !pts[i].Date.After(asOf) {
