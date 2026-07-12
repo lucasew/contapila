@@ -250,6 +250,65 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "index.html", data)
 }
 
+// pageTimeQuery is shared time-filter + as-of resolution for ledger/account/commodity pages.
+type pageTimeQuery struct {
+	Time        string
+	Period      period.Range
+	PeriodErr   error
+	PeriodLabel string
+	AsOf        time.Time
+	AsOfStr     string
+}
+
+// parsePageTimeQuery reads time (and optionally from/to, as-of) from q.
+// fromTo: compose time from from/to when time is empty (ledger only).
+// explicitAsOf: honor as-of with validation (ledger only); account/commodity leave false.
+// Invalid explicit as-of returns a non-nil error; period parse errors stay in PeriodErr.
+func parsePageTimeQuery(q url.Values, now time.Time, fromTo, explicitAsOf bool) (pageTimeQuery, error) {
+	timeStr := q.Get("time")
+	if timeStr == "" && fromTo {
+		fromStr, toStr := q.Get("from"), q.Get("to")
+		switch {
+		case fromStr != "" && toStr != "":
+			timeStr = fromStr + " - " + toStr
+		case fromStr != "":
+			timeStr = fromStr
+		case toStr != "":
+			timeStr = toStr
+		}
+	}
+
+	pr, perr := period.Parse(timeStr, now)
+	out := pageTimeQuery{
+		Time:        timeStr,
+		Period:      pr,
+		PeriodErr:   perr,
+		PeriodLabel: period.DisplayLabel(timeStr, now),
+	}
+
+	// as-of: explicit flag wins (when enabled); else end of time filter; else far future
+	if explicitAsOf {
+		asOfStr := q.Get("as-of")
+		if asOfStr != "" {
+			parsed, err := engine.ParseDate(asOfStr)
+			if err != nil {
+				return out, fmt.Errorf("invalid as-of date (want YYYY-MM-DD): %s", asOfStr)
+			}
+			out.AsOf = parsed
+			out.AsOfStr = asOfStr
+			return out, nil
+		}
+	}
+	if !pr.End.IsZero() {
+		out.AsOf = pr.End
+		out.AsOfStr = pr.End.Format("2006-01-02")
+	} else {
+		out.AsOf = engine.AsOfLatest
+		out.AsOfStr = ""
+	}
+	return out, nil
+}
+
 func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("ledger")
 	page := r.PathValue("page")
@@ -260,44 +319,12 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
-	now := time.Now()
-	timeStr := q.Get("time")
-	if timeStr == "" {
-		fromStr := q.Get("from")
-		toStr := q.Get("to")
-		if fromStr != "" || toStr != "" {
-			if fromStr != "" && toStr != "" {
-				timeStr = fromStr + " - " + toStr
-			} else if fromStr != "" {
-				timeStr = fromStr
-			} else {
-				timeStr = toStr
-			}
-		}
+	tq, err := parsePageTimeQuery(q, time.Now(), true, true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
-
-	pr, perr := period.Parse(timeStr, now)
-	periodLabel := period.DisplayLabel(timeStr, now)
-
-	// as-of: explicit flag wins; else end of time filter; else far future
-	asOfStr := q.Get("as-of")
-	var asOf time.Time
-	if asOfStr != "" {
-		parsed, err := engine.ParseDate(asOfStr)
-		if err != nil {
-			http.Error(w, "invalid as-of date (want YYYY-MM-DD): "+asOfStr, http.StatusBadRequest)
-			return
-		}
-		asOf = parsed
-	}
-	if asOf.IsZero() && !pr.End.IsZero() {
-		asOf = pr.End
-		asOfStr = asOf.Format("2006-01-02")
-	}
-	if asOf.IsZero() {
-		asOf = engine.AsOfLatest
-		asOfStr = ""
-	}
+	timeStr, pr, perr, asOf, asOfStr := tq.Time, tq.Period, tq.PeriodErr, tq.AsOf, tq.AsOfStr
 
 	data := pageData{
 		Title:       name + " · " + page,
@@ -312,7 +339,7 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		OK:          !l.Diags.HasErrors(),
 		AsOf:        asOfStr,
 		Time:        timeStr,
-		PeriodLabel: periodLabel,
+		PeriodLabel: tq.PeriodLabel,
 	}
 	if perr != nil {
 		data.Error = perr.Error()
@@ -408,19 +435,13 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	q := r.URL.Query()
-	now := time.Now()
-	timeStr := q.Get("time")
-	pr, perr := period.Parse(timeStr, now)
-	periodLabel := period.DisplayLabel(timeStr, now)
-
-	asOf := pr.End
-	asOfStr := ""
-	if asOf.IsZero() {
-		asOf = engine.AsOfLatest
-	} else {
-		asOfStr = asOf.Format("2006-01-02")
+	// Account page honors only ?time= (not from/to or as-of).
+	tq, err := parsePageTimeQuery(r.URL.Query(), time.Now(), false, false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
+	timeStr, pr, perr, asOf := tq.Time, tq.Period, tq.PeriodErr, tq.AsOf
 
 	data := pageData{
 		Title:       account,
@@ -430,8 +451,8 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 		ProjectRoot: s.Project.Root,
 		OpCurrency:  l.OpCurrency,
 		Time:        timeStr,
-		PeriodLabel: periodLabel,
-		AsOf:        asOfStr,
+		PeriodLabel: tq.PeriodLabel,
+		AsOf:        tq.AsOfStr,
 		AccountName: account,
 	}
 	if perr != nil {
@@ -830,19 +851,13 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	q := r.URL.Query()
-	now := time.Now()
-	timeStr := q.Get("time")
-	pr, perr := period.Parse(timeStr, now)
-	periodLabel := period.DisplayLabel(timeStr, now)
-
-	asOf := pr.End
-	asOfStr := ""
-	if asOf.IsZero() {
-		asOf = engine.AsOfLatest
-	} else {
-		asOfStr = asOf.Format("2006-01-02")
+	// Commodity page honors only ?time= (not from/to or as-of).
+	tq, err := parsePageTimeQuery(r.URL.Query(), time.Now(), false, false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
+	timeStr, pr, perr, asOf := tq.Time, tq.Period, tq.PeriodErr, tq.AsOf
 
 	data := pageData{
 		Title:         commodity,
@@ -852,8 +867,8 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 		ProjectRoot:   s.Project.Root,
 		OpCurrency:    l.OpCurrency,
 		Time:          timeStr,
-		PeriodLabel:   periodLabel,
-		AsOf:          asOfStr,
+		PeriodLabel:   tq.PeriodLabel,
+		AsOf:          tq.AsOfStr,
 		CommodityName: commodity,
 	}
 	if perr != nil {
