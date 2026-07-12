@@ -47,6 +47,62 @@ func TestResidualCash(t *testing.T) {
 	}
 }
 
+func TestExpandPadsDatesSyntheticTxnAtPad(t *testing.T) {
+	dirs := []ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Expenses:Food"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Equity:Opening"},
+		ast.Pad{Meta: ast.Meta{Date: d("2020-01-01"), File: "t", Line: 4}, Account: "Assets:Cash", FromAccount: "Equity:Opening"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-10"), File: "t", Line: 5},
+			Flag: "*", Narration: "Lunch",
+			Postings: []ast.Posting{
+				{Account: "Assets:Cash", Units: amt("-30", "BRL")},
+				{Account: "Expenses:Food", Units: amt("30", "BRL")},
+			},
+		},
+		ast.Balance{Meta: ast.Meta{Date: d("2020-02-01"), File: "t", Line: 10}, Account: "Assets:Cash", Amount: ast.Amount{Number: r("100"), Commodity: "BRL"}},
+	}
+
+	expanded, diags := ExpandPads(dirs, nil)
+	if diags.HasErrors() {
+		t.Fatalf("errors: %v", diags)
+	}
+	var pads []ast.Transaction
+	for _, dir := range expanded {
+		if txn, ok := dir.(ast.Transaction); ok && txn.Flag == "P" && txn.Narration == "pad" {
+			pads = append(pads, txn)
+		}
+	}
+	if len(pads) != 1 {
+		t.Fatalf("synthetic pad txns=%d want 1", len(pads))
+	}
+	if !pads[0].Date.Equal(d("2020-01-01")) {
+		t.Fatalf("pad txn date=%s want 2020-01-01", pads[0].Date.Format("2006-01-02"))
+	}
+	if got := pads[0].Postings[0].Units.Number; got.Cmp(r("130")) != 0 {
+		t.Fatalf("pad amount=%s want 130", got.FloatString(4))
+	}
+
+	e := New()
+	e.Book(expanded)
+	if e.Diags.HasErrors() {
+		t.Fatalf("errors: %v", e.Diags)
+	}
+	if got := e.balOf("Assets:Cash", "BRL"); got.Cmp(r("100")) != 0 {
+		t.Fatalf("balance=%s want 100", got.FloatString(4))
+	}
+	var bookedPads int
+	for _, txn := range e.Txns {
+		if txn.Txn.Flag == "P" && txn.Txn.Narration == "pad" {
+			bookedPads++
+		}
+	}
+	if bookedPads != 1 {
+		t.Fatalf("booked pad txns=%d want 1", bookedPads)
+	}
+}
+
 func TestResidualMultiCommodity(t *testing.T) {
 	// One empty residual absorbs every leftover commodity.
 	e := New()

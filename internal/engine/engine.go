@@ -143,11 +143,16 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 
 	// CUE ⊔ journal commodity meta → per-commodity booking tolerances.
 	commTol := commodityTolerances(p, commodities)
+	setupBooking := func(e *booking.Engine) {
+		e.CommTol = commTol
+	}
+
+	var pdiags diag.List
+	stream, pdiags = booking.ExpandPads(stream, setupBooking)
+	diags.Merge(pdiags)
 
 	// closing: TRUE expands after residual fill (BookWithClosing), then re-books.
-	b, stream, cdiags := booking.BookWithClosing(stream, func(e *booking.Engine) {
-		e.CommTol = commTol
-	})
+	b, stream, cdiags := booking.BookWithClosing(stream, setupBooking)
 	diags.Merge(cdiags)
 
 	autoInterest := booking.CollectAutoInterest(stream)

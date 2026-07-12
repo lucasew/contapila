@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucasew/contapila-go/internal/ast"
+	"github.com/lucasew/contapila-go/internal/booking"
 	"github.com/lucasew/contapila-go/internal/period"
 )
 
@@ -33,6 +35,57 @@ func TestExampleNetWorthSeries(t *testing.T) {
 	for i := 1; i < len(pts); i++ {
 		if !pts[i].Date.After(pts[i-1].Date) && !pts[i].Date.Equal(pts[i-1].Date) {
 			t.Fatalf("dates not ordered")
+		}
+	}
+}
+
+func TestAccountSeriesUsesPadDate(t *testing.T) {
+	dirs := []ast.Directive{
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Assets:Cash"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Expenses:Food"},
+		ast.Open{Meta: ast.Meta{Date: d("2020-01-01")}, Account: "Equity:Opening"},
+		ast.Pad{Meta: ast.Meta{Date: d("2020-01-01"), File: "t", Line: 4}, Account: "Assets:Cash", FromAccount: "Equity:Opening"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2020-01-10"), File: "t", Line: 5},
+			Flag: "*", Narration: "Lunch",
+			Postings: []ast.Posting{
+				{Account: "Assets:Cash", Units: &ast.Amount{Number: r("-30"), Commodity: "BRL"}},
+				{Account: "Expenses:Food", Units: &ast.Amount{Number: r("30"), Commodity: "BRL"}},
+			},
+		},
+		ast.Balance{Meta: ast.Meta{Date: d("2020-02-01"), File: "t", Line: 10}, Account: "Assets:Cash", Amount: ast.Amount{Number: r("100"), Commodity: "BRL"}},
+	}
+	expanded, diags := booking.ExpandPads(dirs, nil)
+	if diags.HasErrors() {
+		t.Fatalf("errors: %v", diags)
+	}
+	book := booking.New()
+	book.Book(expanded)
+	if book.Diags.HasErrors() {
+		t.Fatalf("errors: %v", book.Diags)
+	}
+	l := &Ledger{
+		Dirs:       expanded,
+		Book:       book,
+		OpCurrency: "BRL",
+	}
+
+	pts, err := l.AccountSeries("Assets:Cash", d("2020-01-01"), d("2020-02-01"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pts) == 0 {
+		t.Fatal("expected account series points")
+	}
+	if !pts[0].Date.Equal(d("2020-01-01")) {
+		t.Fatalf("first point=%s want 2020-01-01", pts[0].Date.Format("2006-01-02"))
+	}
+	if pts[0].Value.Cmp(r("130")) != 0 {
+		t.Fatalf("first value=%s want 130", pts[0].Value.FloatString(4))
+	}
+	for _, pt := range pts {
+		if pt.Value.Sign() < 0 {
+			t.Fatalf("negative point on %s: %s", pt.Date.Format("2006-01-02"), pt.Value.FloatString(4))
 		}
 	}
 }

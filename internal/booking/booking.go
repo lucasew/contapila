@@ -37,8 +37,8 @@ type Engine struct {
 	// running balance per account+commodity (units only, for balance assertions)
 	Bal map[string]map[string]*big.Rat
 
-	// pad pending: account -> fromAccount (last pad wins until used)
-	Pad map[string]string
+	// pad pending: account -> pad directive (last pad wins until used)
+	Pad map[string]ast.Pad
 
 	Txns   []BookedTxn
 	Notes  []ast.Note
@@ -71,7 +71,7 @@ func New() *Engine {
 		Open:      map[string]time.Time{},
 		Close:     map[string]time.Time{},
 		Bal:       map[string]map[string]*big.Rat{},
-		Pad:       map[string]string{},
+		Pad:       map[string]ast.Pad{},
 		Tolerance: big.NewRat(5, 1000000), // 5e-6 default (precision 5 half-ulp-ish)
 	}
 }
@@ -93,6 +93,31 @@ func (e *Engine) Book(dirs []ast.Directive) {
 	// Sort by date, then Beancount-style type rank (open before txn, close last),
 	// then source line. Same-day open that appears after a txn in include order
 	// must still open the account before the txn is booked.
+	indexed := sortedDirectives(dirs)
+
+	for _, d := range indexed {
+		switch v := d.(type) {
+		case ast.Open:
+			e.bookOpen(v)
+		case ast.Close:
+			e.bookClose(v)
+		case ast.Transaction:
+			e.bookTxn(v)
+		case ast.Balance:
+			e.bookBalance(v)
+		case ast.Pad:
+			e.Pad[v.Account] = v
+		case ast.Note:
+			e.Notes = append(e.Notes, v)
+		case ast.Event:
+			e.Events = append(e.Events, v)
+		case ast.Option, ast.Commodity, ast.Price, ast.Include, ast.Document, ast.Unknown, ast.Custom:
+			// handled elsewhere (Custom index series used by autointerest projection)
+		}
+	}
+}
+
+func sortedDirectives(dirs []ast.Directive) []ast.Directive {
 	indexed := make([]ast.Directive, len(dirs))
 	copy(indexed, dirs)
 	sort.SliceStable(indexed, func(i, j int) bool {
@@ -111,27 +136,7 @@ func (e *Engine) Book(dirs []ast.Directive) {
 		}
 		return false
 	})
-
-	for _, d := range indexed {
-		switch v := d.(type) {
-		case ast.Open:
-			e.bookOpen(v)
-		case ast.Close:
-			e.bookClose(v)
-		case ast.Transaction:
-			e.bookTxn(v)
-		case ast.Balance:
-			e.bookBalance(v)
-		case ast.Pad:
-			e.Pad[v.Account] = v.FromAccount
-		case ast.Note:
-			e.Notes = append(e.Notes, v)
-		case ast.Event:
-			e.Events = append(e.Events, v)
-		case ast.Option, ast.Commodity, ast.Price, ast.Include, ast.Document, ast.Unknown, ast.Custom:
-			// handled elsewhere (Custom index series used by autointerest projection)
-		}
-	}
+	return indexed
 }
 
 // directiveOrder ranks same-day directives (lower runs first).
@@ -531,6 +536,7 @@ func faceCurrencyDemand(postings []ast.Posting, filled []FilledPosting) map[stri
 // cashFaceWeight is true for FX cash legs (foreign cost basis, no @/{}) when:
 //   - reducing to pay for faceDemand legs (expense USD, stocks @ USD), or
 //   - increasing (more USD into the lot / residual refund) so residual balances in USD.
+//
 // Pure FX conversion (USD → BRL + gains) keeps cost-basis weight on reduces when
 // faceDemand does not include the unit currency.
 func cashFaceWeight(p ast.Posting, units *big.Rat, unitComm string, costBasis *ast.Amount, faceDemand map[string]bool) bool {
@@ -674,24 +680,25 @@ func (e *Engine) bookBalance(b ast.Balance) {
 	diff := new(big.Rat).Sub(new(big.Rat).Set(expected), actual)
 	tol := e.tol(b.Amount.Commodity)
 	if new(big.Rat).Abs(diff).Cmp(tol) <= 0 {
+		delete(e.Pad, b.Account)
 		return
 	}
 	// try pad
-	if from, ok := e.Pad[b.Account]; ok {
+	if pad, ok := e.Pad[b.Account]; ok {
 		// insert balancing: from -> account for diff
-		e.checkAccount(b.Date, from, b.File, b.Line)
+		e.checkAccount(b.Date, pad.FromAccount, b.File, b.Line)
 		e.addBal(b.Account, b.Amount.Commodity, diff)
-		e.addBal(from, b.Amount.Commodity, new(big.Rat).Neg(diff))
+		e.addBal(pad.FromAccount, b.Amount.Commodity, new(big.Rat).Neg(diff))
 		// also synth txn for journal
 		e.Txns = append(e.Txns, BookedTxn{
 			Txn: ast.Transaction{
-				Meta:      ast.Meta{Date: b.Date, File: b.File, Line: b.Line},
+				Meta:      ast.Meta{Date: pad.Date, File: pad.File, Line: pad.Line},
 				Flag:      "P",
 				Narration: "pad",
 			},
 			Postings: []FilledPosting{
 				{Account: b.Account, Units: &ast.Amount{Number: diff, Commodity: b.Amount.Commodity}},
-				{Account: from, Units: &ast.Amount{Number: new(big.Rat).Neg(diff), Commodity: b.Amount.Commodity}},
+				{Account: pad.FromAccount, Units: &ast.Amount{Number: new(big.Rat).Neg(diff), Commodity: b.Amount.Commodity}},
 			},
 		})
 		delete(e.Pad, b.Account)
