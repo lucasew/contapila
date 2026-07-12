@@ -4,6 +4,7 @@ package docs
 import (
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -142,10 +143,32 @@ func ForAccount(docs []ast.Document, account string) []ast.Document {
 }
 
 // IsLedgerDocPath reports whether rel is under <ledger>/docs/ (safe to serve).
+// After slash-normalize and slash trim, rel must be <ledger>/docs/<…> with no
+// empty segments or ".." components (checked before Clean so they are not
+// folded away). The shape is verified on path.Clean form.
 func IsLedgerDocPath(rel string) bool {
 	rel = filepath.ToSlash(rel)
-	rel = strings.TrimPrefix(rel, "/")
-	parts := strings.Split(rel, "/")
-	// <ledger>/docs/...
-	return len(parts) >= 3 && parts[1] == "docs"
+	rel = strings.Trim(rel, "/")
+	if rel == "" || rel == "." {
+		return false
+	}
+	for _, p := range strings.Split(rel, "/") {
+		if p == "" || p == ".." {
+			return false
+		}
+	}
+	cleaned := path.Clean(rel)
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") || path.IsAbs(cleaned) {
+		return false
+	}
+	parts := strings.Split(cleaned, "/")
+	if len(parts) < 3 || parts[1] != "docs" {
+		return false
+	}
+	for _, p := range parts {
+		if p == "" || p == "." || p == ".." {
+			return false
+		}
+	}
+	return true
 }
