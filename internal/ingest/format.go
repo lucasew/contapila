@@ -169,6 +169,10 @@ func quoteStr(s string) string {
 	return fmt.Sprintf("%q", s)
 }
 
+// ratFormatPrec is decimal digits for non-integer big.Rat rendering: enough for
+// beancount-ish amounts while avoiding float-noise tails after trim.
+const ratFormatPrec = 18
+
 func formatRat(r *big.Rat) (string, error) {
 	if r == nil {
 		return "", fmt.Errorf("nil number")
@@ -176,7 +180,7 @@ func formatRat(r *big.Rat) (string, error) {
 	if r.IsInt() {
 		return r.Num().String(), nil
 	}
-	s := r.FloatString(18)
+	s := r.FloatString(ratFormatPrec)
 	s = strings.TrimRight(s, "0")
 	s = strings.TrimRight(s, ".")
 	if s == "" || s == "-" {
