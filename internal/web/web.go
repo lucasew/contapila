@@ -1043,6 +1043,7 @@ func mergeCUECommodityMeta(cfg cue.Value, commodity string, rows []metaKV) []met
 
 func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if err := s.Tmpl.ExecuteTemplate(w, name, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
