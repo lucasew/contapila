@@ -141,6 +141,52 @@ func TestSeverityString(t *testing.T) {
 	}
 }
 
+func TestListFormatErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		list List
+		want string
+	}{
+		{
+			name: "empty",
+			list: nil,
+			want: "",
+		},
+		{
+			name: "warnings only",
+			list: List{
+				{Severity: Warn, Message: "soft", File: "a.beancount", Line: 1},
+			},
+			want: "",
+		},
+		{
+			name: "single error",
+			list: List{
+				{Severity: Error, Message: "bad", File: "main.beancount", Line: 12},
+			},
+			want: "main.beancount:12: error: bad",
+		},
+		{
+			name: "mixed skips warnings",
+			list: List{
+				{Severity: Warn, Message: "soft", File: "a.beancount", Line: 1},
+				{Severity: Error, Message: "first", File: "b.beancount", Line: 2},
+				{Severity: Error, Message: "second", File: "c.beancount", Line: 3},
+			},
+			want: "b.beancount:2: error: first; c.beancount:3: error: second",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.list.FormatErrors(); got != tt.want {
+				t.Errorf("FormatErrors() = %q; want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestListWarnErrorMerge(t *testing.T) {
 	var l List
 	l.Warn("a.beancount", 1, "soft")
