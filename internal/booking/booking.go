@@ -728,11 +728,6 @@ func (e *Engine) AllBalances() map[string]map[string]*big.Rat {
 	return out
 }
 
-// Positions returns costed inventory.
-func (e *Engine) Positions() map[string]map[string]*Position {
-	return e.Inv
-}
-
 func IsIncome(account string) bool  { return strings.HasPrefix(account, "Income:") }
 func IsExpense(account string) bool { return strings.HasPrefix(account, "Expenses:") }
 func IsAsset(account string) bool   { return strings.HasPrefix(account, "Assets:") }
