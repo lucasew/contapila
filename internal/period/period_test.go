@@ -6,11 +6,29 @@ import (
 )
 
 func d(s string) time.Time {
-	t, err := time.ParseInLocation("2006-01-02", s, time.UTC)
+	t, err := ParseDate(s)
 	if err != nil {
 		panic(err)
 	}
 	return t
+}
+
+func TestParseDate(t *testing.T) {
+	got, err := ParseDate("")
+	if err != nil || !got.IsZero() {
+		t.Fatalf("empty: got %v %v", got, err)
+	}
+	got, err = ParseDate("2024-07-15")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2024, 7, 15, 0, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	if _, err = ParseDate("not-a-date"); err == nil {
+		t.Fatal("expected error for invalid date")
+	}
 }
 
 func TestParseYearMonth(t *testing.T) {
