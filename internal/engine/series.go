@@ -27,13 +27,15 @@ type BarPoint struct {
 
 // NetWorthSeries returns net worth in op currency after each event that changes
 // asset/liability positions or market prices within [from, to]. Empty bounds = open side.
+// Always includes a terminal sample at `to` (or today if open) so the last chart point
+// matches the table total (same book units + prices as-of that day).
 // Single forward booking pass (not rebook-per-point); price days revalue holdings.
 // Leading/trailing zero-value samples are dropped (same idea as PnL empty-bin edge trim).
 func (l *Ledger) NetWorthSeries(from, to time.Time) ([]SeriesPoint, error) {
 	if l.OpCurrency == "" {
 		return nil, nil
 	}
-	pts, err := l.walkBalanceSeries(from, to, func(acct string) bool {
+	pts, err := l.walkBalanceSeries(from, to, true, func(acct string) bool {
 		return booking.IsAsset(acct) || booking.IsLiability(acct)
 	}, func(b *booking.Engine, asOf time.Time) *big.Rat {
 		return l.netWorthFromBook(b, asOf)
@@ -50,7 +52,7 @@ func (l *Ledger) AccountSeries(account string, from, to time.Time) ([]SeriesPoin
 	if l.OpCurrency == "" || account == "" {
 		return nil, nil
 	}
-	return l.walkBalanceSeries(from, to, func(acct string) bool {
+	return l.walkBalanceSeries(from, to, true, func(acct string) bool {
 		return AccountMatches(acct, account)
 	}, func(b *booking.Engine, asOf time.Time) *big.Rat {
 		return l.accountValueFromBook(b, account, asOf)
@@ -59,12 +61,14 @@ func (l *Ledger) AccountSeries(account string, from, to time.Time) ([]SeriesPoin
 
 func (l *Ledger) walkBalanceSeries(
 	from, to time.Time,
+	forceTerminal bool,
 	touch func(string) bool,
 	value func(*booking.Engine, time.Time) *big.Rat,
 ) ([]SeriesPoint, error) {
 	// Group directives by calendar day (stable within day via original order).
 	byDay := map[time.Time][]ast.Directive{}
 	priceDay := map[time.Time]bool{}
+	forceDay := map[time.Time]bool{}
 	var order []time.Time
 	addDay := func(dt time.Time) {
 		if _, ok := byDay[dt]; !ok {
@@ -128,6 +132,18 @@ func (l *Ledger) walkBalanceSeries(
 			}
 		}
 	}
+	// Terminal day: revalue at filter end (or today) so last point matches NW table as-of.
+	if forceTerminal {
+		term := to
+		if term.IsZero() {
+			term = time.Now()
+		}
+		term = dateOnly(term)
+		if from.IsZero() || !term.Before(dateOnly(from)) {
+			addDay(term)
+			forceDay[term] = true
+		}
+	}
 	sort.SliceStable(order, func(i, j int) bool {
 		// undated directives (options, …) book first
 		if order[i].IsZero() != order[j].IsZero() {
@@ -154,31 +170,33 @@ func (l *Ledger) walkBalanceSeries(
 		}
 		// emit if this day could change relevant balances (txn, pad, balance+pad)
 		// or revalue via market prices while holdings exist
-		hit := false
-		for _, d := range dirs {
-			switch v := d.(type) {
-			case ast.Transaction:
-				for _, p := range v.Postings {
-					if touch(p.Account) {
-						hit = true
-						break
+		hit := forceDay[day]
+		if !hit {
+			for _, d := range dirs {
+				switch v := d.(type) {
+				case ast.Transaction:
+					for _, p := range v.Postings {
+						if touch(p.Account) {
+							hit = true
+							break
+						}
 					}
+				case ast.Pad:
+					if touch(v.Account) || touch(v.FromAccount) {
+						hit = true
+					}
+				case ast.Balance:
+					// may apply pending pad into the account
+					if touch(v.Account) {
+						hit = true
+					}
+				case ast.Price:
+					// ledger-stream prices (also covered by PriceDB dates)
+					hit = hasTouchBalance(b, touch)
 				}
-			case ast.Pad:
-				if touch(v.Account) || touch(v.FromAccount) {
-					hit = true
+				if hit {
+					break
 				}
-			case ast.Balance:
-				// may apply pending pad into the account
-				if touch(v.Account) {
-					hit = true
-				}
-			case ast.Price:
-				// ledger-stream prices (also covered by PriceDB dates)
-				hit = hasTouchBalance(b, touch)
-			}
-			if hit {
-				break
 			}
 		}
 		if !hit && priceDay[day] {
@@ -207,35 +225,20 @@ func hasTouchBalance(b *booking.Engine, touch func(string) bool) bool {
 	return false
 }
 
+// netWorthFromBook matches NetWorth table: book units only (not autointerest projection),
+// market prices as-of the sample date.
 func (l *Ledger) netWorthFromBook(b *booking.Engine, asOf time.Time) *big.Rat {
 	total := big.NewRat(0, 1)
-	seen := map[string]bool{}
 	for acct, m := range b.AllBalances() {
 		if !booking.IsAsset(acct) && !booking.IsLiability(acct) {
 			continue
 		}
-		seen[acct] = true
-		unitsMap := l.unitsForDisplay(b, acct, m, asOf)
-		for comm, units := range unitsMap {
-			if units.Sign() == 0 {
+		for comm, units := range m {
+			if units == nil || units.Sign() == 0 {
 				continue
 			}
 			// Natural Beancount signs (liabilities are typically negative).
 			val, _ := l.convert(b, acct, comm, units, asOf)
-			total.Add(total, val)
-		}
-	}
-	// Autointerest assets with only projected balance (no book units yet).
-	for _, a := range l.AutoInterest {
-		if seen[a.Account] || !booking.IsAsset(a.Account) {
-			continue
-		}
-		unitsMap := l.unitsForDisplay(b, a.Account, nil, asOf)
-		for comm, units := range unitsMap {
-			if units.Sign() == 0 {
-				continue
-			}
-			val, _ := l.convert(b, a.Account, comm, units, asOf)
 			total.Add(total, val)
 		}
 	}

@@ -64,9 +64,13 @@ func CollectAutoInterest(dirs []ast.Directive) []AutoInterestAccount {
 
 // ExpandAutoInterest inserts:
 //   - open Income:Passivo:… for each autointerest asset (if missing)
-//   - pad asset Income day-before each balance on an autointerest asset (if no pad already set)
+//   - pad asset←Income day-before each balance on an autointerest asset (if no pad already set)
+//   - on close: pad + balance 0 (per open currency) so residual interest zeros before close
 //
-// Projection is not written to the stream (graphs use ProjectAutoInterest).
+// Safe to call more than once (idempotent pads). Run again after ExpandClosing so
+// synthetic balance 0 / close from closing: TRUE also get autointerest pads.
+//
+// Projection is not written to the stream (graphs use ProjectedUnits).
 func ExpandAutoInterest(dirs []ast.Directive) ([]ast.Directive, diag.List) {
 	var diags diag.List
 	accounts := CollectAutoInterest(dirs)
@@ -79,8 +83,6 @@ func ExpandAutoInterest(dirs []ast.Directive) ([]ast.Directive, diag.List) {
 	}
 
 	opened := map[string]bool{}
-	// User pad for account still pending until balance consumes it — track last pad source per account in stream order.
-	// For expand we only care: is there already a pad for this account before this balance with no intervening balance?
 	for _, d := range dirs {
 		if o, ok := d.(ast.Open); ok {
 			opened[o.Account] = true
@@ -100,16 +102,22 @@ func ExpandAutoInterest(dirs []ast.Directive) ([]ast.Directive, diag.List) {
 		})
 	}
 
-	// Pending user pads: account → true if pad seen since last balance on that account.
+	// Pending pads: account → true if pad seen since last balance on that account.
 	userPadPending := map[string]bool{}
 	var out []ast.Directive
 	out = append(out, dirs...)
-	// Insert opens at front (booking sorts by date anyway).
 	if len(synthOpen) > 0 {
 		out = append(synthOpen, out...)
 	}
 
-	// Second pass: inject pads before balances (rebuild with inserts).
+	// Zero-balance already present for account|commodity (avoid double inject on close).
+	hasZeroBal := map[string]bool{}
+	for _, d := range out {
+		if b, ok := d.(ast.Balance); ok && b.Amount.Number != nil && b.Amount.Number.Sign() == 0 {
+			hasZeroBal[b.Account+"|"+b.Amount.Commodity] = true
+		}
+	}
+
 	var final []ast.Directive
 	for _, d := range out {
 		switch v := d.(type) {
@@ -119,23 +127,41 @@ func ExpandAutoInterest(dirs []ast.Directive) ([]ast.Directive, diag.List) {
 		case ast.Balance:
 			if a := ai[v.Account]; a != nil {
 				if !userPadPending[v.Account] {
-					padDate := v.Date.AddDate(0, 0, -1)
-					// Don't pad before open date.
-					if padDate.Before(a.OpenDate) {
-						padDate = a.OpenDate
-					}
-					// Stop autointerest after close.
-					if !a.CloseDate.IsZero() && !v.Date.Before(a.CloseDate) {
-						// still allow pad if balance on/after close? design: stop projecting; pad on balance is materialize.
-						// Keep pad for balance even near close — user may balance then close.
-					}
-					final = append(final, ast.Pad{
-						Meta:        ast.Meta{Date: padDate, File: v.File, Line: v.Line},
-						Account:     v.Account,
-						FromAccount: a.Income,
-					})
+					final = append(final, autoInterestPad(a, v.Date, v.File, v.Line))
 				}
 				userPadPending[v.Account] = false
+				if v.Amount.Number != nil && v.Amount.Number.Sign() == 0 {
+					hasZeroBal[v.Account+"|"+v.Amount.Commodity] = true
+				}
+			}
+			final = append(final, d)
+		case ast.Close:
+			if a := ai[v.Account]; a != nil {
+				ccys := a.Currencies
+				if len(ccys) == 0 {
+					// Infer from zero-balances already planned; else cannot pad safely.
+					diags.Warn(v.File, v.Line, fmt.Sprintf(
+						"autointerest close %s: no currencies on open; skip pad-to-zero (add currency on open)", v.Account))
+				} else {
+					for _, ccy := range ccys {
+						key := v.Account + "|" + ccy
+						if hasZeroBal[key] {
+							// ExpandClosing (or user) already has balance 0; pad was handled on that Balance.
+							continue
+						}
+						if !userPadPending[v.Account] {
+							final = append(final, autoInterestPad(a, v.Date, v.File, v.Line))
+							userPadPending[v.Account] = true
+						}
+						final = append(final, ast.Balance{
+							Meta:    ast.Meta{Date: v.Date, File: v.File, Line: v.Line},
+							Account: v.Account,
+							Amount:  ast.Amount{Number: big.NewRat(0, 1), Commodity: ccy},
+						})
+						userPadPending[v.Account] = false
+						hasZeroBal[key] = true
+					}
+				}
 			}
 			final = append(final, d)
 		default:
@@ -143,6 +169,21 @@ func ExpandAutoInterest(dirs []ast.Directive) ([]ast.Directive, diag.List) {
 		}
 	}
 	return final, diags
+}
+
+func autoInterestPad(a *AutoInterestAccount, balDate time.Time, file string, line int) ast.Pad {
+	padDate := balDate.AddDate(0, 0, -1)
+	if padDate.Before(a.OpenDate) {
+		padDate = a.OpenDate
+	}
+	// Same-day close/balance 0: pad ranks before balance/close in booking sort.
+	// Day-before is preferred for ordinary balances; for close-day inject use same day
+	// when padDate would still work — keep day-before for balances, same-day when balDate == close.
+	return ast.Pad{
+		Meta:        ast.Meta{Date: padDate, File: file, Line: line},
+		Account:     a.Account,
+		FromAccount: a.Income,
+	}
 }
 
 // ProjectedUnits estimates autointerest account units as-of asOf (inclusive),

@@ -349,6 +349,29 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		data.Documents = documentTreeRows(l.Documents)
 	case "prices":
 		data.PriceSeries = priceSeriesRows(s.Prices)
+		// Chart the busiest base (or ?base=) so the prices report is not table-only.
+		base := q.Get("base")
+		if base == "" {
+			var bestN int
+			for _, row := range data.PriceSeries {
+				if row.Count > bestN {
+					bestN = row.Count
+					base = row.Base
+				}
+			}
+		}
+		if base != "" {
+			if js, quote, jerr := chartPriceJSON(s.Prices, base, l.OpCurrency, time.Time{}, time.Time{}); jerr == nil && js != "" {
+				data.NeedCharts = true
+				data.ChartID = "chart-prices"
+				if quote != "" {
+					data.ChartTitle = base + " price (" + quote + ")"
+				} else {
+					data.ChartTitle = base + " price"
+				}
+				data.ChartJSON = js
+			}
+		}
 	default:
 		http.NotFound(w, r)
 		return
@@ -471,7 +494,8 @@ func chartLineJSON(pts []engine.SeriesPoint, currency, label string) (template.J
 
 // chartPriceJSON builds a stepped line of market prices for base commodity.
 // Prefers preferQuote (usually op currency); otherwise first series by quote name.
-// Points outside [from,to] are dropped when bounds are set; empty filter → no chart.
+// Points outside [from,to] are dropped when bounds are set; zero bounds = full series.
+// If the filter removes every point, falls back to the full series so the chart still shows.
 func chartPriceJSON(db *prices.DB, base, preferQuote string, from, to time.Time) (template.JS, string, error) {
 	if db == nil || base == "" {
 		return "", "", nil
@@ -493,34 +517,47 @@ func chartPriceJSON(db *prices.DB, base, preferQuote string, from, to time.Time)
 		Kind     string    `json:"kind"`
 		Currency string    `json:"currency"`
 		Label    string    `json:"label"`
+		Height   int       `json:"height,omitempty"`
 		X        []int64   `json:"x"`
 		Y        []float64 `json:"y"`
 	}
-	p := payload{
-		Kind:     "line",
-		Currency: chosen.Quote,
-		Label:    base + "/" + chosen.Quote,
-	}
-	fromD, toD := from, to
-	if !fromD.IsZero() {
-		fromD = time.Date(fromD.Year(), fromD.Month(), fromD.Day(), 0, 0, 0, 0, time.UTC)
-	}
-	if !toD.IsZero() {
-		toD = time.Date(toD.Year(), toD.Month(), toD.Day(), 0, 0, 0, 0, time.UTC)
-	}
-	for _, pt := range chosen.Points {
-		if pt.Rate == nil {
-			continue
+	build := func(filter bool) payload {
+		p := payload{
+			Kind:     "line",
+			Currency: chosen.Quote,
+			Label:    base + "/" + chosen.Quote,
+			Height:   220,
 		}
-		d := time.Date(pt.Date.Year(), pt.Date.Month(), pt.Date.Day(), 0, 0, 0, 0, time.UTC)
-		if !fromD.IsZero() && d.Before(fromD) {
-			continue
+		fromD, toD := from, to
+		if filter {
+			if !fromD.IsZero() {
+				fromD = time.Date(fromD.Year(), fromD.Month(), fromD.Day(), 0, 0, 0, 0, time.UTC)
+			}
+			if !toD.IsZero() {
+				toD = time.Date(toD.Year(), toD.Month(), toD.Day(), 0, 0, 0, 0, time.UTC)
+			}
+		} else {
+			fromD, toD = time.Time{}, time.Time{}
 		}
-		if !toD.IsZero() && d.After(toD) {
-			continue
+		for _, pt := range chosen.Points {
+			if pt.Rate == nil {
+				continue
+			}
+			d := time.Date(pt.Date.Year(), pt.Date.Month(), pt.Date.Day(), 0, 0, 0, 0, time.UTC)
+			if !fromD.IsZero() && d.Before(fromD) {
+				continue
+			}
+			if !toD.IsZero() && d.After(toD) {
+				continue
+			}
+			p.X = append(p.X, d.Unix())
+			p.Y = append(p.Y, ratFloat(pt.Rate))
 		}
-		p.X = append(p.X, d.Unix())
-		p.Y = append(p.Y, ratFloat(pt.Rate))
+		return p
+	}
+	p := build(true)
+	if len(p.X) == 0 && (!from.IsZero() || !to.IsZero()) {
+		p = build(false)
 	}
 	if len(p.X) == 0 {
 		return "", "", nil
@@ -843,7 +880,9 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 		data.CommodityMeta = mergeCUECommodityMeta(s.Project.Config.Value, commodity, data.CommodityMeta)
 	}
 	data.CommodityPrices = commodityPriceRows(s.Prices, commodity)
-	if js, quote, jerr := chartPriceJSON(s.Prices, commodity, l.OpCurrency, pr.Start, pr.End); jerr == nil && js != "" {
+	// Price chart uses full history (not the journal time filter). Filtering prices
+	// by "month" / current year often empties the chart even when history exists.
+	if js, quote, jerr := chartPriceJSON(s.Prices, commodity, l.OpCurrency, time.Time{}, time.Time{}); jerr == nil && js != "" {
 		data.NeedCharts = true
 		data.ChartID = "chart-commodity-price"
 		if quote != "" {

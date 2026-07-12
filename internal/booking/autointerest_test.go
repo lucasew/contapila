@@ -205,3 +205,112 @@ func TestInterestRateFromMetaAlias(t *testing.T) {
 		t.Fatalf("ok=%v raw=%q", ok, raw)
 	}
 }
+
+func TestExpandAutoInterestPadOnClose(t *testing.T) {
+	dirs := []ast.Directive{
+		ast.Open{
+			Meta:       ast.Meta{Date: d("2025-01-01"), File: "t", Line: 1},
+			Account:    "Assets:CDB",
+			Currencies: []string{"BRL"},
+			Metadata:   ast.Metadata{"interest_rate": "100% CDI"},
+		},
+		ast.Open{Meta: ast.Meta{Date: d("2025-01-01")}, Account: "Assets:Cash"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2025-01-01"), File: "t"}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:CDB", Units: amt("1000", "BRL")},
+				{Account: "Assets:Cash", Units: amt("-1000", "BRL")},
+			},
+		},
+		ast.Close{Meta: ast.Meta{Date: d("2025-02-01"), File: "t", Line: 5}, Account: "Assets:CDB"},
+	}
+	out, diags := ExpandAutoInterest(dirs)
+	if diags.HasErrors() {
+		t.Fatalf("%v", diags)
+	}
+	var sawPad, sawBal0, sawClose bool
+	for _, d := range out {
+		switch v := d.(type) {
+		case ast.Pad:
+			if v.Account == "Assets:CDB" && v.FromAccount == "Income:Passivo:CDB" {
+				sawPad = true
+			}
+		case ast.Balance:
+			if v.Account == "Assets:CDB" && v.Amount.Commodity == "BRL" && v.Amount.Number.Sign() == 0 {
+				sawBal0 = true
+			}
+		case ast.Close:
+			if v.Account == "Assets:CDB" {
+				sawClose = true
+			}
+		}
+	}
+	if !sawPad || !sawBal0 || !sawClose {
+		t.Fatalf("pad=%v bal0=%v close=%v", sawPad, sawBal0, sawClose)
+	}
+	e := New()
+	e.Book(out)
+	if e.Diags.HasErrors() {
+		t.Fatalf("book: %v", e.Diags)
+	}
+	if got := e.balOf("Assets:CDB", "BRL"); got.Sign() != 0 {
+		t.Fatalf("CDB after close pad want 0 got %s", got.FloatString(4))
+	}
+	// Pad to zero: asset −1000, income counterpart +1000 (pad FromAccount).
+	inc := e.balOf("Income:Passivo:CDB", "BRL")
+	if inc.Cmp(r("1000")) != 0 {
+		t.Fatalf("income %s want 1000", inc.FloatString(4))
+	}
+}
+
+func TestExpandAutoInterestAfterClosingMeta(t *testing.T) {
+	// closing: TRUE expands to balance 0 + close next day; ExpandAutoInterest after must pad.
+	dirs := []ast.Directive{
+		ast.Open{
+			Meta:       ast.Meta{Date: d("2025-01-01"), File: "t", Line: 1},
+			Account:    "Assets:CDB",
+			Currencies: []string{"BRL"},
+			Metadata:   ast.Metadata{"interest_rate": "100% CDI"},
+		},
+		ast.Open{Meta: ast.Meta{Date: d("2025-01-01")}, Account: "Assets:Cash"},
+		ast.Open{Meta: ast.Meta{Date: d("2025-01-01")}, Account: "Income:Passivo:CDB"},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2025-01-10"), File: "t", Line: 3}, Flag: "*",
+			Postings: []ast.Posting{
+				{Account: "Assets:CDB", Units: amt("500", "BRL")},
+				{Account: "Assets:Cash", Units: amt("-500", "BRL")},
+			},
+		},
+		ast.Transaction{
+			Meta: ast.Meta{Date: d("2025-01-15"), File: "t", Line: 4}, Flag: "*",
+			Postings: []ast.Posting{
+				// drain with residual, mark closing
+				{Account: "Assets:Cash", Units: amt("500", "BRL")},
+				{Account: "Assets:CDB", Metadata: ast.Metadata{"closing": "TRUE"}},
+			},
+		},
+	}
+	// First autointerest (income already open)
+	stream, _ := ExpandAutoInterest(dirs)
+	e, out, diags := BookWithClosing(stream, nil)
+	if diags.HasErrors() {
+		t.Fatalf("%v", diags)
+	}
+	// CDB should be closed at 0
+	if _, ok := e.Close["Assets:CDB"]; !ok {
+		t.Fatal("expected close booked")
+	}
+	if got := e.balOf("Assets:CDB", "BRL"); got.Sign() != 0 {
+		t.Fatalf("CDB bal %s", got.FloatString(4))
+	}
+	// stream should contain a pad for CDB from second ExpandAutoInterest
+	var padAfter bool
+	for _, d := range out {
+		if p, ok := d.(ast.Pad); ok && p.Account == "Assets:CDB" {
+			padAfter = true
+		}
+	}
+	if !padAfter {
+		t.Fatal("expected autointerest pad after autoclose")
+	}
+}

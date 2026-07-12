@@ -106,7 +106,8 @@ func ExpandClosing(dirs []ast.Directive, booked []BookedTxn) ([]ast.Directive, d
 }
 
 // BookWithClosing books dirs, expands closing: TRUE from filled postings (including
-// residuals), then re-books with synthetic balance/close so assertions run in date order.
+// residuals), re-runs ExpandAutoInterest so synthetic balance 0 / close get interest
+// pads, then re-books with synthetic balance/close so assertions run in date order.
 // When no closing metadata is present, books once.
 // setup is optional (e.g. set CommTol); applied to each Engine before Book.
 func BookWithClosing(dirs []ast.Directive, setup func(*Engine)) (e *Engine, out []ast.Directive, diags diag.List) {
@@ -128,6 +129,10 @@ func BookWithClosing(dirs []ast.Directive, setup func(*Engine)) (e *Engine, out 
 	var cdiags diag.List
 	out, cdiags = ExpandClosing(dirs, probe.Txns)
 	diags.Merge(cdiags)
+	// After autoclose, pad autointerest accounts into synthetic balance 0 / close.
+	var adiags diag.List
+	out, adiags = ExpandAutoInterest(out)
+	diags.Merge(adiags)
 	e = newE()
 	e.Book(out)
 	diags.Merge(e.Diags)

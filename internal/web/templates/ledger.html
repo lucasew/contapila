@@ -236,7 +236,10 @@
     {{end}}
 
     {{if eq .Page "prices"}}
-      <p class="mb-2 text-xs text-base-content/60">Shared project prices (<span class="font-mono">prices.beancount</span>) — last write wins per day.</p>
+      <p class="mb-2 text-xs text-base-content/60">Shared project prices (<span class="font-mono">prices.beancount</span>) — last write wins per day. Open a base commodity for its full price chart.</p>
+      {{if not .Error}}
+      {{template "chart-panel" .}}
+      {{end}}
       {{if not .PriceSeries}}
       {{template "empty-note" "No prices loaded."}}
       {{else}}

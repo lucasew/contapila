@@ -341,7 +341,8 @@ Built-in expander (not a plugin). On `open` with **`interest_rate`** (or alias *
 - Parse expression (spaces allowed): `115% CDI`, `IPCA + 10% aa`, `10% aa`, …  
   Daily growth uses `α × index_return + plus_daily` where `plus_daily = (1+r)^(1/n)−1` (`aa`→365, `am`→30).
 - Counterpart income account: `Assets:…` → `Income:Passivo:…` (string replace); synth `open` if missing.
-- **Materialize only on `balance`:** insert **`pad` day-before** from that income account to the asset (skip if user already wrote a pad). Bank balance is ground truth.
+- **Materialize on `balance`:** insert **`pad` day-before** from that income account to the asset (skip if user already wrote a pad). Bank balance is ground truth.
+- **Materialize on `close`:** inject **`pad` + `balance 0` CUR** (per open currency) before close so residual interest/principal zeros via Income:Passivo. Runs again **after** `closing: TRUE` autoclose (synthetic balance 0 / close).
 - **Projection** (graphs / estimates): apply the curve using `custom "index" "CDI"|"IPCA" <daily_return>` in the stream; pure fixed also samples month-ends; horizon through `time.Now()`; **stops on `close`**.
 - Index series: stream journals from `project_journals` (default `indexes.beancount`) are auto-injected; extra `custom "index"` may also appear via includes. No `fixes.beancount` write-back.
 
