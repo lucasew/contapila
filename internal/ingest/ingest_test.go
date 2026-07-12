@@ -83,6 +83,26 @@ func TestApplyAppendAndReplace(t *testing.T) {
 	}
 }
 
+func TestApplyParseErrorReadable(t *testing.T) {
+	// Garbage that tree-sitter cannot turn into directives → error diagnostics.
+	bad := "@@@ not beancount @@@\n"
+	_, err := Apply(bad, "bad.beancount", nil)
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	msg := err.Error()
+	if !strings.HasPrefix(msg, "parse bad.beancount: ") {
+		t.Fatalf("prefix: %q", msg)
+	}
+	// Human-readable Diagnostic.String form, not fmt %v of the slice/structs.
+	if strings.Contains(msg, "Severity:") || strings.Contains(msg, "[{") {
+		t.Fatalf("raw struct dump: %q", msg)
+	}
+	if !strings.Contains(msg, "error:") {
+		t.Fatalf("expected severity label: %q", msg)
+	}
+}
+
 func TestApplyCreateFromEmpty(t *testing.T) {
 	line := `{"type":"price","date":"2025-01-01","id":"px:usd","currency":"USD","amount":{"number":"5.2","commodity":"BRL"}}` + "\n"
 	dirs, err := DecodeJSONL(strings.NewReader(line), nil)
