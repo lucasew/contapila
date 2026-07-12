@@ -282,6 +282,47 @@ func TestWithIngestID_keyConstant(t *testing.T) {
 	}
 }
 
+func TestMetadataClone(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil", func(t *testing.T) {
+		t.Parallel()
+		var m Metadata
+		if got := m.Clone(); got != nil {
+			t.Errorf("nil.Clone() = %#v; want nil", got)
+		}
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+		m := Metadata{}
+		if got := m.Clone(); got != nil {
+			t.Errorf("empty.Clone() = %#v; want nil", got)
+		}
+	})
+
+	t.Run("independent copy", func(t *testing.T) {
+		t.Parallel()
+		src := Metadata{"asset-class": "cash", "institution": "Bank"}
+		cl := src.Clone()
+		if cl == nil {
+			t.Fatal("Clone() is nil; want non-empty map")
+		}
+		if !reflect.DeepEqual(cl, src) {
+			t.Errorf("Clone() = %#v; want %#v", cl, src)
+		}
+		// Same contents, different map: mutating clone must not affect source.
+		cl["asset-class"] = "equity"
+		cl["new"] = "x"
+		if src["asset-class"] != "cash" {
+			t.Errorf("mutating clone changed source asset-class: got %q", src["asset-class"])
+		}
+		if _, ok := src["new"]; ok {
+			t.Error("mutating clone added key to source")
+		}
+	})
+}
+
 func TestAmountClone(t *testing.T) {
 	tests := []struct {
 		name string
