@@ -599,7 +599,7 @@ type NetWorthLine struct {
 	Commodity string
 	Units     *big.Rat
 	Value     *big.Rat // in op currency
-	UsedCost  bool
+	Unpriced  bool     // true when marketConvert had no price (value is 0)
 }
 
 func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
@@ -621,7 +621,7 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 			// Beancount signs: assets usually debit (+), liabilities credit (−).
 			// NW = Σ signed market values (no cost-basis fallback).
 			val, unpriced := l.marketConvert(comm, units, asOf, true)
-			lines = append(lines, NetWorthLine{Account: acct, Commodity: comm, Units: units, Value: val, UsedCost: unpriced})
+			lines = append(lines, NetWorthLine{Account: acct, Commodity: comm, Units: units, Value: val, Unpriced: unpriced})
 			total.Add(total, val)
 		}
 	}

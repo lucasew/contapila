@@ -401,7 +401,7 @@ func networthCmd() *cobra.Command {
 						name = ln.Account
 					}
 					flag := ""
-					if ln.UsedCost {
+					if ln.Unpriced {
 						flag = " (no px)"
 					}
 					units := ""

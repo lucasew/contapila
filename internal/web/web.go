@@ -234,7 +234,7 @@ type nwRow struct {
 	Commodity string
 	Units     string
 	Value     string
-	UsedCost  bool
+	Unpriced  bool
 	Depth     int
 	IsRollup  bool
 	PadLeft   string
@@ -1117,7 +1117,7 @@ func buildNetWorthRows(lines []engine.NetWorthTreeLine) []nwRow {
 			Commodity: ln.Commodity,
 			Units:     units,
 			Value:     val,
-			UsedCost:  ln.UsedCost,
+			Unpriced:  ln.Unpriced,
 			Depth:     ln.Depth,
 			IsRollup:  ln.IsRollup,
 			PadLeft:   treePadLeft(ln.Depth),
