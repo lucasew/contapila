@@ -217,6 +217,25 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 		}
 		m[k].Add(m[k], n)
 	}
+	invOpAlready := func(account, comm string, units *big.Rat) bool {
+		if units == nil {
+			return false
+		}
+		for _, op := range ops {
+			if op.account != account || op.comm != comm {
+				continue
+			}
+			if units.Sign() < 0 && !op.buy {
+				if op.units.Cmp(new(big.Rat).Neg(units)) == 0 {
+					return true
+				}
+			}
+			if units.Sign() > 0 && op.buy && op.units.Cmp(units) == 0 {
+				return true
+			}
+		}
+		return false
+	}
 
 	// Phase 1: plan inventory + weights without mutating positions/balances.
 	// Oversell is judged on the whole txn net per (account, commodity), not per posting.
@@ -259,12 +278,21 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 			k := invKey{p.Account, comm}
 			if units.Sign() > 0 {
 				// buy: {...} cost, or @/@@ price as cost basis
+				unitCost := buyUnitCost
+				costComm := buyCostComm
+				if !buyCostOK {
+					// Increase into an existing lot without braces: book at current average
+					// (deposit more USD into a costed FX cash account, residual refund, etc.).
+					if pos := e.getPos(p.Account, comm); pos != nil && pos.Units.Sign() > 0 && pos.CostComm != "" {
+						unitCost = pos.Avg()
+						costComm = pos.CostComm
+						buyCostOK = true
+					}
+				}
 				if !buyCostOK {
 					e.Diags.Error(t.File, t.Line, fmt.Sprintf("buy of %s %s requires explicit cost {...} or price @/@@", units.FloatString(4), comm))
 					return
 				}
-				unitCost := buyUnitCost
-				costComm := buyCostComm
 				total := new(big.Rat).Mul(new(big.Rat).Set(units), new(big.Rat).Set(unitCost))
 				ops = append(ops, invOp{
 					buy: true, account: p.Account, comm: comm,
@@ -300,10 +328,27 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 			}
 		}
 
-		// weight for balancing
-		w := postingWeight(p, units, fp.CostBasis)
-		addW(w.comm, w.amt)
 		filled[i] = fp
+	}
+
+	// Face currencies demanded by other legs (stock costs in USD, expenses in USD, …).
+	// Spending a foreign-costed pile of that currency weights as face amount for balancing.
+	faceDemand := faceCurrencyDemand(t.Postings, filled)
+
+	// Phase 1b: weights for balancing
+	for i, p := range t.Postings {
+		fp := filled[i]
+		if p.Units == nil || fp.Units == nil || fp.Units.Number == nil {
+			continue
+		}
+		units := fp.Units.Number
+		comm := fp.Units.Commodity
+		w := postingWeight(p, units, fp.CostBasis)
+		if cashFaceWeight(p, units, comm, fp.CostBasis, faceDemand) {
+			// Face amount in the cash currency (USD), not foreign cost (BRL).
+			w = wpair{comm, new(big.Rat).Set(units)}
+		}
+		addW(w.comm, w.amt)
 	}
 
 	// Residual (weights only; balances applied after inventory plan succeeds).
@@ -339,6 +384,45 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 				}
 			}
 			filled = expanded
+		}
+		// Residual on a costed inventory account must move inventory (not bare bal only).
+		for _, fp := range filled {
+			if fp.Units == nil || fp.Units.Number == nil || fp.Units.Number.Sign() == 0 {
+				continue
+			}
+			comm := fp.Units.Commodity
+			if !e.hasPosition(fp.Account, comm) {
+				continue
+			}
+			// Skip if already planned from an explicit posting in phase 1.
+			if invOpAlready(fp.Account, comm, fp.Units.Number) {
+				continue
+			}
+			pos := e.getPos(fp.Account, comm)
+			avg := big.NewRat(0, 1)
+			costComm := ""
+			if pos != nil && pos.Units.Sign() != 0 {
+				avg = pos.Avg()
+				costComm = pos.CostComm
+			}
+			k := invKey{fp.Account, comm}
+			if fp.Units.Number.Sign() < 0 {
+				sellUnits := new(big.Rat).Neg(fp.Units.Number)
+				totalCost := new(big.Rat).Mul(sellUnits, avg)
+				ops = append(ops, invOp{
+					buy: false, account: fp.Account, comm: comm,
+					units: sellUnits, total: totalCost, costComm: costComm,
+				})
+				addNet(sellNet, k, sellUnits)
+			} else if costComm != "" {
+				// Residual refund into costed cash: increase at current average.
+				total := new(big.Rat).Mul(new(big.Rat).Set(fp.Units.Number), avg)
+				ops = append(ops, invOp{
+					buy: true, account: fp.Account, comm: comm,
+					units: new(big.Rat).Set(fp.Units.Number), total: total, costComm: costComm,
+				})
+				addNet(buyNet, k, fp.Units.Number)
+			}
 		}
 	} else {
 		// must balance
@@ -409,6 +493,65 @@ func (e *Engine) bookTxn(t ast.Transaction) {
 type wpair struct {
 	comm string
 	amt  *big.Rat
+}
+
+// faceCurrencyDemand lists currencies other legs need in face terms: inventory buy
+// cost currencies (SPDW @ USD → USD) and bare expense/income/cash weights (19.20 USD).
+// Inventory reduces are skipped so a stock sale costed in BRL does not mark BRL as
+// "face demand" that would flip an FX cash reduce incorrectly.
+func faceCurrencyDemand(postings []ast.Posting, filled []FilledPosting) map[string]bool {
+	out := map[string]bool{}
+	for i, p := range postings {
+		if p.Units == nil {
+			continue
+		}
+		fp := filled[i]
+		if fp.Units == nil || fp.Units.Number == nil {
+			continue
+		}
+		units := fp.Units.Number
+		// Inventory buy → demand cost currency
+		if units.Sign() > 0 && fp.CostBasis != nil && fp.CostBasis.Commodity != "" {
+			out[fp.CostBasis.Commodity] = true
+			continue
+		}
+		// Inventory reduce (stock sale / FX lot) — not face demand
+		if units.Sign() < 0 && fp.CostBasis != nil {
+			continue
+		}
+		// Expense, income, bare amounts, etc.
+		w := postingWeight(p, units, fp.CostBasis)
+		if w.comm != "" {
+			out[w.comm] = true
+		}
+	}
+	return out
+}
+
+// cashFaceWeight is true for FX cash legs (foreign cost basis, no @/{}) when:
+//   - reducing to pay for faceDemand legs (expense USD, stocks @ USD), or
+//   - increasing (more USD into the lot / residual refund) so residual balances in USD.
+// Pure FX conversion (USD → BRL + gains) keeps cost-basis weight on reduces when
+// faceDemand does not include the unit currency.
+func cashFaceWeight(p ast.Posting, units *big.Rat, unitComm string, costBasis *ast.Amount, faceDemand map[string]bool) bool {
+	if costBasis == nil || costBasis.Number == nil || costBasis.Commodity == "" {
+		return false
+	}
+	if costBasis.Commodity == unitComm {
+		return false // cost already in face currency
+	}
+	if p.Price != nil {
+		return false // priced leg keeps cost/price weight
+	}
+	if p.Cost != nil && !p.Cost.Empty {
+		return false // explicit {...} → cost weight
+	}
+	if units.Sign() > 0 {
+		// Deposit more of a foreign-costed currency without braces.
+		return true
+	}
+	// Spend: only when other legs demand this currency in face terms.
+	return faceDemand[unitComm]
 }
 
 // resolveIncreaseCost returns unit cost for an inventory increase from {...}

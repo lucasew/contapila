@@ -306,6 +306,7 @@ Internal stages are separate packages; the public surface stays a deep module (s
 - Inventory increases need a cost basis: **explicit cost** `{...}`, or **`@` / `@@` price** when braces are omitted.
 - `@` → unit cost; `@@` → unit cost = total / units (same commodity as the price).
 - `{...}` wins over `@`/`@@` when both are present.
+- **Existing lot without braces:** if the account already holds that commodity with a cost basis, new units are booked at the **current average** (e.g. more USD into a costed USD cash account).
 - New units merge into the average cost of the position.
 
 ### 7.3 Sells (reductions) — Shape 4
@@ -313,6 +314,7 @@ Internal stages are separate packages; the public surface stays a deep module (s
 - Cost braces may be **omitted** on a reduction; engine books cost at **current average**.
 - Prefer **`@@` total proceeds** for broker-style fills; support `@` unit price as well.
 - Multi-stock sells: **one posting per commodity**; sugar is per line, not one average for the whole txn.
+- **FX cash spend:** reducing a currency held at a *foreign* cost (e.g. USD with BRL average cost) to pay for legs that need that currency in face terms — stocks `@ … USD`, **USD expenses**, residual cash drain — weights the cash leg in **face currency (USD)** for balancing, while still reducing the FX lot’s foreign cost basis. Residual cash on a costed FX account also reduces inventory (not bare balance only). Pure FX conversion to BRL + gains still weights by cost basis.
 
 Example:
 
