@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,6 +18,9 @@ import (
 	"github.com/lucasew/contapila-go/internal/prices"
 	"github.com/lucasew/contapila-go/pkg/project"
 )
+
+// AsOfLatest is an as-of far in the future meaning "latest known state".
+var AsOfLatest = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 
 // AccountInfo is an opened account plus metadata from the open directive.
 type AccountInfo struct {
@@ -607,15 +609,6 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 		return nil, nil, fmt.Errorf("operating currency unknown; set option operating_currency")
 	}
 	bals := l.BalancesAsOf(asOf)
-	// rebuild positions as-of via rebook
-	b := booking.New()
-	var subset []ast.Directive
-	for _, d := range l.Dirs {
-		if d.GetDate().IsZero() || !d.GetDate().After(asOf) {
-			subset = append(subset, d)
-		}
-	}
-	b.Book(subset)
 
 	var lines []NetWorthLine
 	total := big.NewRat(0, 1)
@@ -629,7 +622,7 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 			}
 			// Beancount signs: assets usually debit (+), liabilities credit (−).
 			// NW = Σ signed market values (no cost-basis fallback).
-			val, unpriced := l.convert(b, acct, comm, units, asOf)
+			val, unpriced := l.convert(comm, units, asOf)
 			lines = append(lines, NetWorthLine{Account: acct, Commodity: comm, Units: units, Value: val, UsedCost: unpriced})
 			total.Add(total, val)
 		}
@@ -646,9 +639,7 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 // convert values units of comm into operating currency at market price only
 // (direct, inverse, or one intermediate hop via PriceDB). No cost-basis fallback.
 // The bool is true when market price was missing (value is 0).
-func (l *Ledger) convert(b *booking.Engine, acct, comm string, units *big.Rat, asOf time.Time) (*big.Rat, bool) {
-	_ = b
-	_ = acct
+func (l *Ledger) convert(comm string, units *big.Rat, asOf time.Time) (*big.Rat, bool) {
 	if comm == l.OpCurrency {
 		return new(big.Rat).Set(units), false
 	}
@@ -677,13 +668,3 @@ func ParseDate(s string) (time.Time, error) {
 	}
 	return time.ParseInLocation("2006-01-02", s, time.UTC)
 }
-
-func MustCwd() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	return cwd
-}
-
-// Ensure path used

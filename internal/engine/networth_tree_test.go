@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestNetWorthTreeLeafNames(t *testing.T) {
@@ -17,7 +16,7 @@ func TestNetWorthTreeLeafNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tree, total, err := l.NetWorthTree(time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC))
+	tree, total, err := l.NetWorthTree(AsOfLatest)
 	if err != nil {
 		t.Fatal(err)
 	}
