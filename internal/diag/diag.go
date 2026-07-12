@@ -1,6 +1,9 @@
 package diag
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Severity int
 
@@ -63,6 +66,19 @@ func (l List) HasWarnings() bool {
 		}
 	}
 	return false
+}
+
+// FormatErrors joins error-severity diagnostics via Diagnostic.String(),
+// separated by "; " for compact single-line error text (e.g. fmt.Errorf).
+// Warnings are omitted.
+func (l List) FormatErrors() string {
+	var parts []string
+	for _, d := range l {
+		if d.IsError() {
+			parts = append(parts, d.String())
+		}
+	}
+	return strings.Join(parts, "; ")
 }
 
 // Warn appends a warning. line is 1-based; use 0 if unknown.

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/lucasew/contapila-go/internal/ast"
-	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/parser"
 )
 
@@ -29,7 +28,7 @@ func Apply(fileText string, filename string, incoming []ast.Directive) (string, 
 			return "", err
 		}
 		if diags.HasErrors() {
-			return "", fmt.Errorf("parse %s: %s", filename, formatParseErrors(diags))
+			return "", fmt.Errorf("parse %s: %s", filename, diags.FormatErrors())
 		}
 		for _, d := range dirs {
 			md := ast.DirectiveMetadata(d)
@@ -118,18 +117,6 @@ func Apply(fileText string, filename string, incoming []ast.Directive) (string, 
 		out = b.String()
 	}
 	return out, nil
-}
-
-// formatParseErrors joins error-severity diagnostics with Diagnostic.String()
-// (path:line: severity: message) for compact CLI-facing error text.
-func formatParseErrors(diags diag.List) string {
-	var parts []string
-	for _, d := range diags {
-		if d.IsError() {
-			parts = append(parts, d.String())
-		}
-	}
-	return strings.Join(parts, "; ")
 }
 
 func directiveMeta(d ast.Directive) ast.Meta {
