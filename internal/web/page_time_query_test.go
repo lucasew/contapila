@@ -1,7 +1,10 @@
 package web
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +27,7 @@ func TestParsePageTimeQuery(t *testing.T) {
 
 	t.Run("from/to composition when fromTo enabled", func(t *testing.T) {
 		q := url.Values{"from": {"2024-01"}, "to": {"2024-03"}}
-		got, err := parsePageTimeQuery(q, now, true, false)
+		got, err := parsePageTimeQuery(q, now, true, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -34,6 +37,7 @@ func TestParsePageTimeQuery(t *testing.T) {
 	})
 
 	t.Run("from/to ignored when fromTo disabled", func(t *testing.T) {
+		// Helper flag still works; page handlers pass fromTo=true.
 		q := url.Values{"from": {"2024-01"}, "to": {"2024-03"}}
 		got, err := parsePageTimeQuery(q, now, false, false)
 		if err != nil {
@@ -52,7 +56,7 @@ func TestParsePageTimeQuery(t *testing.T) {
 
 	t.Run("from only", func(t *testing.T) {
 		q := url.Values{"from": {"2024-01"}}
-		got, err := parsePageTimeQuery(q, now, true, false)
+		got, err := parsePageTimeQuery(q, now, true, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,7 +67,7 @@ func TestParsePageTimeQuery(t *testing.T) {
 
 	t.Run("to only", func(t *testing.T) {
 		q := url.Values{"to": {"2024-03"}}
-		got, err := parsePageTimeQuery(q, now, true, false)
+		got, err := parsePageTimeQuery(q, now, true, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -74,7 +78,7 @@ func TestParsePageTimeQuery(t *testing.T) {
 
 	t.Run("as-of from period end", func(t *testing.T) {
 		q := url.Values{"time": {"2024-03"}}
-		got, err := parsePageTimeQuery(q, now, false, false)
+		got, err := parsePageTimeQuery(q, now, true, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -103,6 +107,7 @@ func TestParsePageTimeQuery(t *testing.T) {
 	})
 
 	t.Run("explicit as-of ignored when disabled", func(t *testing.T) {
+		// Helper flag still works; page handlers pass explicitAsOf=true.
 		q := url.Values{"time": {"2024-03"}, "as-of": {"2024-02-10"}}
 		got, err := parsePageTimeQuery(q, now, false, false)
 		if err != nil {
@@ -134,4 +139,47 @@ func TestParsePageTimeQuery(t *testing.T) {
 			t.Fatalf("AsOfStr=%q", got.AsOfStr)
 		}
 	})
+}
+
+// Account, commodity, and ledger pages share the full time query surface
+// (from/to composition + explicit as-of with 400 on invalid).
+func TestPageTimeQueryHandlersParity(t *testing.T) {
+	s := testWebServer(t)
+	paths := []string{
+		"/l/personal/balances",
+		"/l/personal/account/Assets:BR:Alfa:ContaCorrente",
+		"/l/personal/commodity/USD",
+	}
+	for _, path := range paths {
+		t.Run("invalid as-of 400 "+path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path+"?as-of=not-a-date", nil)
+			rr := httptest.NewRecorder()
+			s.Handler().ServeHTTP(rr, req)
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("status %d want 400 body=%s", rr.Code, rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), "as-of") {
+				t.Fatalf("body missing as-of error: %s", rr.Body.String())
+			}
+		})
+		t.Run("from/to and as-of ok "+path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path+"?from=2024-01&to=2024-03&as-of=2024-02-10", nil)
+			rr := httptest.NewRecorder()
+			s.Handler().ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("status %d body=%s", rr.Code, rr.Body.String())
+			}
+			// as-of should surface in the page when set
+			if !strings.Contains(rr.Body.String(), "2024-02-10") {
+				t.Fatalf("response missing as-of date; body head=%q", truncate(rr.Body.String(), 200))
+			}
+		})
+	}
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }

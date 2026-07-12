@@ -262,8 +262,9 @@ type pageTimeQuery struct {
 }
 
 // parsePageTimeQuery reads time (and optionally from/to, as-of) from q.
-// fromTo: compose time from from/to when time is empty (ledger only).
-// explicitAsOf: honor as-of with validation (ledger only); account/commodity leave false.
+// fromTo: compose time from from/to when time is empty.
+// explicitAsOf: honor as-of with validation (invalid → error).
+// Ledger, account, and commodity handlers pass fromTo=true, explicitAsOf=true.
 // Invalid explicit as-of returns a non-nil error; period parse errors stay in PeriodErr.
 func parsePageTimeQuery(q url.Values, now time.Time, fromTo, explicitAsOf bool) (pageTimeQuery, error) {
 	timeStr := q.Get("time")
@@ -439,8 +440,8 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// Account page honors only ?time= (not from/to or as-of).
-	tq, err := parsePageTimeQuery(r.URL.Query(), time.Now(), false, false)
+	// Same time query surface as ledger: ?time=, from/to, and as-of.
+	tq, err := parsePageTimeQuery(r.URL.Query(), time.Now(), true, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -862,8 +863,8 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// Commodity page honors only ?time= (not from/to or as-of).
-	tq, err := parsePageTimeQuery(r.URL.Query(), time.Now(), false, false)
+	// Same time query surface as ledger: ?time=, from/to, and as-of.
+	tq, err := parsePageTimeQuery(r.URL.Query(), time.Now(), true, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
