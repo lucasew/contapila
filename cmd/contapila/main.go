@@ -26,9 +26,6 @@ import (
 // Empty means use the process working directory.
 var workDir string
 
-// asOfLatest means "all dates" when --as-of is omitted.
-var asOfLatest = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
-
 func main() {
 	root := &cobra.Command{
 		Use:           "contapila",
@@ -186,7 +183,7 @@ func balancesCmd() *cobra.Command {
 				return err
 			}
 			if t.IsZero() {
-				t = asOfLatest
+				t = engine.AsOfLatest
 			}
 			// Single ledger: hierarchical tree. Multi-ledger: flat sorted table.
 			if len(args) == 1 {
@@ -385,7 +382,7 @@ func networthCmd() *cobra.Command {
 				return err
 			}
 			if t.IsZero() {
-				t = asOfLatest
+				t = engine.AsOfLatest
 			}
 			return withLedgers(args, func(l *engine.Ledger) error {
 				lines, total, err := l.NetWorthTree(t)
@@ -450,7 +447,7 @@ func accountCmd() *cobra.Command {
 			acct := args[1]
 			asOf := r.End
 			if asOf.IsZero() {
-				asOf = asOfLatest
+				asOf = engine.AsOfLatest
 			}
 			fmt.Printf("== %s · %s ==", l.Name, acct)
 			if !r.Empty() {
