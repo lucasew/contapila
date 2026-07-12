@@ -120,8 +120,7 @@ func (l *Ledger) walkBalanceSeries(
 			if l.IndexDB != nil {
 				if m := l.IndexDB[a.Rate.Indicator]; m != nil {
 					for dk := range m {
-						if dt, err := time.ParseInLocation("2006-01-02", dk, time.UTC); err == nil {
-							dt = period.DateOnly(dt)
+						if dt, err := period.ParseDate(dk); err == nil {
 							if !dt.Before(period.DateOnly(a.OpenDate)) && !dt.After(end) {
 								addDay(dt)
 								priceDay[dt] = true
