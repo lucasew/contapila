@@ -431,14 +431,9 @@ func binLabel(b period.Range, kind period.BinKind) string {
 }
 
 // convertUnits converts a unit amount of commodity to op currency as-of date (no inventory cost).
+// Quiet on unpriced commodities (PnLBars samples many postings).
 func (l *Ledger) convertUnits(comm string, units *big.Rat, asOf time.Time) (*big.Rat, bool) {
-	if comm == l.OpCurrency || l.OpCurrency == "" {
-		return new(big.Rat).Set(units), false
-	}
-	if rate, _, ok := l.Prices.Rate(comm, l.OpCurrency, asOf); ok {
-		return new(big.Rat).Mul(new(big.Rat).Set(units), rate), false
-	}
-	return big.NewRat(0, 1), true
+	return l.marketConvert(comm, units, asOf, false)
 }
 
 func dateOnly(t time.Time) time.Time {

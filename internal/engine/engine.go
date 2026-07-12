@@ -639,8 +639,16 @@ func (l *Ledger) NetWorth(asOf time.Time) ([]NetWorthLine, *big.Rat, error) {
 // convert values units of comm into operating currency at market price only
 // (direct, inverse, or one intermediate hop via PriceDB). No cost-basis fallback.
 // The bool is true when market price was missing (value is 0).
+// Logs a warning when unpriced (NetWorth / series table paths).
 func (l *Ledger) convert(comm string, units *big.Rat, asOf time.Time) (*big.Rat, bool) {
-	if comm == l.OpCurrency {
+	return l.marketConvert(comm, units, asOf, true)
+}
+
+// marketConvert is the single FX conversion path used by NetWorth, series, and PnL.
+// logUnpriced should be true for table/NetWorth-style reports; false for dense
+// series walks (e.g. PnLBars) to avoid log spam.
+func (l *Ledger) marketConvert(comm string, units *big.Rat, asOf time.Time, logUnpriced bool) (*big.Rat, bool) {
+	if comm == l.OpCurrency || l.OpCurrency == "" {
 		return new(big.Rat).Set(units), false
 	}
 	if l.Prices != nil {
@@ -648,7 +656,9 @@ func (l *Ledger) convert(comm string, units *big.Rat, asOf time.Time) (*big.Rat,
 			return new(big.Rat).Mul(new(big.Rat).Set(units), rate), false
 		}
 	}
-	slog.Warn("unpriced commodity; valued at 0 (market only)", "commodity", comm, "op", l.OpCurrency, "asOf", asOf.Format("2006-01-02"))
+	if logUnpriced {
+		slog.Warn("unpriced commodity; valued at 0 (market only)", "commodity", comm, "op", l.OpCurrency, "asOf", asOf.Format("2006-01-02"))
+	}
 	return big.NewRat(0, 1), true
 }
 
