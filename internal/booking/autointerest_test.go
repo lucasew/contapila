@@ -314,3 +314,31 @@ func TestExpandAutoInterestAfterClosingMeta(t *testing.T) {
 		t.Fatal("expected autointerest pad after autoclose")
 	}
 }
+
+func TestEffectiveInterestRate(t *testing.T) {
+	idx := IndexDB{
+		IndicatorCDI: {"2025-01-02": r("0.01")},
+	}
+	// 115% CDI → 1.15 * 0.01
+	ir, ok := ParseInterestRate("115% CDI")
+	if !ok {
+		t.Fatal("parse")
+	}
+	got := EffectiveInterestRate(ir, idx, d("2025-01-02"))
+	if got.Cmp(r("0.0115")) != 0 {
+		t.Fatalf("115%% CDI: got %s want 0.0115", got.FloatString(6))
+	}
+	// missing index day → 0
+	if z := EffectiveInterestRate(ir, idx, d("2025-01-03")); z.Sign() != 0 {
+		t.Fatalf("missing idx: got %s", z.FloatString(6))
+	}
+	// fixed plus only: 10% aa has PlusDaily and IndicatorFixed (idx 0)
+	fixed, ok := ParseInterestRate("10% aa")
+	if !ok {
+		t.Fatal("parse fixed")
+	}
+	eff := EffectiveInterestRate(fixed, idx, d("2025-01-02"))
+	if fixed.PlusDaily == nil || eff.Cmp(fixed.PlusDaily) != 0 {
+		t.Fatalf("fixed: got %s want plus %v", eff.FloatString(10), fixed.PlusDaily)
+	}
+}

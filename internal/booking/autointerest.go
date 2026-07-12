@@ -258,11 +258,7 @@ func ProjectedUnits(
 	ei := 0
 
 	applyInterest := func(d time.Time) {
-		idxRate := idx.IndexRate(cfg.Indicator, d)
-		eff := new(big.Rat).Mul(new(big.Rat).Set(cfg.Alpha), idxRate)
-		if cfg.PlusDaily != nil {
-			eff = new(big.Rat).Add(eff, cfg.PlusDaily)
-		}
+		eff := EffectiveInterestRate(cfg, idx, d)
 		if eff.Sign() == 0 {
 			return
 		}
