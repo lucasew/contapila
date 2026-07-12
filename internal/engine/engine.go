@@ -350,8 +350,6 @@ func inferOpCurrency(dirs []ast.Directive, p *project.Project) string {
 	return ""
 }
 
-func (l *Ledger) Check() diag.List { return l.Diags }
-
 // BalancesAsOf recomputes balances using only directives on or before asOf.
 func (l *Ledger) BalancesAsOf(asOf time.Time) map[string]map[string]*big.Rat {
 	b := booking.New()
