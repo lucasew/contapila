@@ -32,9 +32,6 @@ var templateFS embed.FS
 //go:embed all:static
 var staticFS embed.FS
 
-// asOfLatest is used when no as-of date or period end is set: include all postings.
-var asOfLatest = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
-
 type Server struct {
 	Project *project.Project
 	Prices  *prices.DB
@@ -298,7 +295,7 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		asOfStr = asOf.Format("2006-01-02")
 	}
 	if asOf.IsZero() {
-		asOf = asOfLatest
+		asOf = engine.AsOfLatest
 		asOfStr = ""
 	}
 
@@ -311,7 +308,7 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		OpCurrency:  l.OpCurrency,
 		Diags:       l.Diags,
 		HasErrors:   l.Diags.HasErrors(),
-		HasWarnings: hasWarn(l.Diags),
+		HasWarnings: l.Diags.HasWarnings(),
 		OK:          !l.Diags.HasErrors(),
 		AsOf:        asOfStr,
 		Time:        timeStr,
@@ -420,7 +417,7 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	asOf := pr.End
 	asOfStr := ""
 	if asOf.IsZero() {
-		asOf = asOfLatest
+		asOf = engine.AsOfLatest
 	} else {
 		asOfStr = asOf.Format("2006-01-02")
 	}
@@ -842,7 +839,7 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 	asOf := pr.End
 	asOfStr := ""
 	if asOf.IsZero() {
-		asOf = asOfLatest
+		asOf = engine.AsOfLatest
 	} else {
 		asOfStr = asOf.Format("2006-01-02")
 	}
@@ -1022,33 +1019,6 @@ func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	if err := s.Tmpl.ExecuteTemplate(w, name, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-}
-
-func hasWarn(ds diag.List) bool {
-	for _, d := range ds {
-		if d.Severity == diag.Warn {
-			return true
-		}
-	}
-	return false
-}
-
-func buildBalances(bals map[string]map[string]*big.Rat) []balanceRow {
-	var rows []balanceRow
-	for a, byComm := range bals {
-		for c, n := range byComm {
-			rows = append(rows, balanceRow{
-				Account: a, Path: a, Commodity: c, Amount: n.FloatString(4),
-			})
-		}
-	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Account != rows[j].Account {
-			return rows[i].Account < rows[j].Account
-		}
-		return rows[i].Commodity < rows[j].Commodity
-	})
-	return rows
 }
 
 // treePadLeft is CSS padding-left for hierarchical tree rows (0.75rem per depth).
