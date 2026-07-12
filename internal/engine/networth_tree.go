@@ -18,7 +18,7 @@ type NetWorthTreeLine struct {
 	Commodity string
 	Value     *big.Rat // signed, operating currency
 	IsRollup  bool
-	UsedCost  bool
+	Unpriced  bool // true when any rolled-up line lacked a market price
 }
 
 // NetWorthTree returns Assets/Liabilities as a collapsible account tree.
@@ -37,28 +37,28 @@ func netWorthTreeFromLines(lines []NetWorthLine) []NetWorthTreeLine {
 
 	type agg struct {
 		value    *big.Rat
-		usedCost bool
+		unpriced bool
 		comms    map[string]*big.Rat // commodity -> units
 		// per-commodity value for multi-ccy leaves
-		commVal  map[string]*big.Rat
-		commCost map[string]bool
+		commVal      map[string]*big.Rat
+		commUnpriced map[string]bool
 	}
 	byAcct := map[string]*agg{}
 	for _, ln := range lines {
 		a := byAcct[ln.Account]
 		if a == nil {
 			a = &agg{
-				value:    big.NewRat(0, 1),
-				comms:    map[string]*big.Rat{},
-				commVal:  map[string]*big.Rat{},
-				commCost: map[string]bool{},
+				value:        big.NewRat(0, 1),
+				comms:        map[string]*big.Rat{},
+				commVal:      map[string]*big.Rat{},
+				commUnpriced: map[string]bool{},
 			}
 			byAcct[ln.Account] = a
 		}
 		a.value.Add(a.value, ln.Value)
-		if ln.UsedCost {
-			a.usedCost = true
-			a.commCost[ln.Commodity] = true
+		if ln.Unpriced {
+			a.unpriced = true
+			a.commUnpriced[ln.Commodity] = true
 		}
 		if ln.Units != nil {
 			if a.comms[ln.Commodity] == nil {
@@ -79,21 +79,21 @@ func netWorthTreeFromLines(lines []NetWorthLine) []NetWorthTreeLine {
 	tree := NewAccountTree(leaves)
 
 	rollupVal := map[string]*big.Rat{}
-	rollupCost := map[string]bool{}
+	rollupUnpriced := map[string]bool{}
 	for _, n := range tree.Names {
 		tot := big.NewRat(0, 1)
-		cost := false
+		unpriced := false
 		for a, ag := range byAcct {
 			if accountUnder(a, n) {
 				tot.Add(tot, ag.value)
-				if ag.usedCost {
-					cost = true
+				if ag.unpriced {
+					unpriced = true
 				}
 			}
 		}
 		if tot.Sign() != 0 {
 			rollupVal[n] = tot
-			rollupCost[n] = cost
+			rollupUnpriced[n] = unpriced
 		}
 	}
 
@@ -111,7 +111,7 @@ func netWorthTreeFromLines(lines []NetWorthLine) []NetWorthTreeLine {
 			Depth:    accountDepth(n),
 			Value:    new(big.Rat).Set(val),
 			IsRollup: child,
-			UsedCost: rollupCost[n],
+			Unpriced: rollupUnpriced[n],
 		}
 		ag := byAcct[n]
 		if !child && ag != nil && len(ag.comms) == 1 {
@@ -142,7 +142,7 @@ func netWorthTreeFromLines(lines []NetWorthLine) []NetWorthTreeLine {
 					Commodity: c,
 					Value:     new(big.Rat).Set(ag.commVal[c]),
 					IsRollup:  false,
-					UsedCost:  ag.commCost[c],
+					Unpriced:  ag.commUnpriced[c],
 				})
 			}
 		}

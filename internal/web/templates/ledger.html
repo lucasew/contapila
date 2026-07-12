@@ -170,7 +170,7 @@
               <td class="text-right tabular text-xs font-medium whitespace-nowrap">
                 {{.Value}}{{if $.OpCurrency}} <a class="link link-hover link-primary font-mono" href="{{commodityURL $.LedgerName $.OpCurrency $.Time}}">{{$.OpCurrency}}</a>{{end}}
               </td>
-              <td class="text-[0.65rem] text-warning">{{if .UsedCost}}no px{{end}}</td>
+              <td class="text-[0.65rem] text-warning">{{if .Unpriced}}no px{{end}}</td>
             </tr>
             {{end}}
           </tbody>
