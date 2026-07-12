@@ -215,11 +215,11 @@ func ProjectedUnits(
 	bal := map[string]*big.Rat{}
 	// Collect dated events for this account.
 	type ev struct {
-		day time.Time
-		kind string // txn | balance
-		comm string
+		day   time.Time
+		kind  string // txn | balance
+		comm  string
 		delta *big.Rat // txn delta; balance sets absolute
-		set bool
+		set   bool
 	}
 	var events []ev
 	for _, d := range dirs {

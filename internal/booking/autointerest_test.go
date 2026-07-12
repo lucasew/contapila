@@ -59,10 +59,10 @@ func TestIncomePassivoAccount(t *testing.T) {
 func TestExpandAutoInterestPadAndIncomeOpen(t *testing.T) {
 	dirs := []ast.Directive{
 		ast.Open{
-			Meta:     ast.Meta{Date: d("2025-04-04"), File: "t", Line: 1},
-			Account:  "Assets:BR:CDB:X",
+			Meta:       ast.Meta{Date: d("2025-04-04"), File: "t", Line: 1},
+			Account:    "Assets:BR:CDB:X",
 			Currencies: []string{"BRL"},
-			Metadata: ast.Metadata{"interest_rate": "115% CDI"},
+			Metadata:   ast.Metadata{"interest_rate": "115% CDI"},
 		},
 		ast.Open{Meta: ast.Meta{Date: d("2025-04-04")}, Account: "Assets:Cash"},
 		ast.Transaction{
