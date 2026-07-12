@@ -27,10 +27,16 @@ import (
 // Empty means use the process working directory.
 var workDir string
 
+// verbose enables Debug-level slog output (--verbose). Default log level is Info.
+var verbose bool
+
+// logLevel is the live slog level (Info by default; Debug when --verbose).
+var logLevel = &slog.LevelVar{} // zero value is LevelInfo
+
 func main() {
-	// Text handler on stderr at Info so engine/project slog.Warn (and any Info)
-	// stay operator-visible and intentionally configured for a CLI tool.
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	// Text handler on stderr so engine/project slog.Warn (and Info) stay
+	// operator-visible. Level Info by default; Debug with --verbose.
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})))
 
 	root := &cobra.Command{
 		Use:           "contapila",
@@ -38,8 +44,11 @@ func main() {
 		Version:       version.GetBuildID(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		// Parse -C before subcommands; discovery starts from this directory.
+		// Apply --verbose / -C before subcommands; discovery starts from -C.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if verbose {
+				logLevel.Set(slog.LevelDebug)
+			}
 			if workDir == "" {
 				return nil
 			}
@@ -59,6 +68,7 @@ func main() {
 		},
 	}
 	root.PersistentFlags().StringVarP(&workDir, "directory", "C", "", "run as if contapila started in this directory (project discovery)")
+	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging on stderr")
 	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), accountCmd(), parseCmd(), ingestCmd(), webCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
