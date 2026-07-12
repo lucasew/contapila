@@ -25,7 +25,7 @@ func TestChartBinFromFilter(t *testing.T) {
 	for _, c := range cases {
 		got := ChartBin(c.raw, c.r)
 		if got != c.want {
-			t.Errorf("ChartBin(%q)=%s want %s", c.raw, got, c.want)
+			t.Errorf("ChartBin(%q)=%v want %v", c.raw, got, c.want)
 		}
 	}
 }

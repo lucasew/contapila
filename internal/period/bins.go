@@ -15,19 +15,6 @@ const (
 	BinYear
 )
 
-func (k BinKind) String() string {
-	switch k {
-	case BinDay:
-		return "day"
-	case BinWeek:
-		return "week"
-	case BinYear:
-		return "year"
-	default:
-		return "month"
-	}
-}
-
 // ChartBin chooses bar bin size from the time filter string and resolved range.
 // Rules (Fava-ish + multi-year → year):
 //
