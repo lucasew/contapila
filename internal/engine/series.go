@@ -238,7 +238,7 @@ func (l *Ledger) netWorthFromBook(b *booking.Engine, asOf time.Time) *big.Rat {
 				continue
 			}
 			// Natural Beancount signs (liabilities are typically negative).
-			val, _ := l.convert(b, acct, comm, units, asOf)
+			val, _ := l.convert(comm, units, asOf)
 			total.Add(total, val)
 		}
 	}
@@ -256,7 +256,7 @@ func (l *Ledger) accountValueFromBook(b *booking.Engine, account string, asOf ti
 			if units.Sign() == 0 {
 				continue
 			}
-			val, _ := l.convert(b, acct, comm, units, asOf)
+			val, _ := l.convert(comm, units, asOf)
 			total.Add(total, val)
 		}
 	}
@@ -273,7 +273,7 @@ func (l *Ledger) accountValueFromBook(b *booking.Engine, account string, asOf ti
 			if units.Sign() == 0 {
 				continue
 			}
-			val, _ := l.convert(b, a.Account, comm, units, asOf)
+			val, _ := l.convert(comm, units, asOf)
 			total.Add(total, val)
 		}
 	}

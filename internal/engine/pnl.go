@@ -84,7 +84,7 @@ func (l *Ledger) pnlConvert(comm string, n *big.Rat) *big.Rat {
 		return new(big.Rat).Set(n)
 	}
 	// Latest known price (same as net-worth walk-back with far as-of).
-	if rate, _, ok := l.Prices.Rate(comm, l.OpCurrency, time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)); ok {
+	if rate, _, ok := l.Prices.Rate(comm, l.OpCurrency, AsOfLatest); ok {
 		return new(big.Rat).Mul(new(big.Rat).Set(n), rate)
 	}
 	return big.NewRat(0, 1)
