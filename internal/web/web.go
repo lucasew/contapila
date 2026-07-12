@@ -1049,12 +1049,15 @@ func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	}
 }
 
-// treePadLeft is CSS padding-left for hierarchical tree rows (0.75rem per depth).
+// treePadStepRem is the CSS padding-left increment per tree depth level.
+const treePadStepRem = 0.75
+
+// treePadLeft is CSS padding-left for hierarchical tree rows (treePadStepRem per depth).
 func treePadLeft(depth int) string {
 	if depth <= 0 {
 		return ""
 	}
-	return strconv.FormatFloat(float64(depth)*0.75, 'f', 2, 64) + "rem"
+	return strconv.FormatFloat(float64(depth)*treePadStepRem, 'f', 2, 64) + "rem"
 }
 
 func treeLabel(name, account string) string {
