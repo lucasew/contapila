@@ -629,7 +629,9 @@ Any error or non-zero CMD exit aborts with no write.`,
 		},
 	}
 	c.Flags().StringVar(&file, "file", "", "target beancount file (created on success if missing)")
-	_ = c.MarkFlagRequired("file")
+	if err := c.MarkFlagRequired("file"); err != nil {
+		panic(fmt.Sprintf("MarkFlagRequired(file): %v", err))
+	}
 	return c
 }
 
