@@ -131,14 +131,14 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 				Account:    v.Account,
 				OpenDate:   v.Date,
 				Currencies: append([]string(nil), v.Currencies...),
-				Metadata:   cloneMeta(v.Metadata),
+				Metadata:   v.Metadata.Clone(),
 				File:       v.File,
 			}
 		case ast.Commodity:
 			commodities[v.Currency] = CommodityInfo{
 				Currency: v.Currency,
 				Date:     v.Date,
-				Metadata: cloneMeta(v.Metadata),
+				Metadata: v.Metadata.Clone(),
 				File:     v.File,
 			}
 		}
@@ -185,17 +185,6 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 		AutoInterest: autoInterest,
 		IndexDB:      indexDB,
 	}, nil
-}
-
-func cloneMeta(m ast.Metadata) ast.Metadata {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make(ast.Metadata, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
 }
 
 // injectProjectStreamJournals prepends prelude project_journals (role stream) into the ledger.

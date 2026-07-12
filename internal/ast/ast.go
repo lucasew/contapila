@@ -71,6 +71,19 @@ type Include struct {
 // Keys are stored as written (e.g. "asset-class", "institution").
 type Metadata map[string]string
 
+// Clone returns a shallow copy of m. Nil and empty maps both yield nil so
+// callers cannot tell empty from missing after a clone (same as prior engine/prices helpers).
+func (m Metadata) Clone() Metadata {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(Metadata, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
 type Commodity struct {
 	Meta
 	Currency string

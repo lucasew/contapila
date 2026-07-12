@@ -50,7 +50,7 @@ func (db *DB) AddPrice(p ast.Price) {
 	if p.Amount.Number == nil || p.Amount.Commodity == "" || p.Currency == "" {
 		return
 	}
-	db.add(p.Currency, p.Amount.Commodity, p.Date, p.Amount.Number, cloneMeta(p.Metadata), p.File)
+	db.add(p.Currency, p.Amount.Commodity, p.Date, p.Amount.Number, p.Metadata.Clone(), p.File)
 }
 
 // Add records a rate (no metadata).
@@ -80,17 +80,6 @@ func (db *DB) add(base, quote string, date time.Time, rate *big.Rat, md ast.Meta
 	sort.Slice(db.series[k], func(i, j int) bool {
 		return db.series[k][i].Date.Before(db.series[k][j].Date)
 	})
-}
-
-func cloneMeta(m ast.Metadata) ast.Metadata {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make(ast.Metadata, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
 }
 
 // Rate returns quote per 1 base on or before asOf (market price only).
