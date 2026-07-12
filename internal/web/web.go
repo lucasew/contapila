@@ -34,9 +34,11 @@ var templateFS embed.FS
 var staticFS embed.FS
 
 type Server struct {
-	Project *project.Project
-	Prices  *prices.DB
-	Tmpl    *template.Template
+	// Root is the project directory (contapila.cue). Config, prices, ledger
+	// discovery, and journals are reloaded from disk on every request so F5
+	// always reflects current files — no process-lifetime cache of project state.
+	Root string
+	Tmpl *template.Template
 }
 
 func Listen(p *project.Project, pdb *prices.DB, defaultLedger string, addr string) error {
@@ -61,7 +63,10 @@ func Listen(p *project.Project, pdb *prices.DB, defaultLedger string, addr strin
 	return srv.ListenAndServe()
 }
 
-func New(p *project.Project, pdb *prices.DB) (*Server, error) {
+// New builds a web server rooted at p.Root. The prices argument is kept for
+// call-site compatibility; request handlers reload project + prices from disk
+// via engine.OpenProject on every request (not cached on Server).
+func New(p *project.Project, _ *prices.DB) (*Server, error) {
 	funcMap := template.FuncMap{
 		"eq":          func(a, b string) bool { return a == b },
 		"queryEscape": url.QueryEscape,
@@ -115,7 +120,19 @@ func New(p *project.Project, pdb *prices.DB) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{Project: p, Prices: pdb, Tmpl: tmpl}, nil
+	if p == nil || p.Root == "" {
+		return nil, fmt.Errorf("web: project root is required")
+	}
+	return &Server{Root: p.Root, Tmpl: tmpl}, nil
+}
+
+// loadProject reloads contapila.cue, project_journals, prices, and ledger discovery.
+func (s *Server) loadProject() (*project.Project, *prices.DB, error) {
+	p, pdb, _, err := engine.OpenProject(s.Root)
+	if err != nil {
+		return nil, nil, err
+	}
+	return p, pdb, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -242,11 +259,16 @@ type nwRow struct {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	p, _, err := s.loadProject()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	data := pageData{
 		Title:       "Ledgers",
 		Page:        "home",
-		Ledgers:     engine.LedgerNames(s.Project),
-		ProjectRoot: s.Project.Root,
+		Ledgers:     engine.LedgerNames(p),
+		ProjectRoot: p.Root,
 	}
 	s.render(w, "index.html", data)
 }
@@ -314,7 +336,12 @@ func parsePageTimeQuery(q url.Values, now time.Time, fromTo, explicitAsOf bool) 
 func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("ledger")
 	page := r.PathValue("page")
-	l, err := engine.OpenLedger(s.Project, s.Prices, name)
+	proj, pdb, err := s.loadProject()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	l, err := engine.OpenLedger(proj, pdb, name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -332,8 +359,8 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 		Title:       name + " · " + page,
 		Page:        page,
 		LedgerName:  name,
-		Ledgers:     engine.LedgerNames(s.Project),
-		ProjectRoot: s.Project.Root,
+		Ledgers:     engine.LedgerNames(proj),
+		ProjectRoot: proj.Root,
 		OpCurrency:  l.OpCurrency,
 		Diags:       l.Diags,
 		HasErrors:   l.Diags.HasErrors(),
@@ -392,7 +419,7 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 	case "documents":
 		data.Documents = documentTreeRows(l.Documents)
 	case "prices":
-		data.PriceSeries = priceSeriesRows(s.Prices)
+		data.PriceSeries = priceSeriesRows(pdb)
 		// Chart the busiest base (or ?base=) so the prices report is not table-only.
 		base := q.Get("base")
 		if base == "" {
@@ -405,7 +432,7 @@ func (s *Server) handleLedgerPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if base != "" {
-			if js, quote, jerr := chartPriceJSON(s.Prices, base, l.OpCurrency, time.Time{}, time.Time{}); jerr == nil && js != "" {
+			if js, quote, jerr := chartPriceJSON(pdb, base, l.OpCurrency, time.Time{}, time.Time{}); jerr == nil && js != "" {
 				data.NeedCharts = true
 				data.ChartID = "chart-prices"
 				if quote != "" {
@@ -435,7 +462,12 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	l, err := engine.OpenLedger(s.Project, s.Prices, name)
+	proj, pdb, err := s.loadProject()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	l, err := engine.OpenLedger(proj, pdb, name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -452,8 +484,8 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 		Title:       account,
 		Page:        "account",
 		LedgerName:  name,
-		Ledgers:     engine.LedgerNames(s.Project),
-		ProjectRoot: s.Project.Root,
+		Ledgers:     engine.LedgerNames(proj),
+		ProjectRoot: proj.Root,
 		OpCurrency:  l.OpCurrency,
 		Time:        timeStr,
 		PeriodLabel: tq.PeriodLabel,
@@ -827,7 +859,7 @@ func (s *Server) handleDocFile(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	root, err := os.OpenRoot(s.Project.Root)
+	root, err := os.OpenRoot(s.Root)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -858,7 +890,12 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	l, err := engine.OpenLedger(s.Project, s.Prices, name)
+	proj, pdb, err := s.loadProject()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	l, err := engine.OpenLedger(proj, pdb, name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -875,8 +912,8 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 		Title:         commodity,
 		Page:          "commodity",
 		LedgerName:    name,
-		Ledgers:       engine.LedgerNames(s.Project),
-		ProjectRoot:   s.Project.Root,
+		Ledgers:       engine.LedgerNames(proj),
+		ProjectRoot:   proj.Root,
 		OpCurrency:    l.OpCurrency,
 		Time:          timeStr,
 		PeriodLabel:   tq.PeriodLabel,
@@ -918,13 +955,13 @@ func (s *Server) handleCommodity(w http.ResponseWriter, r *http.Request) {
 		data.CommodityMeta = metaRows(info.Metadata)
 	}
 	// Overlay CUE commodity fields (name, asset-class, …) when present.
-	if s.Project.Config != nil {
-		data.CommodityMeta = mergeCUECommodityMeta(s.Project.Config.Value, commodity, data.CommodityMeta)
+	if proj.Config != nil {
+		data.CommodityMeta = mergeCUECommodityMeta(proj.Config.Value, commodity, data.CommodityMeta)
 	}
-	data.CommodityPrices = commodityPriceRows(s.Prices, commodity)
+	data.CommodityPrices = commodityPriceRows(pdb, commodity)
 	// Price chart uses full history (not the journal time filter). Filtering prices
 	// by "month" / current year often empties the chart even when history exists.
-	if js, quote, jerr := chartPriceJSON(s.Prices, commodity, l.OpCurrency, time.Time{}, time.Time{}); jerr == nil && js != "" {
+	if js, quote, jerr := chartPriceJSON(pdb, commodity, l.OpCurrency, time.Time{}, time.Time{}); jerr == nil && js != "" {
 		data.NeedCharts = true
 		data.ChartID = "chart-commodity-price"
 		if quote != "" {
