@@ -362,24 +362,6 @@ func metadataValue(f *source.File, n *grammar.Node) string {
 	}
 }
 
-// warnIgnoredKeyValues emits a warn for each key_value child (metadata not stored yet).
-func warnIgnoredKeyValues(f *source.File, n *grammar.Node, diags *diag.List) {
-	if n == nil || diags == nil {
-		return
-	}
-	for i := uint32(0); i < n.NamedChildCount(); i++ {
-		c := n.NamedChild(i)
-		if c.Type() != "key_value" {
-			continue
-		}
-		key, _ := keyValuePair(f, c)
-		if key == "" {
-			key = strings.TrimSpace(nodeText(f, c))
-		}
-		diags.Warn(f.Path, f.LineAtU32(c.StartByte()), fmt.Sprintf("metadata %q ignored (not stored yet)", key))
-	}
-}
-
 func convertTxn(f *source.File, n *grammar.Node, diags *diag.List) ast.Transaction {
 	txn := ast.Transaction{
 		Meta:      meta(f, n),
