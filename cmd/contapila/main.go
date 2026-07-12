@@ -26,6 +26,9 @@ import (
 // Empty means use the process working directory.
 var workDir string
 
+// asOfLatest means "all dates" when --as-of is omitted.
+var asOfLatest = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+
 func main() {
 	root := &cobra.Command{
 		Use:           "contapila",
@@ -61,16 +64,16 @@ func main() {
 	}
 }
 
-// mustCwd returns the project search start directory: -C if set, else process CWD.
-func mustCwd() string {
+// projectCwd returns the project search start directory: -C if set, else process CWD.
+func projectCwd() (string, error) {
 	if workDir != "" {
-		return workDir
+		return workDir, nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("get working directory: %w", err)
 	}
-	return cwd
+	return cwd, nil
 }
 
 func printDiags(ds diag.List) {
@@ -80,7 +83,11 @@ func printDiags(ds diag.List) {
 }
 
 func withLedgers(args []string, fn func(*engine.Ledger) error) error {
-	p, pdb, pdiags, err := engine.OpenProject(mustCwd())
+	cwd, err := projectCwd()
+	if err != nil {
+		return err
+	}
+	p, pdb, pdiags, err := engine.OpenProject(cwd)
 	if err != nil {
 		return err
 	}
@@ -113,7 +120,11 @@ func statusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use: "status", Aliases: []string{"doctor"}, Short: "Show project status",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p, err := project.OpenProject(mustCwd())
+			cwd, err := projectCwd()
+			if err != nil {
+				return err
+			}
+			p, err := project.OpenProject(cwd)
 			if err != nil {
 				return err
 			}
@@ -175,7 +186,7 @@ func balancesCmd() *cobra.Command {
 				return err
 			}
 			if t.IsZero() {
-				t = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+				t = asOfLatest
 			}
 			// Single ledger: hierarchical tree. Multi-ledger: flat sorted table.
 			if len(args) == 1 {
@@ -374,7 +385,7 @@ func networthCmd() *cobra.Command {
 				return err
 			}
 			if t.IsZero() {
-				t = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+				t = asOfLatest
 			}
 			return withLedgers(args, func(l *engine.Ledger) error {
 				lines, total, err := l.NetWorthTree(t)
@@ -423,7 +434,11 @@ func accountCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			p, pdb, pdiags, err := engine.OpenProject(mustCwd())
+			cwd, err := projectCwd()
+			if err != nil {
+				return err
+			}
+			p, pdb, pdiags, err := engine.OpenProject(cwd)
 			if err != nil {
 				return err
 			}
@@ -435,7 +450,7 @@ func accountCmd() *cobra.Command {
 			acct := args[1]
 			asOf := r.End
 			if asOf.IsZero() {
-				asOf = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+				asOf = asOfLatest
 			}
 			fmt.Printf("== %s · %s ==", l.Name, acct)
 			if !r.Empty() {
@@ -611,7 +626,11 @@ func webCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use: "web [ledger]", Short: "Read-only web UI", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p, pdb, _, err := engine.OpenProject(mustCwd())
+			cwd, err := projectCwd()
+			if err != nil {
+				return err
+			}
+			p, pdb, _, err := engine.OpenProject(cwd)
 			if err != nil {
 				return err
 			}
