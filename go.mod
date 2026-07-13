@@ -10,6 +10,8 @@ require (
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar/go v0.0.0-20260713221032-8673315d25fc // indirect
+	github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar/json v0.0.0-20260713221032-8673315d25fc // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
