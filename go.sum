@@ -31,8 +31,8 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mitchellh/go-wordwrap v1.0.1 h1:TLuKupo69TCn6TQSyGxwI1EblZZEsQ0vMlAFQflz0v0=
 github.com/mitchellh/go-wordwrap v1.0.1/go.mod h1:R62XHJLzvMFRBbcrT7m7WgmE1eOyTSsCt+hzestvNj0=
-github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar v0.0.0-20260709194218-9c327294737a h1:j44MdQuaOQNXIjmLOunrV5l+uPgIU5mf28INgcDl82U=
-github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar v0.0.0-20260709194218-9c327294737a/go.mod h1:jR96Nqj1lVnP2eTRrbQnHUoSJ3uzijfhErwZhSi+bnk=
+github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar v0.0.0-20260713221032-8673315d25fc h1:1QOPZYo72WjzoyLaUzxLnPmc5fEyC5hSIVH2V5WhwCo=
+github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar v0.0.0-20260713221032-8673315d25fc/go.mod h1:jR96Nqj1lVnP2eTRrbQnHUoSJ3uzijfhErwZhSi+bnk=
 github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar/beancount v0.0.0-20260712133229-595d7ebeb83b h1:wfiJPJ7dRBsLAeWPlV8Zid0o706liCeWonTqYqF1R6w=
 github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar/beancount v0.0.0-20260712133229-595d7ebeb83b/go.mod h1:/UkoaTlVUs+Dfvqjvfj4Ea0NpM3Q580LyzzJ2kCoFvA=
 github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=

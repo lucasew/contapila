@@ -52,7 +52,7 @@ func collectDirectives(f *source.File, n *grammar.Node, diags *diag.List, out *[
 		return
 	}
 	if n.IsError() {
-		diags.Error(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("syntax error near %q", clip(nodeText(f, n), 40)))
+		diags.Error(f.Path, f.Lines.LineAtU32(n.StartByte()), fmt.Sprintf("syntax error near %q", clip(nodeText(f, n), 40)))
 		return
 	}
 	switch n.Type() {
@@ -116,7 +116,7 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 	case "price":
 		amt, ok := parseAmountNode(f, field(n, "amount"))
 		if !ok {
-			diags.Error(f.Path, f.LineAtU32(n.StartByte()), "price missing or invalid amount; skipped")
+			diags.Error(f.Path, f.Lines.LineAtU32(n.StartByte()), "price missing or invalid amount; skipped")
 			return nil, false
 		}
 		return ast.Price{
@@ -142,7 +142,7 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 		}
 		amt, ok := parseAmountNode(f, an)
 		if !ok {
-			diags.Error(f.Path, f.LineAtU32(n.StartByte()), "balance missing or invalid amount; skipped")
+			diags.Error(f.Path, f.Lines.LineAtU32(n.StartByte()), "balance missing or invalid amount; skipped")
 			return nil, false
 		}
 		return ast.Balance{
@@ -204,17 +204,17 @@ func convert(f *source.File, n *grammar.Node, diags *diag.List) (ast.Directive, 
 			Metadata: parseKeyValues(f, n),
 		}, true
 	case "query":
-		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
+		diags.Warn(f.Path, f.Lines.LineAtU32(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
 	case "custom":
 		return convertCustom(f, n, diags)
 	case "comment":
 		return nil, false
 	case "pushtag", "poptag", "pushmeta", "popmeta":
-		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
+		diags.Warn(f.Path, f.Lines.LineAtU32(n.StartByte()), fmt.Sprintf("%s not supported; skipped", n.Type()))
 		return nil, false
 	default:
-		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("unsupported directive %q skipped", n.Type()))
+		diags.Warn(f.Path, f.Lines.LineAtU32(n.StartByte()), fmt.Sprintf("unsupported directive %q skipped", n.Type()))
 		return nil, false
 	}
 }
@@ -248,7 +248,7 @@ func convertCustom(f *source.File, n *grammar.Node, diags *diag.List) (ast.Direc
 		}
 	}
 	if typ == "" {
-		diags.Warn(f.Path, f.LineAtU32(n.StartByte()), `custom directive missing type string; skipped`)
+		diags.Warn(f.Path, f.Lines.LineAtU32(n.StartByte()), `custom directive missing type string; skipped`)
 		return nil, false
 	}
 	return ast.Custom{
@@ -457,7 +457,7 @@ func convertPosting(f *source.File, n *grammar.Node, diags *diag.List) ast.Posti
 	}
 	// Number present but no commodity → error (not a residual empty leg).
 	if p.Units != nil && p.Units.Number != nil && strings.TrimSpace(p.Units.Commodity) == "" {
-		diags.Error(f.Path, f.LineAtU32(n.StartByte()), fmt.Sprintf("amount missing commodity on %s", p.Account))
+		diags.Error(f.Path, f.Lines.LineAtU32(n.StartByte()), fmt.Sprintf("amount missing commodity on %s", p.Account))
 	}
 	if cs := field(n, "cost_spec"); cs != nil {
 		p.Cost = parseCost(f, cs)
@@ -621,7 +621,7 @@ func meta(f *source.File, n *grammar.Node) ast.Meta {
 	if f != nil {
 		path = f.Path
 		if n != nil && !n.IsNull() {
-			line = f.LineAtU32(n.StartByte())
+			line = f.Lines.LineAtU32(n.StartByte())
 		}
 	}
 	return ast.Meta{Date: d, File: path, Line: line, StartByte: start, EndByte: end}

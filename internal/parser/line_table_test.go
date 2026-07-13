@@ -8,10 +8,10 @@ import (
 )
 
 func TestSourceFileLineAtViaParse(t *testing.T) {
-	// Line mapping is owned by source.File; covered there and via Meta.Line.
+	// Line mapping is owned by grammar.LineIndex on source.File.Lines.
 	f := source.NewString("t.beancount", "a\nbb\nccc\n")
-	if f.LineAt(5) != 3 {
-		t.Fatalf("LineAt(5)=%d", f.LineAt(5))
+	if f.Lines.LineAt(5) != 3 {
+		t.Fatalf("Lines.LineAt(5)=%d", f.Lines.LineAt(5))
 	}
 }
 
