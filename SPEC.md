@@ -2,7 +2,7 @@
 
 Status: MVP implementation in progress (tree-sitter grammar wired via modernc-tree-sitter/ccgo-tree-sitter).
 
-Contapila is a self-contained **Go** reimplementation of a Beancount-class ledger engine plus a Fava-class read-only web UI: **one binary** (Cobra CLI + HTTP server with Go templates). Philosophy is **Helix, not Neovim**: good defaults, batteries included, no plugin system, poetic license on tooling.
+Contapila is a self-contained **Go** reimplementation of a Beancount-class ledger engine plus a Fava-class read-only web UI and an optional **language server**: **one binary** (Cobra CLI + HTTP server with Go templates + `contapila lsp`). Philosophy is **Helix, not Neovim**: good defaults, batteries included, no plugin system, poetic license on tooling.
 
 ---
 
@@ -15,6 +15,7 @@ Contapila is a self-contained **Go** reimplementation of a Beancount-class ledge
 | Semantics bar **B** | Same balances/lots on **plugin-free** ledgers for supported features; document intentional divergences |
 | Ready to use | Enough reports for a normal person: month-end balances, activity, P&L, net worth, `check` |
 | Project-oriented | Git-like project root + conventional multi-ledger layout |
+| Editor-ready | Same project truth in Helix via `contapila lsp` (check, account goto, account/commodity completion, minimal hover) |
 
 ### Non-goals (MVP)
 
@@ -24,6 +25,8 @@ Contapila is a self-contained **Go** reimplementation of a Beancount-class ledge
 - Multi-user auth / remote multi-tenant hosting
 - Tooling flag-compatibility with upstream Beancount CLIs
 - Second/temporary parser before modernc grammar lands
+- Full CUE language server (cuepls remains separate; contapila may only surface project-load errors on `contapila.cue` if free)
+- Separate `contapila-lsp` binary
 
 ---
 
@@ -60,6 +63,7 @@ Illustrative commands (names may be refined at implement time):
 | `contapila networth [ledger]` | Net worth as-of (shared prices) |
 | `contapila ingest --file path [-- CMD …]` | Merge JSONL directives into a beancount file (upsert by `id` → `ingest_id`) |
 | `contapila web [ledger]` | Read-only HTTP UI |
+| `contapila lsp` | Language server over stdio (Helix dogfood; see §3.4) |
 
 Ledger argument is the **directory name** under the project root (see §4).
 
@@ -80,6 +84,94 @@ Ledger argument is the **directory name** under the project root (see §4).
 | P&L | Income vs expenses for the period (by account type prefix) |
 | Net worth | Assets − liabilities in operating currency as-of D |
 | Check | Opens/closes, balance assertions, booking errors, unbalanced txns |
+
+### 3.4 Language server (LSP)
+
+Status: **specified; first dogfood cut not yet shipped.** Same binary, stdio LSP. Dogfood target: **Helix**. Example projects may ship `.helix/languages` (or equivalent) pointing at `contapila lsp`.
+
+#### 3.4.1 First dogfood cut (definition of done)
+
+| Capability | Behavior |
+|------------|----------|
+| `textDocument/publishDiagnostics` | **Two channels** — see §3.4.3 |
+| `textDocument/definition` | Account use → that ledger’s `open`; missing → editor “no definition” / status feedback (no fake jump to first posting) |
+| `textDocument/completion` | Accounts + commodities only where the grammar expects an account or commodity slot |
+| `textDocument/hover` | **Minimal** — account: `open` date + currencies/meta; commodity: CUE policy already on the loaded project (precision, class, …). No live balances/lots |
+
+**Out of first dogfood cut:** commodity goto, references, rename, formatting, code actions/fixits, semantic tokens, workspace symbols, rich/Fava-ish hover, full CUE IDE features.
+
+Later phases may add the rest of a normal language server surface; v1 stops at the table above.
+
+#### 3.4.2 Project model (LSP)
+
+| Rule | Behavior |
+|------|----------|
+| Unit of truth | **Whole contapila project** (all ledgers + shared journals + CUE), not a single buffer |
+| Root discovery | **Same as CLI**: walk up from the document path for `contapila.cue`; nearest wins |
+| Multi-project | **First resolved root wins** for the server process; no multi-session map |
+| Open buffers | LSP text overlays **win** over disk on every recompute |
+| Closed files | Re-read from disk each recompute turn (debounce/save). **fsnotify optional** — may wake debounce; absence is fine (next turn still refreshes) |
+| Account symbols | **Ledger of the current file** only (inventory isolation) |
+| Commodity symbols | **Project-shared** (prices/indexes/root journals still commodity-aware) |
+| Non-ledger `.beancount` | No fake ledger account chart; commodities still resolve; parse + project load as applicable |
+| `contapila.cue` | **Not** a CUE language server target. Config changes still invalidate project state when noticed. Surfacing unify/load errors that already point at the cue file is allowed if cheap |
+| Open ledger scope | Opening any file that belongs to ledger L → **ingest whole L** (main + includes + stream/prices as engine already does). **Publish diagnostics for all files of open ledgers**, not only the focused buffer |
+
+No re-open model for accounts: definition is the single `open`.
+
+#### 3.4.3 Recompute: two-tier + snapshot swap
+
+```text
+didChange / didSave / optional fsnotify wake
+        │
+        ├─ fast: parse dirty buffer(s) → publish parse/syntax diagnostics immediately
+        │
+        └─ if dirty: debounce and/or save
+                │
+                ├─ parse fails → keep last-good account/commodity indexes + last-good check diags
+                │                 (completion/goto/hover still use last-good index)
+                │
+                └─ parse succeeds → background full project perception (overlays + disk)
+                                   rebuild indexes + run check (ctx-cancellable)
+                                   atomic swap: indexes + semantic/check diagnostics
+```
+
+| Rule | Behavior |
+|------|----------|
+| Triggers | **Debounce and save**, only when something actually changed (dirty) |
+| Overlap | **Cancel + restart** via `context.Context` (newer edit/save cancels in-flight slow run) |
+| Index / check publish | Only after parse **passes**; atomic swap of the live snapshot |
+| Parse publish | Immediate (does not wait for successful full check) |
+| Partial trees | **No** best-effort symbol extraction from broken parses — last-good index only |
+
+#### 3.4.4 Completion and navigation detail
+
+- **Completion contexts:** only syntactic positions where an **account** or **commodity** is expected (posting account, `open`/`close`/`balance`/`pad`/`document` account fields, amount commodity, `price` commodities, `commodity` directive, etc.). Not narration / free text.
+- **Account completion:** opens from the **current file’s ledger** (last-good index).
+- **Commodity completion:** project commodity set (last-good index), including when editing `prices.beancount` and other shared journals.
+- **Goto:** account → `open` in that ledger’s graph; no definition → client-visible error, not a degraded first-mention jump.
+- **Hover:** index/config facts only (see §3.4.1); must not force a full booking pass on every hover.
+
+#### 3.4.5 Locations and ranges
+
+- Prefer real ranges from existing AST spans (`Meta.StartByte` / `EndByte`) and `grammar.LineIndex` (`LineColumnAt`).
+- LSP positions require protocol encoding conversion (tree-sitter / line index are **byte** offsets; LSP commonly **UTF-16**).
+- Line-only diagnostics only as fallback when span is unknown (synthesized nodes, legacy diags without bytes).
+
+#### 3.4.6 Architecture seams (required for parity)
+
+| Seam | Intent |
+|------|--------|
+| FS-shaped loader dependency | Project open / include load take an FS-like reader. **CLI** = disk; **LSP** = overlay FS (buffer text first, else disk). One load/check path for both |
+| Surfaces | LSP is another consumer of project/`Ledger` APIs — same check truth as `contapila check` |
+| Context | Thread `context.Context` through load/check far enough that cancel aborts in-flight LSP work without publishing stale results |
+
+Not: temp-dir materialization of overlays; not a forked LSP-only parse/check that drifts from CLI.
+
+#### 3.4.7 Client packaging
+
+- Document / ship Helix `language-server` config for Beancount (and related journal paths as needed) invoking `contapila lsp`.
+- Prefer embedding example config under testdata or docs so dogfood is one clone away.
 
 ---
 
@@ -210,7 +302,8 @@ links: [{
 
 - Open project from CWD → project handle (root, config, PriceDB, ledger names).
 - Open/load each named ledger → `*Ledger`.
-- Surfaces (CLI, HTTP) call only project/`Ledger` methods — no parsing in handlers.
+- Surfaces (CLI, HTTP, LSP) call only project/`Ledger` methods — no parsing in handlers.
+- Project/loader accept an **FS-shaped** dependency for file reads (disk default; LSP overlays).
 
 Suggested capabilities on `*Ledger`:
 
@@ -247,6 +340,12 @@ Internal stages are separate packages; the public surface stays a deep module (s
 
 - Engine amounts and costs: **`math/big.Rat`** (never `float64` for money).
 - Display/tolerance from commodity policy (§7).
+
+### 5.5 Language server placement
+
+- Command: **`contapila lsp`** (stdio) in the main module — not a second binary.
+- Package boundary: dedicated LSP adapter (protocol, overlays, debounce, publish) over the same open/load/check pipeline as CLI.
+- Full feature matrix and recompute rules: **§3.4**.
 
 ---
 
@@ -492,6 +591,7 @@ Golden fixtures should emphasize average-cost stock buys/partial sells, pads, in
 6. CLI commands.
 7. Read-only web server; live reload later.
 8. Golden corpus expansion alongside dogfood.
+9. **LSP dogfood (§3.4):** FS overlay seam + `context` on load/check → `contapila lsp` → parse diags, snapshot indexes, account goto, account/commodity completion, minimal hover, Helix example config.
 
 ---
 
@@ -503,9 +603,12 @@ Golden fixtures should emphasize average-cost stock buys/partial sells, pads, in
 - Whether `contapila init` scaffolds root + empty cue + sample ledger dirs.
 - Tolerance combination rules when a transaction touches multiple commodities.
 - Optional `option "booking_method"` surface once more methods exist.
+- LSP debounce duration default; exact Go FS interface (`io/fs.FS` vs small project-local API).
+- How aggressively to clear vs retain check diagnostics for ledgers with no open buffers.
+- LSP library / protocol stack choice (implementation detail).
 
 ---
 
 ## 15. Summary one-liner
 
-**Contapila** = conventional multi-ledger Beancount project (`contapila.cue` + `*/main.beancount` + `prices.beancount`) with embedded CUE policy, average-cost inventory, and a single Go binary for check/reports/read-only web — semantics-first, plugins never, tree-sitter when modernc is ready.
+**Contapila** = conventional multi-ledger Beancount project (`contapila.cue` + `*/main.beancount` + `prices.beancount`) with embedded CUE policy, average-cost inventory, and a single Go binary for check/reports/read-only web/**Helix LSP** — semantics-first, plugins never, tree-sitter via modernc.
