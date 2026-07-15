@@ -14,6 +14,7 @@ import (
 	"github.com/lucasew/contapila-go/internal/config"
 	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/docs"
+	"github.com/lucasew/contapila-go/internal/filesys"
 	"github.com/lucasew/contapila-go/internal/loader"
 	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/prices"
@@ -30,14 +31,20 @@ type AccountInfo struct {
 	Currencies []string
 	Metadata   ast.Metadata
 	File       string
+	Line       int // 1-based; 0 if unknown
+	StartByte  int
+	EndByte    int
 }
 
 // CommodityInfo is a commodity declaration plus metadata from the commodity directive.
 type CommodityInfo struct {
-	Currency string
-	Date     time.Time
-	Metadata ast.Metadata
-	File     string
+	Currency  string
+	Date      time.Time
+	Metadata  ast.Metadata
+	File      string
+	Line      int
+	StartByte int
+	EndByte   int
 }
 
 // Ledger is a fully loaded and booked named ledger.
@@ -60,16 +67,24 @@ type Ledger struct {
 	IndexDB      booking.IndexDB
 }
 
-// OpenProject wraps project.OpenProject and loads shared prices.
+// OpenProject wraps project.OpenProject and loads shared prices from disk.
 func OpenProject(cwd string) (*project.Project, *prices.DB, diag.List, error) {
+	return OpenProjectFS(filesys.OS{}, cwd)
+}
+
+// OpenProjectFS opens a project and prices via fsys.
+func OpenProjectFS(fsys filesys.FS, cwd string) (*project.Project, *prices.DB, diag.List, error) {
+	if fsys == nil {
+		fsys = filesys.OS{}
+	}
 	var diags diag.List
-	p, err := project.OpenProject(cwd)
+	p, err := project.OpenProjectFS(fsys, cwd)
 	if err != nil {
 		return nil, nil, diags, err
 	}
 	db := prices.NewDB()
 	if !p.PricesMissing && !p.PricesEmpty {
-		pdb, pd, err := prices.LoadFile(p.PricesPath)
+		pdb, pd, err := prices.LoadFileFS(fsys, p.PricesPath)
 		diags.Merge(pd)
 		if err != nil {
 			slog.Warn("failed loading prices", "err", err)
@@ -80,8 +95,16 @@ func OpenProject(cwd string) (*project.Project, *prices.DB, diag.List, error) {
 	return p, db, diags, nil
 }
 
-// OpenLedger loads and books one named ledger.
+// OpenLedger loads and books one named ledger from disk.
 func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error) {
+	return OpenLedgerFS(filesys.OS{}, p, pdb, name)
+}
+
+// OpenLedgerFS loads and books one named ledger via fsys.
+func OpenLedgerFS(fsys filesys.FS, p *project.Project, pdb *prices.DB, name string) (*Ledger, error) {
+	if fsys == nil {
+		fsys = filesys.OS{}
+	}
 	var entry string
 	for _, l := range p.Ledgers {
 		if l.Name == name {
@@ -92,7 +115,7 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 	if entry == "" {
 		return nil, fmt.Errorf("unknown ledger %q", name)
 	}
-	dirs, diags, err := loader.LoadFile(entry)
+	dirs, diags, err := loader.LoadFileFS(fsys, entry)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +129,7 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 	}
 	// Prelude project_journals with role "stream" are auto-injected into every ledger.
 	// Skip a path if the ledger stream already loaded that realpath via include.
-	stream, idiags := injectProjectStreamJournals(p, stream)
+	stream, idiags := injectProjectStreamJournals(fsys, p, stream)
 	diags.Merge(idiags)
 
 	// {cost, date} on postings → synthetic price directives (+ PriceDB points).
@@ -133,13 +156,19 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 				Currencies: append([]string(nil), v.Currencies...),
 				Metadata:   v.Metadata.Clone(),
 				File:       v.File,
+				Line:       v.Line,
+				StartByte:  v.StartByte,
+				EndByte:    v.EndByte,
 			}
 		case ast.Commodity:
 			commodities[v.Currency] = CommodityInfo{
-				Currency: v.Currency,
-				Date:     v.Date,
-				Metadata: v.Metadata.Clone(),
-				File:     v.File,
+				Currency:  v.Currency,
+				Date:      v.Date,
+				Metadata:  v.Metadata.Clone(),
+				File:      v.File,
+				Line:      v.Line,
+				StartByte: v.StartByte,
+				EndByte:   v.EndByte,
 			}
 		}
 	}
@@ -189,10 +218,13 @@ func OpenLedger(p *project.Project, pdb *prices.DB, name string) (*Ledger, error
 
 // injectProjectStreamJournals prepends prelude project_journals (role stream) into the ledger.
 // Paths already present in the stream (via include) are skipped to avoid double-load.
-func injectProjectStreamJournals(p *project.Project, stream []ast.Directive) ([]ast.Directive, diag.List) {
+func injectProjectStreamJournals(fsys filesys.FS, p *project.Project, stream []ast.Directive) ([]ast.Directive, diag.List) {
 	var diags diag.List
 	if p == nil || len(p.StreamJournals) == 0 {
 		return stream, diags
+	}
+	if fsys == nil {
+		fsys = filesys.OS{}
 	}
 	present := map[string]bool{}
 	for _, d := range stream {
@@ -215,7 +247,7 @@ func injectProjectStreamJournals(p *project.Project, stream []ast.Directive) ([]
 		if present[abs] {
 			continue
 		}
-		dirs, ldiags, err := loader.LoadFile(j.Path)
+		dirs, ldiags, err := loader.LoadFileFS(fsys, j.Path)
 		diags.Merge(ldiags)
 		if err != nil {
 			diags.Error(j.Path, 0, fmt.Sprintf("failed to load project journal %s: %v", j.RelPath, err))

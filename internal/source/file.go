@@ -2,8 +2,7 @@
 package source
 
 import (
-	"os"
-
+	"github.com/lucasew/contapila-go/internal/filesys"
 	"github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar"
 )
 
@@ -20,7 +19,15 @@ type File struct {
 
 // New reads path from disk (as UTF-8 text) and builds the line index.
 func New(path string) (*File, error) {
-	b, err := os.ReadFile(path)
+	return NewFS(filesys.OS{}, path)
+}
+
+// NewFS reads path via fsys and builds the line index.
+func NewFS(fsys filesys.FS, path string) (*File, error) {
+	if fsys == nil {
+		fsys = filesys.OS{}
+	}
+	b, err := fsys.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +44,7 @@ func NewString(path, text string) *File {
 }
 
 // Slice returns Text[start:end] safely (empty if out of range).
-// start/end are byte offsets, matching tree-sitter.
+// start/end are source byte offsets, matching tree-sitter.
 func (f *File) Slice(start, end int) string {
 	if f == nil {
 		return ""

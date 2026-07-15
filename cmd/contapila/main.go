@@ -15,6 +15,7 @@ import (
 	"github.com/lucasew/contapila-go/internal/diag"
 	"github.com/lucasew/contapila-go/internal/engine"
 	"github.com/lucasew/contapila-go/internal/ingest"
+	"github.com/lucasew/contapila-go/internal/lsp"
 	"github.com/lucasew/contapila-go/internal/parser"
 	"github.com/lucasew/contapila-go/internal/period"
 	"github.com/lucasew/contapila-go/internal/web"
@@ -69,7 +70,7 @@ func main() {
 	}
 	root.PersistentFlags().StringVarP(&workDir, "directory", "C", "", "run as if contapila started in this directory (project discovery)")
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging on stderr")
-	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), accountCmd(), parseCmd(), ingestCmd(), webCmd())
+	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), accountCmd(), parseCmd(), ingestCmd(), webCmd(), lspCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -658,4 +659,16 @@ func webCmd() *cobra.Command {
 	}
 	c.Flags().StringVar(&addr, "addr", "127.0.0.1:8765", "listen address (host:port)")
 	return c
+}
+
+func lspCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "lsp",
+		Short: "Language server (stdio) for Helix and other LSP clients",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Protocol on stdout; keep slog on stderr.
+			return lsp.RunStdio(cmd.Context())
+		},
+	}
 }

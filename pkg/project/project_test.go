@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/lucasew/contapila-go/internal/filesys"
 )
 
 func TestDiscovery(t *testing.T) {
@@ -48,7 +50,7 @@ func TestDiscovery(t *testing.T) {
 	}
 
 	t.Run("findRoot", func(t *testing.T) {
-		found, err := findRoot(filepath.Join(root, "personal"))
+		found, err := findRoot(filesys.OS{}, filepath.Join(root, "personal"))
 		if err != nil {
 			t.Fatalf("failed to find root: %v", err)
 		}
@@ -58,7 +60,7 @@ func TestDiscovery(t *testing.T) {
 	})
 
 	t.Run("discoverLedgers", func(t *testing.T) {
-		ledgers, err := discoverLedgers(root)
+		ledgers, err := discoverLedgers(filesys.OS{}, root)
 		if err != nil {
 			t.Fatalf("failed to discover ledgers: %v", err)
 		}
@@ -94,7 +96,7 @@ func TestDiscovery(t *testing.T) {
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		_, err := findRoot(tmp)
+		_, err := findRoot(filesys.OS{}, tmp)
 		if err == nil {
 			t.Errorf("expected error searching for root in non-project dir")
 		}

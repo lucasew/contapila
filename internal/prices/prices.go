@@ -7,6 +7,7 @@ import (
 
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
+	"github.com/lucasew/contapila-go/internal/filesys"
 	"github.com/lucasew/contapila-go/internal/loader"
 )
 
@@ -30,10 +31,15 @@ func NewDB() *DB {
 
 func PairKey(base, quote string) string { return base + "|" + quote }
 
-// LoadFile loads prices.beancount (includes expanded).
+// LoadFile loads prices.beancount (includes expanded) from disk.
 func LoadFile(path string) (*DB, diag.List, error) {
+	return LoadFileFS(filesys.OS{}, path)
+}
+
+// LoadFileFS loads prices via fsys (includes expanded).
+func LoadFileFS(fsys filesys.FS, path string) (*DB, diag.List, error) {
 	db := NewDB()
-	dirs, diags, err := loader.LoadFile(path)
+	dirs, diags, err := loader.LoadFileFS(fsys, path)
 	if err != nil {
 		return db, diags, err
 	}
