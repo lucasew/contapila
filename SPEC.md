@@ -168,7 +168,38 @@ didChange / didSave / optional fsnotify wake
 
 Not: temp-dir materialization of overlays; not a forked LSP-only parse/check that drifts from CLI.
 
-#### 3.4.7 Client packaging
+#### 3.4.7 Protocol stack (library choice)
+
+| Choice | Detail |
+|--------|--------|
+| Modules | [`go.lsp.dev/protocol`](https://pkg.go.dev/go.lsp.dev/protocol) + [`go.lsp.dev/jsonrpc2`](https://pkg.go.dev/go.lsp.dev/jsonrpc2) (LSP **3.18**, generated types) |
+| Server API | Embed `protocol.UnimplementedServer`; serve with `protocol.NewServer`; use typed `Client` for `publishDiagnostics` and window messages |
+| Not | Full SDKs (e.g. tliron/glsp, TobiasYin/go-lsp) as primary stack; gopls `internal/*` (unimportable); hand-rolled Content-Length framing |
+| Toolchain | These modules require **Go 1.26+** — bump the contapila module when implementing LSP |
+| Isolation | LSP imports live under `internal/lsp` only; engine/loader stay free of protocol types |
+| Stdio | Wrap `os.Stdin` / `os.Stdout` as a `jsonrpc2.Stream` (stdout is protocol-only) |
+
+**Logging / user feedback**
+
+| Channel | Use |
+|---------|-----|
+| stdout | LSP protocol only |
+| stderr `log/slog` | Operator / debug (same family as CLI; respect `--verbose` if shared) |
+| `window/logMessage` | Soft user-relevant warnings that are not diagnostics |
+| `window/showMessage` | Rare hard failures (e.g. project open broken) |
+| diagnostics / request results | Product truth (check errors; missing definition → empty result / client “no definition”, not a fake status-bar API) |
+
+There is no portable LSP “set status bar text”; do not design around editor-private chrome.
+
+**Testing**
+
+| Layer | Method |
+|-------|--------|
+| Regression | In-memory `jsonrpc2.Stream` (pipe) client ↔ `NewServer`; assert completion, definition, hover, diagnostics on fixtures |
+| Unit | Index / goto / hover helpers without RPC where possible |
+| Acceptance | Helix dogfood + example `.helix` config (§3.4.8) |
+
+#### 3.4.8 Client packaging
 
 - Document / ship Helix `language-server` config for Beancount (and related journal paths as needed) invoking `contapila lsp`.
 - Prefer embedding example config under testdata or docs so dogfood is one clone away.
@@ -345,6 +376,7 @@ Internal stages are separate packages; the public surface stays a deep module (s
 
 - Command: **`contapila lsp`** (stdio) in the main module — not a second binary.
 - Package boundary: dedicated LSP adapter (protocol, overlays, debounce, publish) over the same open/load/check pipeline as CLI.
+- Wire stack: **`go.lsp.dev/protocol` + `go.lsp.dev/jsonrpc2`** (§3.4.7); not glsp-as-framework.
 - Full feature matrix and recompute rules: **§3.4**.
 
 ---
@@ -591,7 +623,7 @@ Golden fixtures should emphasize average-cost stock buys/partial sells, pads, in
 6. CLI commands.
 7. Read-only web server; live reload later.
 8. Golden corpus expansion alongside dogfood.
-9. **LSP dogfood (§3.4):** FS overlay seam + `context` on load/check → `contapila lsp` → parse diags, snapshot indexes, account goto, account/commodity completion, minimal hover, Helix example config.
+9. **LSP dogfood (§3.4):** bump Go **1.26+** if needed → add `go.lsp.dev/protocol` + `jsonrpc2` → FS overlay seam + `context` on load/check → `contapila lsp` (`UnimplementedServer` + `NewServer`) → parse diags, snapshot indexes, account goto, account/commodity completion, minimal hover → in-memory RPC regression tests + Helix example config.
 
 ---
 
@@ -605,7 +637,7 @@ Golden fixtures should emphasize average-cost stock buys/partial sells, pads, in
 - Optional `option "booking_method"` surface once more methods exist.
 - LSP debounce duration default; exact Go FS interface (`io/fs.FS` vs small project-local API).
 - How aggressively to clear vs retain check diagnostics for ledgers with no open buffers.
-- LSP library / protocol stack choice (implementation detail).
+- Exact `go.lsp.dev/*` module versions at implement time (track latest stable 3.18 stack).
 
 ---
 
