@@ -267,6 +267,9 @@ func TestSuggestDates(t *testing.T) {
 	if got[1].Date != "2024-03-14" || got[1].Detail != "yesterday" {
 		t.Fatalf("second want yesterday, got %#v", got[1])
 	}
+	if got[2].Date != "2024-03-01" || got[2].Detail != "start of month" {
+		t.Fatalf("third want start of month 2024-03-01, got %#v", got[2])
+	}
 	// prefix filter
 	pref := suggestDates("2024-03-1", doc, now)
 	for _, d := range pref {

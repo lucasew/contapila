@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"fmt"
 	"regexp"
 	"sort"
 	"time"
@@ -44,20 +43,11 @@ func suggestDates(prefix, docText string, now time.Time) []dateSuggestion {
 		cand[s] = meta{detail: detail, sort: sortKey}
 	}
 
+	// Preferred top three (sort keys 0–2), then in-file dates.
 	add(now, "today", "0")
 	add(now.AddDate(0, 0, -1), "yesterday", "1")
-	// a few nearby days often used when backfilling
-	nearby := []struct {
-		days  int
-		label string
-	}{
-		{2, "2 days ago"},
-		{3, "3 days ago"},
-		{7, "1 week ago"},
-	}
-	for i, n := range nearby {
-		add(now.AddDate(0, 0, -n.days), n.label, fmt.Sprintf("2%d", i))
-	}
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	add(monthStart, "start of month", "2")
 
 	// dates already in the buffer (recent journal context)
 	for _, m := range dateTokenRE.FindAllString(docText, -1) {
