@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/lucasew/contapila-go/internal/config"
 	"github.com/lucasew/contapila-go/internal/engine"
@@ -175,14 +176,39 @@ func (s *Server) Completion(_ context.Context, params *protocol.CompletionParams
 		return protocol.CompletionItemSlice{}, nil
 	}
 	off := byteOffset(text, params.Position)
-	kind := completionKind(linePrefixAt(text, off))
+	prefix := linePrefixAt(text, off)
+	kind := completionKind(prefix)
 	tok, tokStart, _ := tokenAt(text, off)
+
+	var items protocol.CompletionItemSlice
+	switch kind {
+	case "date":
+		// Date tokens are digits/dashes; tokenAt already expands those runes.
+		for _, d := range suggestDates(tok, text, time.Time{}) {
+			te := &protocol.TextEdit{
+				Range:   rangeFromBytes(text, tokStart, off, nil),
+				NewText: d.Date,
+			}
+			items = append(items, protocol.CompletionItem{
+				Label:    d.Date,
+				Kind:     protocol.CompletionItemKindValue,
+				Detail:   protocol.NewOptional(d.Detail),
+				SortText: protocol.NewOptional(d.Sort),
+				TextEdit: te,
+			})
+		}
+		return items, nil
+	case "account", "commodity":
+		// need project snapshot
+	default:
+		return protocol.CompletionItemSlice{}, nil
+	}
+
 	snap := s.session.snapshot()
 	if snap == nil {
 		return protocol.CompletionItemSlice{}, nil
 	}
 
-	var items protocol.CompletionItemSlice
 	switch kind {
 	case "account":
 		ledger := s.session.resolveLedger(path)

@@ -240,4 +240,135 @@ func TestTokenAndCompletionKind(t *testing.T) {
 	if completionKind("  Assets:Cash  10 B") != "commodity" {
 		t.Fatalf("amount commodity")
 	}
+	if completionKind("") != "date" {
+		t.Fatalf("empty line date")
+	}
+	if completionKind("2024") != "date" {
+		t.Fatalf("year prefix date")
+	}
+	if completionKind("2024-01-1") != "date" {
+		t.Fatalf("partial day date")
+	}
+	if completionKind("2024-01-15") != "" {
+		t.Fatalf("complete date alone is not date-complete")
+	}
+}
+
+func TestSuggestDates(t *testing.T) {
+	now := time.Date(2024, 3, 15, 12, 0, 0, 0, time.UTC)
+	doc := "2024-03-10 open Assets:Cash\n2024-03-12 * \"x\"\n"
+	got := suggestDates("", doc, now)
+	if len(got) < 3 {
+		t.Fatalf("expected several dates, got %v", got)
+	}
+	if got[0].Date != "2024-03-15" || got[0].Detail != "today" {
+		t.Fatalf("first want today 2024-03-15, got %#v", got[0])
+	}
+	if got[1].Date != "2024-03-14" || got[1].Detail != "yesterday" {
+		t.Fatalf("second want yesterday, got %#v", got[1])
+	}
+	// prefix filter
+	pref := suggestDates("2024-03-1", doc, now)
+	for _, d := range pref {
+		if !strings.HasPrefix(d.Date, "2024-03-1") {
+			t.Fatalf("prefix filter failed: %s", d.Date)
+		}
+	}
+	// file date included
+	found := false
+	for _, d := range got {
+		if d.Date == "2024-03-10" && d.Detail == "in file" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected in-file date 2024-03-10 in %v", got)
+	}
+}
+
+func TestLSP_DateCompletion(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "contapila.cue"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ledgerDir := filepath.Join(root, "personal")
+	if err := os.MkdirAll(ledgerDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mainPath := filepath.Join(ledgerDir, "main.beancount")
+	src := "2020-01-01 open Assets:Cash BRL\n\n"
+	if err := os.WriteFile(mainPath, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+
+	srv, connA, _ := RunWith(ctx, jsonrpc2.NewHeaderStream(a))
+	defer connA.Close()
+	_ = srv
+	_, connB, client := protocol.NewClient(ctx, protocol.UnimplementedClient{}, jsonrpc2.NewHeaderStream(b))
+	defer connB.Close()
+
+	if _, err := client.Initialize(ctx, &protocol.InitializeParams{}); err != nil {
+		t.Fatal(err)
+	}
+	_ = client.Initialized(ctx, &protocol.InitializedParams{})
+
+	docURI := uri.File(mainPath)
+	if err := client.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: protocol.TextDocumentItem{
+			URI: docURI, LanguageID: "beancount", Version: 1, Text: src,
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// didOpen is a notification — wait until the server has the overlay
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, ok := srv.session.docText(mainPath); ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timeout waiting for didOpen overlay")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// cursor on empty third line
+	pos := offsetToPos(src, len(src))
+	comp, err := client.Completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: docURI},
+			Position:     pos,
+		},
+	})
+	if err != nil {
+		t.Fatalf("completion: %v", err)
+	}
+	items, ok := comp.(protocol.CompletionItemSlice)
+	if !ok || len(items) == 0 {
+		t.Fatalf("want date items, got %T %v", comp, comp)
+	}
+	// today should be first-ish
+	today := time.Now().Format("2006-01-02")
+	foundToday := false
+	foundFile := false
+	for _, it := range items {
+		if it.Label == today {
+			foundToday = true
+		}
+		if it.Label == "2020-01-01" {
+			foundFile = true
+		}
+	}
+	if !foundToday {
+		t.Fatalf("missing today %s in %v", today, labels(items))
+	}
+	if !foundFile {
+		t.Fatalf("missing in-file 2020-01-01 in %v", labels(items))
+	}
 }

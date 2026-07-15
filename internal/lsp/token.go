@@ -46,7 +46,7 @@ func tokenAt(text string, byteOff int) (tok string, start, end int) {
 	return text[start:end], start, end
 }
 
-// completionKind classifies cursor context: "account", "commodity", or "".
+// completionKind classifies cursor context: "date", "account", "commodity", or "".
 func completionKind(linePrefix string) string {
 	trimmed := strings.TrimSpace(linePrefix)
 	if trimmed == "" {
@@ -54,11 +54,24 @@ func completionKind(linePrefix string) string {
 		if len(linePrefix) > 0 && (linePrefix[0] == ' ' || linePrefix[0] == '\t') {
 			return "account"
 		}
-		return ""
+		// top-level empty / only spaces before first token → date directive
+		return "date"
 	}
 	fields := strings.Fields(trimmed)
 	if len(fields) == 0 {
-		return ""
+		return "date"
+	}
+
+	// Typing a date (or date prefix) as the first field on a non-indented line.
+	if len(linePrefix) == 0 || (linePrefix[0] != ' ' && linePrefix[0] != '\t') {
+		if len(fields) == 1 && isDatePrefix(fields[0]) && !looksDate(fields[0]) {
+			return "date"
+		}
+		// complete date alone (user may still want to replace / continue) — not date complete
+		if len(fields) == 1 && isDatePrefix(fields[0]) && looksDate(fields[0]) {
+			// after a full date, next is keyword — no date items
+			return ""
+		}
 	}
 
 	// "open Assets:…" without date, or "2020-01-01 open …"
@@ -114,6 +127,41 @@ func looksDate(s string) bool {
 		if c < '0' || c > '9' {
 			return false
 		}
+	}
+	return true
+}
+
+// isDatePrefix reports a partial or full ISO calendar date token (digits and '-').
+// Examples: "2", "2024", "2024-", "2024-01", "2024-01-1", "2024-01-15".
+func isDatePrefix(s string) bool {
+	if s == "" || len(s) > 10 {
+		return false
+	}
+	digits, dashes := 0, 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= '0' && c <= '9':
+			digits++
+		case c == '-':
+			dashes++
+			if dashes > 2 {
+				return false
+			}
+			// dashes only after year or month groups
+			if i != 4 && i != 7 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	if digits == 0 {
+		return false
+	}
+	// reject pure numbers that look like amounts with decimal
+	if strings.Contains(s, ".") {
+		return false
 	}
 	return true
 }
