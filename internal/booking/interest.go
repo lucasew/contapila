@@ -102,9 +102,14 @@ func parsePlusDaily(plus string) (*big.Rat, bool) {
 		return nil, false
 	}
 	v.Quo(v, big.NewRat(100, 1))
-	days := 365.0
+	// Compounding day counts for %aa / %am → daily factor (plugin-compatible).
+	const (
+		daysPerYearApprox  = 365.0
+		daysPerMonthApprox = 30.0
+	)
+	days := daysPerYearApprox
 	if period == "am" {
-		days = 30.0
+		days = daysPerMonthApprox
 	}
 	// (1+r)^(1/days) - 1 — float64 is enough for daily interest factors.
 	base, _ := new(big.Rat).Add(big.NewRat(1, 1), v).Float64()
