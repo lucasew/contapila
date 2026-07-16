@@ -8,6 +8,7 @@ import (
 
 	"github.com/lucasew/contapila-go/internal/ast"
 	"github.com/lucasew/contapila-go/internal/diag"
+	"github.com/lucasew/contapila-go/internal/filesys"
 )
 
 func writeFile(t *testing.T, dir, name, content string) string {
@@ -304,3 +305,162 @@ func TestLoadFileMissingRoot(t *testing.T) {
 		t.Fatal("expected error for missing root file")
 	}
 }
+
+func TestLoadFileFSNilUsesOS(t *testing.T) {
+	dir := t.TempDir()
+	main := writeFile(t, dir, "main.beancount", `
+2020-01-01 open Assets:Cash
+`)
+	dirs, diags, err := LoadFileFS(nil, main)
+	if err != nil {
+		t.Fatalf("LoadFileFS(nil): %v", err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("unexpected errors: %v", diags)
+	}
+	got := openAccounts(dirs)
+	if len(got) != 1 || got[0] != "Assets:Cash" {
+		t.Fatalf("opens=%v want [Assets:Cash]", got)
+	}
+}
+
+func TestLoadFileFSOverlayOverridesDisk(t *testing.T) {
+	dir := t.TempDir()
+	main := writeFile(t, dir, "main.beancount", `
+2020-01-01 open Assets:Disk
+`)
+	// Overlay rewrites the entry file; disk still has Assets:Disk.
+	ov := filesys.NewOverlay(filesys.OS{})
+	ov.Set(main, "2020-01-01 open Assets:Overlay\n")
+
+	dirs, diags, err := LoadFileFS(ov, main)
+	if err != nil {
+		t.Fatalf("LoadFileFS: %v", err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("unexpected errors: %v", diags)
+	}
+	got := openAccounts(dirs)
+	if len(got) != 1 || got[0] != "Assets:Overlay" {
+		t.Fatalf("opens=%v want [Assets:Overlay] (overlay must win over disk)", got)
+	}
+}
+
+func TestLoadFileFSOverlayIncludeNotOnDisk(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.beancount")
+	incPath := filepath.Join(dir, "only-overlay.beancount")
+	// Root lives on disk so Open works; include target exists only in the overlay.
+	writeFile(t, dir, "main.beancount", `
+include "only-overlay.beancount"
+2020-01-01 open Assets:Main
+`)
+	ov := filesys.NewOverlay(filesys.OS{})
+	ov.Set(incPath, "2020-01-01 open Assets:FromOverlay\n")
+
+	dirs, diags, err := LoadFileFS(ov, mainPath)
+	if err != nil {
+		t.Fatalf("LoadFileFS: %v", err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("unexpected errors: %v", diags)
+	}
+	got := openAccounts(dirs)
+	want := []string{"Assets:FromOverlay", "Assets:Main"}
+	if len(got) != len(want) {
+		t.Fatalf("opens=%v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("opens=%v want %v", got, want)
+		}
+	}
+}
+
+func TestLoadFileAbsoluteInclude(t *testing.T) {
+	dir := t.TempDir()
+	inc := writeFile(t, dir, "shared/leaf.beancount", `
+2020-01-01 open Assets:Abs
+`)
+	// Quote the absolute path into the include so expandInclude takes the IsAbs branch.
+	main := writeFile(t, dir, "main.beancount", `
+include "`+inc+`"
+2020-01-01 open Assets:Main
+`)
+
+	dirs, diags, err := LoadFile(main)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("unexpected errors: %v", diags)
+	}
+	got := openAccounts(dirs)
+	want := []string{"Assets:Abs", "Assets:Main"}
+	if len(got) != len(want) {
+		t.Fatalf("opens=%v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("opens=%v want %v", got, want)
+		}
+	}
+}
+
+func TestLoadFileGlobSkipsDirectories(t *testing.T) {
+	dir := t.TempDir()
+	// parts/* matches both a file and a subdirectory; dirs must be skipped.
+	writeFile(t, dir, "parts/a.beancount", `
+2020-01-01 open Assets:A
+`)
+	if err := os.MkdirAll(filepath.Join(dir, "parts", "subdir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Marker file inside the dir must not be loaded via the parent glob.
+	writeFile(t, dir, "parts/subdir/nested.beancount", `
+2020-01-01 open Assets:Nested
+`)
+	main := writeFile(t, dir, "main.beancount", `
+include "parts/*"
+2020-01-01 open Assets:Main
+`)
+
+	dirs, diags, err := LoadFile(main)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if diags.HasErrors() {
+		t.Fatalf("unexpected errors: %v", diags)
+	}
+	got := openAccounts(dirs)
+	// Only a.beancount + main — not nested inside the matched directory.
+	want := []string{"Assets:A", "Assets:Main"}
+	if len(got) != len(want) {
+		t.Fatalf("opens=%v want %v (glob must skip directories)", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("opens=%v want %v", got, want)
+		}
+	}
+	for _, a := range got {
+		if a == "Assets:Nested" {
+			t.Fatalf("loaded nested open from directory match: %v", got)
+		}
+	}
+}
+
+func TestLoadFileInvalidGlobPattern(t *testing.T) {
+	dir := t.TempDir()
+	// Unclosed character class is an invalid filepath.Glob pattern.
+	main := writeFile(t, dir, "main.beancount", `
+include "bad["
+2020-01-01 open Assets:Cash
+`)
+
+	_, _, err := LoadFile(main)
+	if err == nil {
+		t.Fatal("expected error for invalid glob pattern")
+	}
+}
+
