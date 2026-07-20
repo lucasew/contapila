@@ -444,7 +444,7 @@ func TestDisplayLabelKindAt(t *testing.T) {
 			{KindMonth, "2024-07"},
 			{KindWeek, "2024-W29"},
 			{KindDay, "2024-07-15"},
-			{"", "2024-07"},          // default month
+			{"", "2024-07"},         // default month
 			{KindCustom, "2024-07"}, // default month
 		}
 		for _, tc := range cases {

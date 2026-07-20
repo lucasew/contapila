@@ -463,4 +463,3 @@ include "bad["
 		t.Fatal("expected error for invalid glob pattern")
 	}
 }
-
