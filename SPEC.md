@@ -2,7 +2,7 @@
 
 Status: MVP implementation in progress (tree-sitter grammar wired via modernc-tree-sitter/ccgo-tree-sitter).
 
-Contapila is a self-contained **Go** reimplementation of a Beancount-class ledger engine plus a Fava-class read-only web UI and an optional **language server**: **one binary** (Cobra CLI + HTTP server with Go templates + `contapila lsp`). Philosophy is **Helix, not Neovim**: good defaults, batteries included, no plugin system, poetic license on tooling.
+Contapila is a self-contained **Go** reimplementation of a Beancount-class ledger engine plus a Fava-class read-only web UI (headless `web` or **eletrocromo** desktop shell) and an optional **language server**: **one binary** (Cobra CLI + HTTP server with Go templates + `contapila lsp` + `contapila desktop`). Philosophy is **Helix, not Neovim**: good defaults, batteries included, no plugin system, poetic license on tooling.
 
 ---
 
@@ -62,18 +62,52 @@ Illustrative commands (names may be refined at implement time):
 | `contapila pnl [ledger]` | Income vs expenses for a period |
 | `contapila networth [ledger]` | Net worth as-of (shared prices) |
 | `contapila ingest --file path [-- CMD …]` | Merge JSONL directives into a beancount file (upsert by `id` → `ingest_id`) |
-| `contapila web [ledger]` | Read-only HTTP UI |
+| `contapila web [ledger]` | Read-only HTTP UI (headless; owns bind via `--addr`) |
+| `contapila desktop [ledger]` | Same UI via **eletrocromo** (Helium `--app` window; library owns loopback bind + token auth) |
 | `contapila lsp` | Language server over stdio (Helix dogfood; see §3.4) |
 
-Ledger argument is the **directory name** under the project root (see §4).
+Ledger argument is the **directory name** under the project root (see §4). Project root is always from `-C` / process cwd (walk up for `contapila.cue`); neither `web` nor `desktop` takes a project path positional.
 
 ### 3.2 Web server
 
 - **Read-only** viewer over the same `*Ledger` APIs as the CLI.
 - **Go templates** (server-rendered).
-- Default bind: **localhost** (no auth story in MVP).
+- **`web`:** default bind `127.0.0.1:8765` (`--addr`); no app-window shell. No multi-user auth story (local tool).
+- **`desktop`:** same HTTP handler as `web`; no `--addr`. Bind, one-shot token auth, and window lifetime are owned by **[eletrocromo](https://github.com/lewtec/eletrocromo)** (`App.ID` = `br.tec.lew.contapila`). Never fall back to the system browser or to `web --addr` if Helium is missing.
 - **Live reload** (watch ledger includes + prices + config): nice-to-have, not blocking first server slice.
 - Out of MVP: in-browser edit, multi-user, write-back.
+
+#### 3.2.1 Desktop auto-launch (QoL)
+
+**Intent:** double-click / “Open with contapila” opens the project UI without a wrapper script; typing in a real terminal stays CLI-first.
+
+| Mode | When | Behavior |
+|------|------|----------|
+| Explicit | `contapila desktop [ledger]` | Always eletrocromo, regardless of TTY |
+| Implicit rewrite | **Both** stdin and stdout are **not** TTYs, and argv is bare or a single project path | Rewrite to `desktop` (see below) |
+| CLI default | Either stdin or stdout is a TTY, or argv is a real subcommand / other shape | Normal Cobra (help, `status`, `web`, …) |
+
+**Terminology:** “not a TTY” = process not attached to an interactive terminal on that fd (`isatty` / `term.IsTerminal`). Dual stdin+stdout check reduces false positives from pipes/CI (`contapila \| …`, redirected stdout).
+
+**Implicit rewrite mapping:**
+
+| User runs (not dual-TTY) | Becomes |
+|--------------------------|---------|
+| `contapila` (no positionals) | `desktop` with current `-C` / cwd |
+| `contapila /path/to/project` | work dir = that directory → `desktop` |
+| `contapila /path/to/contapila.cue` | work dir = **parent** of the cue file → `desktop` |
+| `contapila -C /path` (no positionals) | `desktop` (`-C` already set) |
+| `contapila status` / `web` / two+ args / unknown junk | **no** rewrite — normal Cobra |
+
+Ledger is **not** accepted on the implicit bare path; only via `desktop [ledger]` or `web [ledger]`.
+
+**Project marker:** `contapila.cue` (same walk-up discovery as the rest of the CLI).
+
+**Failures** (missing marker, bad project, Helium/ensure/`App.Run` error): message on **stderr**, exit **1**. No silent fall-through to help on the implicit path (help is useless without a terminal).
+
+**Layout (v1):** wiring lives in `cmd/contapila`; extract `internal/desktop` only if it grows. Tests: pure helpers for auto-launch gate + path→work-dir; **no** Helium window in contapila CI (eletrocromo’s own tests cover host launch).
+
+**Dependency:** `github.com/lewtec/eletrocromo`.
 
 ### 3.3 Reports
 
@@ -624,6 +658,7 @@ Golden fixtures should emphasize average-cost stock buys/partial sells, pads, in
 7. Read-only web server; live reload later.
 8. Golden corpus expansion alongside dogfood.
 9. **LSP dogfood (§3.4):** bump Go **1.26+** if needed → add `go.lsp.dev/protocol` + `jsonrpc2` → FS overlay seam + `context` on load/check → `contapila lsp` (`UnimplementedServer` + `NewServer`) → parse diags, snapshot indexes, account goto, account/commodity completion, minimal hover → in-memory RPC regression tests + Helix example config.
+10. **Desktop shell (§3.2.1):** `contapila desktop` + not-a-TTY implicit rewrite via eletrocromo (same web handler).
 
 ---
 
@@ -643,4 +678,4 @@ Golden fixtures should emphasize average-cost stock buys/partial sells, pads, in
 
 ## 15. Summary one-liner
 
-**Contapila** = conventional multi-ledger Beancount project (`contapila.cue` + `*/main.beancount` + `prices.beancount`) with embedded CUE policy, average-cost inventory, and a single Go binary for check/reports/read-only web/**Helix LSP** — semantics-first, plugins never, tree-sitter via modernc.
+**Contapila** = conventional multi-ledger Beancount project (`contapila.cue` + `*/main.beancount` + `prices.beancount`) with embedded CUE policy, average-cost inventory, and a single Go binary for check/reports/read-only web/**desktop (eletrocromo + Helium)**/**Helix LSP** — semantics-first, plugins never, tree-sitter via modernc.
