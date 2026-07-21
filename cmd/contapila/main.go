@@ -70,7 +70,13 @@ func main() {
 	}
 	root.PersistentFlags().StringVarP(&workDir, "directory", "C", "", "run as if contapila started in this directory (project discovery)")
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging on stderr")
-	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), accountCmd(), parseCmd(), ingestCmd(), webCmd(), lspCmd())
+	root.AddCommand(statusCmd(), checkCmd(), balancesCmd(), journalCmd(), pnlCmd(), networthCmd(), accountCmd(), parseCmd(), ingestCmd(), webCmd(), desktopCmd(), lspCmd())
+
+	// Not-a-TTY bare launch / project path → desktop (SPEC §3.2.1).
+	// After flag registration so workDir is not wiped by StringVarP defaults;
+	// before Execute so "contapila /path" is not an unknown command.
+	applyDesktopRewrite()
+
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

@@ -4,6 +4,8 @@ go 1.26.4
 
 require (
 	cuelang.org/go v0.17.0
+	github.com/lewtec/eletrocromo v0.0.0-20260720233412-019f2474a08f
+	github.com/mattn/go-isatty v0.0.20
 	github.com/spf13/cobra v1.10.2
 	go.lsp.dev/jsonrpc2 v1.0.1
 	go.lsp.dev/protocol v1.0.1
@@ -13,7 +15,6 @@ require (
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar/go v0.0.0-20260713221032-8673315d25fc // indirect
 	github.com/modernc-tree-sitter/ccgo-tree-sitter/grammar/json v0.0.0-20260713221032-8673315d25fc // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
