@@ -3,7 +3,7 @@ module github.com/lucasew/contapila-go
 go 1.26.4
 
 require (
-	cuelang.org/go v0.17.0
+	cuelang.org/go v0.17.1
 	github.com/lewtec/eletrocromo v0.0.0-20260720233412-019f2474a08f
 	github.com/mattn/go-isatty v0.0.20
 	github.com/spf13/cobra v1.10.2
