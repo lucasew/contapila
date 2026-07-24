@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,7 +13,7 @@ import (
 func TestPlanDesktopRewrite_TTY(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name               string
+		name                string
 		stdinTTY, stdoutTTY bool
 	}{
 		{"both TTY", true, true},
@@ -190,6 +192,71 @@ func TestResolveProjectStartArg(t *testing.T) {
 	}
 	if _, ok := resolveProjectStartArg(""); ok {
 		t.Fatal("empty should not resolve")
+	}
+}
+
+func TestProjectHasLedger(t *testing.T) {
+	t.Parallel()
+	p := &project.Project{
+		Ledgers: []project.Ledger{
+			{Name: "personal"},
+			{Name: "acme"},
+		},
+	}
+	if !projectHasLedger(p, "personal") {
+		t.Fatal("expected personal")
+	}
+	if projectHasLedger(p, "missing") {
+		t.Fatal("missing should be false")
+	}
+	if projectHasLedger(nil, "personal") {
+		t.Fatal("nil project")
+	}
+}
+
+func TestRootDeepLinkHandler(t *testing.T) {
+	t.Parallel()
+	var hit string
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	})
+	h := rootDeepLinkHandler(next, "personal")
+
+	// Root + token query (eletrocromo launch URL) → ledger check, query kept.
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/?token=abc", nil)
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("root status=%d want 302", rr.Code)
+	}
+	loc := rr.Header().Get("Location")
+	want := "/l/personal/check?token=abc"
+	if loc != want {
+		t.Fatalf("Location=%q want %q", loc, want)
+	}
+	if hit != "" {
+		t.Fatalf("next should not run on root redirect, hit=%q", hit)
+	}
+
+	// Non-root path passes through.
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/l/personal/balances", nil)
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("pass-through status=%d", rr.Code)
+	}
+	if hit != "/l/personal/balances" {
+		t.Fatalf("hit=%q", hit)
+	}
+
+	// Ledger names with special characters are path-escaped.
+	h2 := rootDeepLinkHandler(next, "a/b")
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	h2.ServeHTTP(rr, req)
+	if got := rr.Header().Get("Location"); got != "/l/a%2Fb/check" {
+		t.Fatalf("escaped Location=%q", got)
 	}
 }
 

@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -27,8 +30,9 @@ func desktopCmd() *cobra.Command {
 --app window via eletrocromo. The library owns loopback bind and token auth;
 there is no --addr flag.
 
-Project root is discovered from -C / the process working directory (walk up
-for contapila.cue), same as other commands.`,
+Optional [ledger] opens that ledger's check page (same path web prints as a
+deep-link). Project root is discovered from -C / the process working directory
+(walk up for contapila.cue), same as other commands.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := projectCwd()
@@ -43,21 +47,62 @@ for contapila.cue), same as other commands.`,
 			if err != nil {
 				return err
 			}
-			// Optional ledger matches web: accepted for CLI parity; web only
-			// prints a deep-link URL, desktop has no stdout banner.
-			_ = args
+			// eletrocromo always launches "/?token=…"; when the user names a
+			// ledger, redirect that root hit to /l/<ledger>/check so desktop
+			// matches the deep-link path that `web [ledger]` only prints.
+			handler := http.Handler(s.Handler())
+			if len(args) == 1 {
+				name := args[0]
+				if !projectHasLedger(p, name) {
+					return fmt.Errorf("unknown ledger %q", name)
+				}
+				handler = rootDeepLinkHandler(handler, name)
+			}
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
 			app := eletrocromo.App{
 				ID:      eletrocromoAppID,
-				Handler: s.Handler(),
+				Handler: handler,
 				Context: ctx,
 			}
 			return app.Run()
 		},
 	}
+}
+
+// projectHasLedger reports whether name is a discovered ledger directory.
+func projectHasLedger(p *project.Project, name string) bool {
+	if p == nil {
+		return false
+	}
+	for _, l := range p.Ledgers {
+		if l.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// rootDeepLinkHandler redirects GET/HEAD "/" to /l/<ledger>/check, preserving
+// the query string (eletrocromo's one-shot ?token= auth). All other paths pass
+// through unchanged.
+func rootDeepLinkHandler(next http.Handler, ledger string) http.Handler {
+	targetPath := "/l/" + url.PathEscape(ledger) + "/check"
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" || r.URL.Path == "" {
+			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == "" {
+				target := targetPath
+				if r.URL.RawQuery != "" {
+					target += "?" + r.URL.RawQuery
+				}
+				http.Redirect(w, r, target, http.StatusFound)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // applyDesktopRewrite mutates os.Args (and workDir when a project path is given)
